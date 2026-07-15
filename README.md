@@ -17,26 +17,14 @@ Il processo previsto comprende:
 9. invio del tracking al marketplace;
 10. supervisione attraverso il pannello operativo.
 
-I marketplace vengono integrati tramite adapter dedicati e condividono lo stesso modello interno dell’ordine. Space gestisce approvvigionamento e disponibilità; il magazzino gestisce picking e parziali; GLS gestisce spedizione, label e tracking.
+I marketplace condividono lo stesso modello interno dell’ordine e vengono collegati tramite adapter dedicati. Space gestisce approvvigionamento e disponibilità; il magazzino gestisce picking e parziali; GLS gestisce spedizione, label e tracking.
 
 ## Architettura
 
-La piattaforma utilizza un framework custom proprietario in PHP 8.4. Lo stack comprende:
-
-- PostgreSQL;
-- Redis;
-- Nginx e PHP-FPM;
-- Docker Compose;
-- Phinx;
-- PHPUnit;
-- PHPStan;
-- componenti Symfony selezionati;
-- Monolog con output JSON e redazione dei dati sensibili.
-
-Il codice è organizzato in:
+La piattaforma utilizza un framework custom proprietario in PHP 8.4 con PostgreSQL, Redis, Nginx/PHP-FPM, Docker Compose, Phinx, PHPUnit, PHPStan, Monolog e componenti Symfony selezionati.
 
 ```text
-app/Core       runtime e servizi trasversali
+app/Core       bootstrap e servizi trasversali
 app/Modules    dominio e contratti applicativi
 config         composizione e routing
 database       migrazioni PostgreSQL
@@ -46,24 +34,22 @@ docker         immagini e configurazioni runtime
 
 ## Stato implementativo
 
-La foundation attuale comprende:
+La foundation comprende:
 
-- bootstrap HTTP e console;
-- routing;
-- validazione della configurazione ambiente;
-- gestione centralizzata delle eccezioni;
-- logging JSON con correlation ID;
-- redazione ricorsiva dei campi sensibili nei log;
-- health check live e ready per PostgreSQL e Redis;
+- bootstrap condiviso per HTTP e CLI;
+- configurazione ambiente e secret file centralizzati;
+- trusted proxy e trusted host per deployment dietro reverse proxy;
+- error handling, logging JSON, correlation ID e redazione dei dati sensibili;
+- health check live e ready per PostgreSQL, Redis e versione schema;
 - schema iniziale per ordini, spedizioni, outbox, delivery esterne e audit;
-- vincoli database su stati, disponibilità e quantità;
+- timestamp UTC, JSONB e vincoli di integrità PostgreSQL;
 - configurazioni Docker distinte per sviluppo e produzione;
-- immagine PHP production multistage e non privilegiata;
-- secret file per PostgreSQL e Redis;
-- pipeline CI con migrazioni, test, PHPStan e audit Composer;
-- contratti iniziali per Marketplace, Space e GLS.
+- immagini separate per runtime e migrazioni;
+- rete dati isolata e connettività esterna del processo applicativo;
+- CI con PostgreSQL, Redis, migrazioni, test, PHPStan, audit Composer e smoke test production;
+- contratti tipizzati per Marketplace, Space e GLS.
 
-Le vertical slice di business, gli adapter reali, l’autenticazione applicativa, il pannello operativo e il worker della transactional outbox appartengono alle fasi successive. Lo schema outbox è presente; l’elaborazione viene attivata insieme ai primi handler applicativi.
+Le vertical slice di business, gli adapter reali, l’autenticazione applicativa, il pannello operativo e il worker della transactional outbox appartengono alle fasi successive.
 
 ## Avvio locale
 
@@ -74,55 +60,17 @@ docker compose exec php composer install
 docker compose exec php vendor/bin/phinx migrate -e development
 ```
 
-Endpoint:
-
 ```text
 GET http://localhost:8080/
 GET http://localhost:8080/health/live
 GET http://localhost:8080/health/ready
 ```
 
-Diagnostica:
-
-```bash
-docker compose exec php php bin/console system:check
-```
-
 ## Verifiche
 
 ```bash
-composer validate --strict
-composer audit --locked
-composer architecture:check
-composer test
-composer analyse
+composer ci:fast
+composer ci:full
 ```
 
-## Produzione
-
-La configurazione production utilizza HTTPS e secret file dedicati per PostgreSQL e Redis. Il template è `.env.production.example`.
-
-```bash
-cp .env.production.example .env.production
-mkdir -p secrets
-umask 077
-openssl rand -base64 48 > secrets/db_password.txt
-openssl rand -base64 48 > secrets/redis_password.txt
-```
-
-Il container Nginx viene pubblicato per impostazione predefinita su `127.0.0.1:8080`. Un reverse proxy o load balancer esterno deve terminare TLS, inoltrare il traffico verso tale endpoint e applicare HSTS. Il backend PostgreSQL/Redis resta su rete Docker interna; `/health/ready` è accessibile soltanto da indirizzi privati.
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml config
-docker compose --env-file .env.production -f docker-compose.prod.yml build
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d
-```
-
-Le migrazioni vengono eseguite come passaggio controllato di deploy:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml run --rm php \
-  vendor/bin/phinx migrate -e production
-```
-
-La documentazione architetturale è disponibile in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); la politica di sicurezza è descritta in [`SECURITY.md`](SECURITY.md).
+La descrizione delle decisioni tecniche è in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Deploy, migrazioni, health check e procedure operative sono in [`docs/OPERATIONS.md`](docs/OPERATIONS.md). La politica di sicurezza è in [`SECURITY.md`](SECURITY.md).
