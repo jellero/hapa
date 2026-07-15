@@ -78,4 +78,17 @@ jobs:
           extensions: pdo_pgsql, redis, intl, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist --quiet
-      - run: composer analyse
+      - name: Run PHPStan
+        id: phpstan
+        continue-on-error: true
+        run: vendor/bin/phpstan analyse --error-format=json > phpstan-report.json
+      - name: Upload PHPStan report
+        if: steps.phpstan.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpstan-report
+          path: phpstan-report.json
+          retention-days: 1
+      - name: Fail on PHPStan errors
+        if: steps.phpstan.outcome == 'failure'
+        run: exit 1
