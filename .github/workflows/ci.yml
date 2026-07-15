@@ -30,11 +30,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       APP_ENV: testing
       APP_DEBUG: "false"
       APP_URL: http://localhost
       APP_TIMEZONE: UTC
+      TRUSTED_PROXIES: ""
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_DATABASE: hapa_test
@@ -42,7 +52,7 @@ jobs:
       DB_PASSWORD: ci-postgres-password
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ci-redis-password
+      REDIS_PASSWORD: ""
       LOG_LEVEL: warning
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -57,15 +67,6 @@ jobs:
       - run: vendor/bin/phinx migrate -e testing
       - run: composer architecture:check
       - run: composer test
-      - name: Validate production Compose
-        env:
-          APP_URL: https://hapa.example.com
-          DB_PASSWORD_FILE: /tmp/hapa-db-secret
-          REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
-        run: |
-          printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
-          printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
-          docker compose -f docker-compose.prod.yml config --quiet
 
   static-analysis:
     runs-on: ubuntu-latest
@@ -79,3 +80,40 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --prefer-dist --quiet
       - run: composer analyse
+
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_URL: https://hapa.example.com
+      TRUSTED_PROXIES: REMOTE_ADDR
+      HAPA_HTTP_BIND: 127.0.0.1
+      HAPA_HTTP_PORT: 18080
+      IMAGE_TAG: ci-${{ github.sha }}
+      PHP_BASE_IMAGE: php:8.4-fpm-alpine
+      COMPOSER_BASE_IMAGE: composer:2
+      NGINX_BASE_IMAGE: nginx:1.27-alpine
+      REDIS_BASE_IMAGE: redis:7.4-alpine
+      POSTGRES_IMAGE: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+      DB_PASSWORD_FILE: ./secrets/db_password.txt
+      REDIS_PASSWORD_FILE: ./secrets/redis_password.txt
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Prepare smoke secrets
+        run: |
+          mkdir -p secrets
+          printf '%s' 'ci-production-database-secret' > secrets/db_password.txt
+          printf '%s' 'ci-production-redis-secret' > secrets/redis_password.txt
+          chmod 600 secrets/*.txt
+      - name: Validate and build production images
+        run: |
+          docker compose -f docker-compose.prod.yml config --quiet
+          docker compose -f docker-compose.prod.yml build php migration nginx redis
+      - name: Run production smoke test
+        run: |
+          set -euo pipefail
+          trap 'docker compose -f docker-compose.prod.yml down -v --remove-orphans' EXIT
+          docker compose -f docker-compose.prod.yml up -d --wait postgres redis php nginx
+          docker compose -f docker-compose.prod.yml run --rm migration migrate -e production
+          curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/live
+          curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/ready
