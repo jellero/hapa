@@ -6,11 +6,13 @@ Copiare il template e sostituire tutti i riferimenti immagine con versioni assoc
 
 ```bash
 cp .env.production.example .env.production
-mkdir -p secrets
-umask 077
+install -d -m 0700 secrets
 openssl rand -base64 48 > secrets/db_password.txt
 openssl rand -base64 48 > secrets/redis_password.txt
+chmod 0444 secrets/*.txt
 ```
+
+Docker Compose monta i secret file in sola lettura esclusivamente nei servizi autorizzati. Il permesso `0444` consente la lettura agli UID non privilegiati dei container; la directory host `0700` impedisce agli altri utenti del server di raggiungere i file.
 
 `APP_URL` identifica l’host pubblico HTTPS. `TRUSTED_PROXIES` identifica esclusivamente i proxy autorizzati a fornire gli header `X-Forwarded-*`. Il binding HTTP applicativo resta su loopback; TLS e HSTS vengono applicati dal reverse proxy o load balancer di frontiera.
 
