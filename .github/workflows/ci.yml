@@ -63,7 +63,8 @@ jobs:
       - run: composer validate --strict
       - run: composer audit --locked
       - run: vendor/bin/phinx migrate -e testing
-      - run: composer ci:fast
+      - run: composer architecture:check
+      - run: composer test
 
   production-smoke:
     runs-on: ubuntu-latest
@@ -80,6 +81,7 @@ jobs:
           REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
         run: |
           set -euo pipefail
+          trap 'docker compose -f docker-compose.prod.yml down -v || true' EXIT
           printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
           printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
           docker compose -f docker-compose.prod.yml config --quiet
@@ -88,7 +90,6 @@ jobs:
           docker compose -f docker-compose.prod.yml --profile tools run --rm migration
           docker compose -f docker-compose.prod.yml up -d --wait php nginx
           curl --fail --silent http://127.0.0.1:18080/health/live
-          docker compose -f docker-compose.prod.yml down -v
 
   static-analysis:
     runs-on: ubuntu-latest
