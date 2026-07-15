@@ -3,6 +3,8 @@ parameters:
     paths:
         - app
         - config
+        - scripts
         - tests
     tmpDir: storage/cache/phpstan
     treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true

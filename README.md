@@ -1,110 +1,117 @@
 # HAPA
 
-## Relazione sintetica del progetto
+HAPA è la piattaforma proprietaria per la gestione del ciclo ordine tra marketplace, Space API, magazzino e GLS.
 
-Il progetto prevede la realizzazione di una piattaforma per la gestione completa degli ordini provenienti da marketplace generici, dalla presa in carico fino alla comunicazione della spedizione.
+## Flusso applicativo
 
-Il flusso operativo comprende:
+Il processo previsto comprende:
 
 1. accettazione dell’ordine sul marketplace;
-2. recupero dei dati di spedizione;
-3. importazione dell’ordine e delle relative righe;
-4. invio degli articoli a Space tramite API;
-5. verifica della disponibilità della merce;
-6. preparazione dell’ordine tramite picking barcode;
+2. recupero dell’indirizzo di spedizione;
+3. importazione dell’ordine e delle righe;
+4. invio dell’ordine a Space tramite API;
+5. controllo della disponibilità della merce;
+6. preparazione e picking barcode;
 7. gestione degli ordini completi e parziali;
 8. creazione della spedizione e dell’etichetta GLS;
 9. invio del tracking al marketplace;
-10. controllo dell’intero processo tramite pannello operativo.
+10. supervisione attraverso il pannello operativo.
 
-Il marketplace viene trattato come canale generico attraverso adapter dedicati. Questo consente di integrare più canali mantenendo invariato il processo interno di gestione dell’ordine.
+I marketplace vengono integrati tramite adapter dedicati e condividono lo stesso modello interno dell’ordine. Space gestisce approvvigionamento e disponibilità; il magazzino gestisce picking e parziali; GLS gestisce spedizione, label e tracking.
 
-Space rappresenta il sistema di approvvigionamento e disponibilità della merce. La comunicazione avviene tramite API, con registrazione delle richieste, delle risposte e degli eventuali errori. Il magazzino riceve quindi ordini già classificati come completi, incompleti o parzialmente disponibili.
+## Architettura
 
-La fase di picking utilizza la lettura barcode per verificare articoli, quantità e anomalie. Gli ordini parziali prevedono una conferma operativa delle quantità da spedire e da annullare. Una volta completata la preparazione, il sistema genera la spedizione GLS, rende disponibile l’etichetta e trasmette il tracking al marketplace di origine.
+La piattaforma utilizza un framework custom proprietario in PHP 8.4. Lo stack comprende:
 
-## Architettura applicativa
+- PostgreSQL;
+- Redis;
+- Nginx e PHP-FPM;
+- Docker Compose;
+- Phinx;
+- PHPUnit;
+- PHPStan;
+- componenti Symfony selezionati;
+- Monolog con output JSON e redazione dei dati sensibili.
 
-La piattaforma sarà sviluppata su un **framework custom proprietario** in PHP 8.4, costruito per applicazioni gestionali modulari e transazionali.
-
-La foundation comprende già:
-
-- kernel applicativo e routing;
-- dependency injection;
-- autenticazione e autorizzazione;
-- utenti, ruoli e permessi;
-- gestione delle transazioni;
-- logging e audit;
-- migrazioni database;
-- configurazione degli ambienti;
-- pipeline di test e analisi statica;
-- procedure Docker e deploy.
-
-Lo stack tecnologico utilizza PHP 8.4, PostgreSQL, Redis, Nginx, PHP-FPM, Docker, Phinx, PHPUnit, PHPStan e componenti Symfony selezionati.
-
-Il Core contiene i servizi trasversali, mentre il dominio viene suddiviso in moduli applicativi dedicati:
+Il codice è organizzato in:
 
 ```text
-Marketplace
-Orders
-Space
-Warehouse
-Picking
-PartialOrders
-GLS
-Tracking
-Automation
-OperationalDashboard
+app/Core       runtime e servizi trasversali
+app/Modules    dominio e contratti applicativi
+config         composizione e routing
+database       migrazioni PostgreSQL
+tests          test unitari, integration e architetturali
+docker         immagini e configurazioni runtime
 ```
 
-Ogni modulo espone contratti espliciti e concentra controller, servizi, repository, validatori e policy della propria area. L’accesso ai dati utilizza repository e SQL controllato, con transazioni governate dal service layer.
+## Stato implementativo
 
-## Affidabilità delle integrazioni
+La foundation attuale comprende:
 
-Le comunicazioni con marketplace, Space e GLS vengono gestite tramite adapter tipizzati e idempotenti.
+- bootstrap HTTP e console;
+- routing;
+- validazione della configurazione ambiente;
+- gestione centralizzata delle eccezioni;
+- logging JSON con correlation ID;
+- redazione ricorsiva dei campi sensibili nei log;
+- health check live e ready per PostgreSQL e Redis;
+- schema iniziale per ordini, spedizioni, outbox, delivery esterne e audit;
+- vincoli database su stati e quantità;
+- configurazioni Docker distinte per sviluppo e produzione;
+- immagine PHP production multistage e non privilegiata;
+- pipeline CI con migrazioni, test, PHPStan e audit Composer;
+- contratti iniziali per Marketplace, Space e GLS.
 
-Il sistema utilizza:
+Le vertical slice di business, gli adapter reali, l’autenticazione applicativa, il pannello operativo e il worker della transactional outbox appartengono alle fasi successive. Lo schema outbox è presente; l’elaborazione viene attivata insieme ai primi handler applicativi.
 
-- transactional outbox;
-- job durevoli;
-- scheduler;
-- worker concorrenti;
-- API log;
-- retry degli errori temporanei;
-- classificazione degli errori definitivi;
-- audit delle operazioni manuali;
-- correlation ID per la tracciabilità end-to-end.
+## Avvio locale
 
-I job acquisiscono il lavoro tramite lock e claim atomici PostgreSQL, garantendo elaborazioni concorrenti controllate e protezione dalle duplicazioni.
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose exec php composer install
+docker compose exec php vendor/bin/phinx migrate -e development
+```
 
-Lo stato di business dell’ordine rimane nel gestionale, mentre scheduler, tentativi, consegne esterne ed esiti tecnici vengono modellati separatamente. Questa distinzione semplifica retry, riconciliazione e analisi degli errori.
+Endpoint:
 
-## Velocità di sviluppo e maturità
+```text
+GET http://localhost:8080/
+GET http://localhost:8080/health/live
+GET http://localhost:8080/health/ready
+```
 
-L’utilizzo del framework proprietario consente di concentrare lo sviluppo direttamente sulle vertical slice specifiche del progetto.
+Diagnostica:
 
-Autenticazione, sicurezza, transazioni, logging, migrazioni, test, configurazione e deploy costituiscono componenti già maturati e riutilizzabili. L’effort viene quindi focalizzato sui moduli di business e sulle integrazioni Space e GLS.
+```bash
+docker compose exec php php bin/console system:check
+```
 
-La qualità viene verificata tramite test unitari, di integrazione, funzionali, di concorrenza e architetturali, affiancati da analisi statica e controlli automatici sulle dipendenze tra moduli.
+## Verifiche
 
-Questo approccio produce tre vantaggi principali:
+```bash
+composer validate --strict
+composer audit --locked
+composer architecture:check
+composer test
+composer analyse
+```
 
-- riduzione del time-to-market;
-- maggiore prevedibilità dello sviluppo;
-- riutilizzo di componenti proprietari già verificati.
+## Produzione
 
-## Scalabilità
+La configurazione production richiede URL HTTPS e segreti espliciti per PostgreSQL e Redis. Il template è `.env.production.example`.
 
-L’architettura permette di scalare separatamente:
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml config
+docker compose --env-file .env.production -f docker-compose.prod.yml build
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+```
 
-- processi HTTP;
-- worker;
-- scheduler;
-- Redis;
-- PostgreSQL;
-- storage delle etichette;
-- processi di integrazione.
+Le migrazioni vengono eseguite come passaggio controllato di deploy:
 
-L’aumento del carico viene gestito inizialmente tramite replica dei worker e concorrenza controllata. Le aree con volumi o requisiti operativi specifici possono successivamente evolvere in servizi dedicati, mantenendo stabili i contratti applicativi e la proprietà del dominio.
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm php \
+  vendor/bin/phinx migrate -e production
+```
 
-Il risultato è una piattaforma con base tecnologica matura, sviluppo rapido, controllo esplicito dei processi e un percorso di crescita progressivo.
+La documentazione architetturale è disponibile in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); la politica di sicurezza è descritta in [`SECURITY.md`](SECURITY.md).

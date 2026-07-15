@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Hapa\Core;
 
+use Hapa\Core\Configuration\Environment;
+use Hapa\Core\Logging\LoggerFactory;
 use RuntimeException;
 use Symfony\Component\Routing\RouteCollection;
 
 final class KernelFactory
 {
-    public function create(string $basePath): Kernel
+    public function create(string $basePath, ?Environment $environment = null): Kernel
     {
+        $environment ??= Environment::load();
         $routesFile = $basePath . '/config/routes.php';
 
         if (!is_file($routesFile)) {
@@ -23,6 +26,10 @@ final class KernelFactory
             throw new RuntimeException('config/routes.php deve restituire RouteCollection.');
         }
 
-        return new Kernel($routes);
+        return new Kernel(
+            $routes,
+            (new LoggerFactory())->create(),
+            $environment->debug,
+        );
     }
 }
