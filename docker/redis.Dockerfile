@@ -1,10 +1,9 @@
 ARG REDIS_BASE_IMAGE=redis:7.4-alpine
 FROM ${REDIS_BASE_IMAGE}
 
-COPY --chown=redis:redis docker/redis-entrypoint.sh /usr/local/bin/hapa-redis-entrypoint
+COPY docker/redis-entrypoint.sh /usr/local/bin/hapa-redis-entrypoint
 RUN chmod 0755 /usr/local/bin/hapa-redis-entrypoint \
     && mkdir -p /data \
     && chown redis:redis /data
 
-USER redis
 ENTRYPOINT ["/usr/local/bin/hapa-redis-entrypoint"]
