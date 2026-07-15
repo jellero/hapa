@@ -3,7 +3,7 @@ x-app-environment: &app-environment
   APP_DEBUG: "false"
   APP_URL: ${APP_URL:?Set APP_URL}
   APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
-  DB_CONNECTION: pgsql
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-REMOTE_ADDR}
   DB_HOST: postgres
   DB_PORT: 5432
   DB_DATABASE: ${DB_DATABASE:-hapa}
@@ -16,16 +16,21 @@ x-app-environment: &app-environment
   REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-2.0}
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
+x-php-build: &php-build
+  context: .
+  dockerfile: docker/php/Dockerfile.prod
+  args:
+    PHP_BASE_IMAGE: ${PHP_BASE_IMAGE:?Set PHP_BASE_IMAGE}
+    COMPOSER_BASE_IMAGE: ${COMPOSER_BASE_IMAGE:?Set COMPOSER_BASE_IMAGE}
+
 services:
   php:
-    image: hapa-php:${IMAGE_TAG:-latest}
+    image: hapa-php:${IMAGE_TAG:?Set IMAGE_TAG}
     build:
-      context: .
-      dockerfile: docker/php/Dockerfile.prod
+      <<: *php-build
+      target: runtime
     environment: *app-environment
-    secrets:
-      - db_password
-      - redis_password
+    secrets: [db_password, redis_password]
     user: www-data
     read_only: true
     tmpfs:
@@ -37,11 +42,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [backend]
+    networks: [edge, data]
     restart: unless-stopped
     stop_grace_period: 20s
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     pids_limit: 256
     mem_limit: 512m
@@ -52,11 +56,28 @@ services:
       timeout: 5s
       retries: 3
 
+  migration:
+    image: hapa-migration:${IMAGE_TAG:?Set IMAGE_TAG}
+    build:
+      <<: *php-build
+      target: migration
+    environment: *app-environment
+    secrets: [db_password, redis_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    profiles: [tools]
+
   nginx:
-    image: hapa-nginx:${IMAGE_TAG:-latest}
+    image: hapa-nginx:${IMAGE_TAG:?Set IMAGE_TAG}
     build:
       context: .
       dockerfile: docker/nginx.Dockerfile
+      args:
+        NGINX_BASE_IMAGE: ${NGINX_BASE_IMAGE:?Set NGINX_BASE_IMAGE}
     ports:
       - "${HAPA_HTTP_BIND:-127.0.0.1}:${HAPA_HTTP_PORT:-8080}:80"
     read_only: true
@@ -67,10 +88,9 @@ services:
     depends_on:
       php:
         condition: service_healthy
-    networks: [frontend, backend]
+    networks: [edge]
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
     pids_limit: 128
@@ -83,19 +103,17 @@ services:
       retries: 3
 
   postgres:
-    image: postgres:17-alpine
+    image: ${POSTGRES_IMAGE:?Set POSTGRES_IMAGE}
     environment:
       POSTGRES_DB: ${DB_DATABASE:-hapa}
       POSTGRES_USER: ${DB_USERNAME:-hapa}
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-    secrets:
-      - db_password
+    secrets: [db_password]
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks: [backend]
+    networks: [data]
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hapa} -d ${DB_DATABASE:-hapa}"]
       interval: 5s
@@ -103,22 +121,22 @@ services:
       retries: 10
 
   redis:
-    image: hapa-redis:${IMAGE_TAG:-latest}
+    image: hapa-redis:${IMAGE_TAG:?Set IMAGE_TAG}
     build:
       context: .
       dockerfile: docker/redis.Dockerfile
+      args:
+        REDIS_BASE_IMAGE: ${REDIS_BASE_IMAGE:?Set REDIS_BASE_IMAGE}
     environment:
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
-    secrets:
-      - redis_password
+    secrets: [redis_password]
     tmpfs:
       - /tmp:noexec,nosuid,size=8m
     volumes:
       - redis_data:/data
-    networks: [backend]
+    networks: [data]
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli ping | grep -qx PONG"]
@@ -127,8 +145,8 @@ services:
       retries: 5
 
 networks:
-  frontend: {}
-  backend:
+  edge: {}
+  data:
     internal: true
 
 volumes:
