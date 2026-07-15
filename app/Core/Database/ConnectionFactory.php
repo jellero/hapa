@@ -29,7 +29,7 @@ final class ConnectionFactory
             }
         }
 
-        return new PDO(
+        $pdo = new PDO(
             sprintf(
                 'pgsql:host=%s;port=%d;dbname=%s;connect_timeout=%d;application_name=hapa',
                 $host,
@@ -46,5 +46,8 @@ final class ConnectionFactory
                 PDO::ATTR_PERSISTENT => false,
             ],
         );
+        $pdo->exec("SET TIME ZONE 'UTC'");
+
+        return $pdo;
     }
 }
