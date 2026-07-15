@@ -17,7 +17,7 @@ app/Core       runtime e servizi trasversali
 app/Modules    dominio e contratti applicativi
 config         composizione e routing
 database       migrazioni PostgreSQL
-docs           architettura, sicurezza e roadmap
+docs           architettura, confronto Symfony, sicurezza e roadmap
 tests          test unitari e integration
 docker         immagini e configurazioni runtime
 ```
@@ -88,5 +88,6 @@ Nginx viene pubblicato per impostazione predefinita su `127.0.0.1:8080`. Il reve
 L’indice è in [`docs/README.md`](docs/README.md). I riferimenti principali sono:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
+- [`docs/SYMFONY_ALIGNMENT.md`](docs/SYMFONY_ALIGNMENT.md);
 - [`docs/SECURITY.md`](docs/SECURITY.md);
 - [`docs/TODO.md`](docs/TODO.md).
