@@ -2,27 +2,27 @@
 
 ## Obiettivo
 
-HAPA gestisce il ciclo ordine tra marketplace generici, Space API, magazzino e GLS. Il dominio applicativo mantiene lo stato autorevole dell’ordine; le integrazioni esterne espongono adapter tipizzati e idempotenti.
+HAPA gestisce il ciclo ordine tra marketplace generici, Space API, magazzino e GLS. Il gestionale mantiene lo stato autorevole dell’ordine; le integrazioni esterne vengono isolate attraverso contratti e adapter.
 
-## Foundation proprietaria
+## Foundation
 
-La base deriva dal framework custom proprietario già impiegato in produzione per applicazioni gestionali PHP. Sono stati riutilizzati stack, convenzioni e confini architetturali: PHP 8.4, PostgreSQL, Redis, Docker, Nginx/PHP-FPM, Phinx, PHPUnit, PHPStan e componenti Symfony selezionati.
+Il framework custom proprietario utilizza PHP 8.4, PostgreSQL, Redis, Docker, Nginx/PHP-FPM, Phinx, PHPUnit, PHPStan, Monolog e componenti Symfony selezionati.
 
-Il namespace applicativo è `Hapa\\`. I moduli PMS restano fuori dal repository.
+Il namespace applicativo è `Hapa\`.
 
 ## Confini
 
-- `app/Core`: runtime HTTP, console, database, configurazione e servizi trasversali.
-- `app/Modules`: dominio e integrazioni applicative.
+- `app/Core`: runtime HTTP, console, configurazione, database, logging, health check e servizi trasversali.
+- `app/Modules`: dominio e contratti applicativi.
 - `config`: composizione applicativa e routing.
 - `database/migrations`: schema PostgreSQL versionato.
-- `tests`: test unitari e architetturali.
+- `tests`: test unitari, integration e architetturali.
 
-Il Core non dipende dai moduli applicativi. Le dipendenze tra moduli passano attraverso contratti espliciti.
+Il Core rimane indipendente dai moduli applicativi. Le dipendenze tra moduli attraversano contratti espliciti.
 
-## Moduli iniziali
+## Moduli di dominio
 
-- `Orders`: ordine, righe, quantità e macchina a stati.
+- `Orders`: ordine, righe, quantità e transizioni di stato.
 - `Marketplace`: import, accettazione, indirizzo e tracking.
 - `Space`: invio ordine e disponibilità merce.
 - `Warehouse` / `Picking`: preparazione e scansione barcode.
@@ -31,23 +31,48 @@ Il Core non dipende dai moduli applicativi. Le dipendenze tra moduli passano att
 - `Automation`: outbox, job, retry e riconciliazione.
 - `OperationalDashboard`: visibilità e azioni operative.
 
-## Affidabilità
+I contratti iniziali Marketplace, Space e GLS sono presenti. Le implementazioni dei provider verranno introdotte per vertical slice.
 
-Le mutazioni di dominio e la pubblicazione degli eventi condividono la stessa transazione PostgreSQL. La transactional outbox separa il commit di business dalla consegna tecnica.
+## Foundation implementata
 
-Ogni chiamata esterna utilizza:
+- bootstrap HTTP e CLI;
+- routing e risposte JSON;
+- configurazione ambiente validata;
+- blocco dell’avvio production con debug, URL non HTTPS o segreti deboli;
+- exception handling centralizzato;
+- logging JSON su stderr;
+- correlation ID propagato nelle risposte;
+- redazione dei dati sensibili nei contesti di log;
+- health live e ready;
+- connessioni PostgreSQL con timeout e prepared statement native;
+- schema ordine, spedizione, outbox, delivery esterna e audit;
+- check constraint su stati, quantità, pesi e tentativi;
+- Docker development e production distinti;
+- CI con migrazioni reali PostgreSQL, test, analisi statica e audit dipendenze.
+
+## Affidabilità delle integrazioni
+
+Lo schema della transactional outbox contiene idempotency key, tentativi, disponibilità temporale, lock, worker identity e stati terminali. Il worker verrà attivato insieme ai primi handler reali, utilizzando claim atomici PostgreSQL con `FOR UPDATE SKIP LOCKED`.
+
+Ogni integrazione dovrà applicare:
 
 - idempotency key;
 - correlation ID;
 - timeout esplicito;
 - classificazione successo / temporaneo / definitivo;
-- tentativi persistenti;
-- request e response log con redazione dei dati sensibili;
 - retry con backoff;
-- verifica manuale per gli errori definitivi.
+- persistenza dei tentativi;
+- redazione dei dati sensibili prima del logging o della persistenza tecnica;
+- riconciliazione e gestione manuale degli errori definitivi.
 
-I worker concorrenti useranno claim atomici PostgreSQL con `FOR UPDATE SKIP LOCKED`.
+## Sicurezza
+
+La configurazione production richiede HTTPS e segreti espliciti. Le immagini production utilizzano build multistage, utente non privilegiato, filesystem read-only, capability ridotte e reti interne per PostgreSQL e Redis.
+
+Nginx inoltra a PHP-FPM esclusivamente il front controller e applica header di sicurezza. Le risposte applicative mantengono messaggi generici in produzione e includono un correlation ID.
+
+I payload tecnici contenenti dati personali richiederanno policy di minimizzazione, redazione e retention prima dell’attivazione degli adapter reali.
 
 ## Scalabilità
 
-Processi HTTP, worker, scheduler, PostgreSQL e Redis sono distribuibili separatamente. La replica orizzontale dei worker aumenta la capacità asincrona mantenendo idempotenza e locking applicativo. Adapter o workload specifici possono evolvere in servizi dedicati conservando i contratti del dominio.
+Processi HTTP, PostgreSQL, Redis e futuri worker sono distribuibili separatamente. La capacità asincrona crescerà tramite replica dei worker e claim concorrenti controllati. Adapter o workload specifici potranno evolvere in servizi dedicati mantenendo stabili i contratti del dominio.
