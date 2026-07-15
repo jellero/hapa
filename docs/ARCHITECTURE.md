@@ -10,7 +10,7 @@ La documentazione distingue sempre tre livelli di maturità:
 - **parziale**: struttura o contratto presente, comportamento operativo ancora incompleto;
 - **pianificato**: definito come direzione architetturale e riportato nella roadmap.
 
-La roadmap esecutiva è mantenuta in [`TODO.md`](../TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](../SECURITY.md).
+La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md).
 
 ---
 
