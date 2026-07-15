@@ -51,13 +51,19 @@ final readonly class Kernel
             $response = $this->problem('Metodo non consentito', Response::HTTP_METHOD_NOT_ALLOWED);
             $response->headers->set('Allow', implode(', ', $exception->getAllowedMethods()));
         } catch (Throwable $exception) {
-            $this->logger->error('Errore applicativo non gestito.', [
+            $logContext = [
                 'correlation_id' => $correlationId,
                 'exception' => $exception::class,
-                'message' => $exception->getMessage(),
+                'exception_code' => (string) $exception->getCode(),
                 'method' => $request->getMethod(),
                 'path' => $request->getPathInfo(),
-            ]);
+            ];
+
+            if ($this->debug) {
+                $logContext['message'] = $exception->getMessage();
+            }
+
+            $this->logger->error('Errore applicativo non gestito.', $logContext);
 
             $payload = ['error' => 'Errore applicativo'];
             if ($this->debug) {
