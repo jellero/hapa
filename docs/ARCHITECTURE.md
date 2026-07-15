@@ -39,16 +39,18 @@ I contratti iniziali Marketplace, Space e GLS sono presenti. Le implementazioni 
 - routing e risposte JSON;
 - configurazione ambiente validata;
 - blocco dell’avvio production con debug, URL non HTTPS o segreti deboli;
-- exception handling centralizzato;
+- secret file per PostgreSQL e Redis;
+- exception handling centralizzato con messaggi tecnici esclusi dai log production;
 - logging JSON su stderr;
 - correlation ID propagato nelle risposte;
 - redazione dei dati sensibili nei contesti di log;
-- health live e ready;
+- health live e ready, con dettaglio componenti escluso in produzione;
 - connessioni PostgreSQL con timeout e prepared statement native;
 - schema ordine, spedizione, outbox, delivery esterna e audit;
-- check constraint su stati, quantità, pesi e tentativi;
+- check constraint su stati, disponibilità, quantità, pesi e tentativi;
+- test di coerenza tra stati PHP e vincolo PostgreSQL;
 - Docker development e production distinti;
-- CI con migrazioni reali PostgreSQL, test, analisi statica e audit dipendenze.
+- CI con migrazioni reali PostgreSQL, test, analisi statica, audit dipendenze e action pinning.
 
 ## Affidabilità delle integrazioni
 
@@ -67,9 +69,9 @@ Ogni integrazione dovrà applicare:
 
 ## Sicurezza
 
-La configurazione production richiede HTTPS e segreti espliciti. Le immagini production utilizzano build multistage, utente non privilegiato, filesystem read-only, capability ridotte e reti interne per PostgreSQL e Redis.
+La configurazione production richiede HTTPS e secret file esterni al repository. Il servizio HTTP viene associato a loopback; la terminazione TLS e HSTS appartengono al reverse proxy o load balancer di frontiera. Le immagini production utilizzano build multistage, utente non privilegiato, filesystem read-only, capability ridotte e reti interne per PostgreSQL e Redis.
 
-Nginx inoltra a PHP-FPM esclusivamente il front controller e applica header di sicurezza. Le risposte applicative mantengono messaggi generici in produzione e includono un correlation ID.
+Nginx inoltra a PHP-FPM esclusivamente il front controller, limita la readiness alle reti private e applica header di sicurezza. Le risposte applicative mantengono messaggi generici in produzione e includono un correlation ID.
 
 I payload tecnici contenenti dati personali richiederanno policy di minimizzazione, redazione e retention prima dell’attivazione degli adapter reali.
 

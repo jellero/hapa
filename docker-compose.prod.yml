@@ -8,11 +8,11 @@ x-app-environment: &app-environment
   DB_PORT: 5432
   DB_DATABASE: ${DB_DATABASE:-hapa}
   DB_USERNAME: ${DB_USERNAME:-hapa}
-  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+  DB_PASSWORD_FILE: /run/secrets/db_password
   DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-5}
   REDIS_HOST: redis
   REDIS_PORT: 6379
-  REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+  REDIS_PASSWORD_FILE: /run/secrets/redis_password
   REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-2.0}
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
@@ -23,6 +23,9 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile.prod
     environment: *app-environment
+    secrets:
+      - db_password
+      - redis_password
     user: www-data
     read_only: true
     tmpfs:
@@ -55,7 +58,7 @@ services:
       context: .
       dockerfile: docker/nginx.Dockerfile
     ports:
-      - "80:80"
+      - "${HAPA_HTTP_BIND:-127.0.0.1}:${HAPA_HTTP_PORT:-8080}:80"
     read_only: true
     tmpfs:
       - /var/cache/nginx:noexec,nosuid,size=32m
@@ -84,7 +87,9 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE:-hapa}
       POSTGRES_USER: ${DB_USERNAME:-hapa}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [backend]
@@ -98,21 +103,28 @@ services:
       retries: 10
 
   redis:
-    image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    image: hapa-redis:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/redis.Dockerfile
+    environment:
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+    secrets:
+      - redis_password
+    tmpfs:
+      - /tmp:noexec,nosuid,size=8m
     volumes:
       - redis_data:/data
     networks: [backend]
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    cap_drop: [ALL]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli ping | grep -qx PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
 
 networks:
   frontend: {}
@@ -123,3 +135,9 @@ volumes:
   postgres_data:
   redis_data:
   app_storage:
+
+secrets:
+  db_password:
+    file: ${DB_PASSWORD_FILE:?Set DB_PASSWORD_FILE}
+  redis_password:
+    file: ${REDIS_PASSWORD_FILE:?Set REDIS_PASSWORD_FILE}

@@ -3,6 +3,7 @@
 /.env.*.local
 /.phpunit.cache/
 /coverage/
+/secrets/
 /storage/cache/*
 /storage/logs/*
 /storage/labels/*

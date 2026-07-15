@@ -13,6 +13,9 @@ final class EnvironmentTest extends TestCase
     /** @var array<string, string|null> */
     private array $original = [];
 
+    /** @var list<string> */
+    private array $temporaryFiles = [];
+
     protected function tearDown(): void
     {
         foreach ($this->original as $key => $value) {
@@ -26,7 +29,14 @@ final class EnvironmentTest extends TestCase
             putenv(sprintf('%s=%s', $key, $value));
         }
 
+        foreach ($this->temporaryFiles as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+
         $this->original = [];
+        $this->temporaryFiles = [];
     }
 
     public function testProductionRejectsDebugMode(): void
@@ -63,6 +73,29 @@ final class EnvironmentTest extends TestCase
         self::assertFalse($environment->debug);
     }
 
+    public function testProductionReadsSecretsFromFiles(): void
+    {
+        $databaseSecret = $this->secretFile('database-secret-from-file');
+        $redisSecret = $this->secretFile('redis-secret-from-file');
+
+        $this->setEnvironment([
+            'APP_ENV' => 'production',
+            'APP_DEBUG' => 'false',
+            'APP_URL' => 'https://hapa.example.com',
+            'APP_TIMEZONE' => 'Europe/Rome',
+            'DB_PASSWORD' => '',
+            'REDIS_PASSWORD' => '',
+            'DB_PASSWORD_FILE' => $databaseSecret,
+            'REDIS_PASSWORD_FILE' => $redisSecret,
+        ]);
+
+        $environment = Environment::load();
+
+        self::assertTrue($environment->isProduction());
+        self::assertSame('database-secret-from-file', Environment::secret('DB_PASSWORD'));
+        self::assertSame('redis-secret-from-file', Environment::secret('REDIS_PASSWORD'));
+    }
+
     /** @param array<string, string> $values */
     private function setEnvironment(array $values): void
     {
@@ -75,5 +108,18 @@ final class EnvironmentTest extends TestCase
             $_ENV[$key] = $value;
             putenv(sprintf('%s=%s', $key, $value));
         }
+    }
+
+    private function secretFile(string $secret): string
+    {
+        $file = tempnam(sys_get_temp_dir(), 'hapa-secret-');
+        if ($file === false) {
+            throw new RuntimeException('Impossibile creare un secret file temporaneo.');
+        }
+
+        file_put_contents($file, $secret . PHP_EOL);
+        $this->temporaryFiles[] = $file;
+
+        return $file;
     }
 }

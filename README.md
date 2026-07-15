@@ -56,9 +56,10 @@ La foundation attuale comprende:
 - redazione ricorsiva dei campi sensibili nei log;
 - health check live e ready per PostgreSQL e Redis;
 - schema iniziale per ordini, spedizioni, outbox, delivery esterne e audit;
-- vincoli database su stati e quantità;
+- vincoli database su stati, disponibilità e quantità;
 - configurazioni Docker distinte per sviluppo e produzione;
 - immagine PHP production multistage e non privilegiata;
+- secret file per PostgreSQL e Redis;
 - pipeline CI con migrazioni, test, PHPStan e audit Composer;
 - contratti iniziali per Marketplace, Space e GLS.
 
@@ -99,7 +100,17 @@ composer analyse
 
 ## Produzione
 
-La configurazione production richiede URL HTTPS e segreti espliciti per PostgreSQL e Redis. Il template è `.env.production.example`.
+La configurazione production utilizza HTTPS e secret file dedicati per PostgreSQL e Redis. Il template è `.env.production.example`.
+
+```bash
+cp .env.production.example .env.production
+mkdir -p secrets
+umask 077
+openssl rand -base64 48 > secrets/db_password.txt
+openssl rand -base64 48 > secrets/redis_password.txt
+```
+
+Il container Nginx viene pubblicato per impostazione predefinita su `127.0.0.1:8080`. Un reverse proxy o load balancer esterno deve terminare TLS, inoltrare il traffico verso tale endpoint e applicare HSTS. Il backend PostgreSQL/Redis resta su rete Docker interna; `/health/ready` è accessibile soltanto da indirizzi privati.
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml config

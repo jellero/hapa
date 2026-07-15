@@ -73,9 +73,38 @@ final readonly class Environment
         return $default;
     }
 
+    public static function secret(string $name, ?string $default = null): string
+    {
+        $file = self::value($name . '_FILE', '');
+
+        if ($file !== '') {
+            if (!is_file($file) || !is_readable($file)) {
+                throw new RuntimeException(sprintf('Secret file non leggibile per %s.', $name));
+            }
+
+            $contents = file_get_contents($file);
+            if ($contents === false) {
+                throw new RuntimeException(sprintf('Impossibile leggere il secret file per %s.', $name));
+            }
+
+            $secret = rtrim($contents, "\r\n");
+            if ($secret !== '') {
+                return $secret;
+            }
+
+            if ($default === null) {
+                throw new RuntimeException(sprintf('Secret file vuoto per %s.', $name));
+            }
+
+            return $default;
+        }
+
+        return self::value($name, $default);
+    }
+
     private static function assertProductionSecret(string $name): void
     {
-        $value = self::value($name);
+        $value = self::secret($name);
         $normalized = strtolower($value);
 
         foreach (['replace_with_secret', 'change-me', 'changeme', 'local'] as $forbidden) {
