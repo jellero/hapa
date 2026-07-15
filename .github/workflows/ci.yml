@@ -70,27 +70,39 @@ jobs:
   production-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      APP_URL: https://hapa.example.com
+      TRUSTED_PROXIES: 127.0.0.1,REMOTE_ADDR
+      IMAGE_TAG: ${{ github.sha }}
+      HAPA_HTTP_PORT: 18080
+      DB_PASSWORD_FILE: /tmp/hapa-db-secret
+      REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Build and smoke production stack
-        env:
-          APP_URL: https://hapa.example.com
-          TRUSTED_PROXIES: 127.0.0.1,REMOTE_ADDR
-          IMAGE_TAG: ${{ github.sha }}
-          HAPA_HTTP_PORT: 18080
-          DB_PASSWORD_FILE: /tmp/hapa-db-secret
-          REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
+      - name: Prepare production secrets
         run: |
-          set -euo pipefail
-          trap 'docker compose -f docker-compose.prod.yml down -v || true' EXIT
           printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
           printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
-          docker compose -f docker-compose.prod.yml config --quiet
-          docker compose -f docker-compose.prod.yml build php migration nginx redis
-          docker compose -f docker-compose.prod.yml up -d --wait postgres redis
-          docker compose -f docker-compose.prod.yml --profile tools run --rm migration
-          docker compose -f docker-compose.prod.yml up -d --wait php nginx
-          curl --fail --silent http://127.0.0.1:18080/health/live
+      - name: Validate production Compose
+        run: docker compose -f docker-compose.prod.yml config --quiet
+      - name: Build production images
+        run: docker compose -f docker-compose.prod.yml build php migration nginx redis
+      - name: Start infrastructure
+        run: docker compose -f docker-compose.prod.yml up -d --wait postgres redis
+      - name: Apply production migrations
+        run: docker compose -f docker-compose.prod.yml --profile tools run --rm migration
+      - name: Start application
+        run: docker compose -f docker-compose.prod.yml up -d --wait php nginx
+      - name: Verify liveness
+        run: curl --fail --silent http://127.0.0.1:18080/health/live
+      - name: Show container diagnostics
+        if: failure()
+        run: |
+          docker compose -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.prod.yml logs --no-color --tail=200
+      - name: Stop production stack
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v
 
   static-analysis:
     runs-on: ubuntu-latest
