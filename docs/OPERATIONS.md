@@ -14,6 +14,10 @@ openssl rand -base64 48 > secrets/redis_password.txt
 
 `APP_URL` identifica l’host pubblico HTTPS. `TRUSTED_PROXIES` identifica esclusivamente i proxy autorizzati a fornire gli header `X-Forwarded-*`. Il binding HTTP applicativo resta su loopback; TLS e HSTS vengono applicati dal reverse proxy o load balancer di frontiera.
 
+## Gate CI
+
+Il commit destinato al deploy deve avere verdi i job `quality`, `static-analysis` e `production-smoke`. Il job production costruisce le immagini, avvia lo stack, applica le migrazioni e verifica liveness e readiness.
+
 ## Build e deploy
 
 ```bash
