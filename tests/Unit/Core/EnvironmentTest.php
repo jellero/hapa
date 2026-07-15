@@ -113,7 +113,10 @@ final class EnvironmentTest extends TestCase
     private function secretFile(string $secret): string
     {
         $file = tempnam(sys_get_temp_dir(), 'hapa-secret-');
-        self::assertNotFalse($file);
+        if ($file === false) {
+            throw new RuntimeException('Impossibile creare un secret file temporaneo.');
+        }
+
         file_put_contents($file, $secret . PHP_EOL);
         $this->temporaryFiles[] = $file;
 
