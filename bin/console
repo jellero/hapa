@@ -3,7 +3,8 @@
 
 declare(strict_types=1);
 
-use Hapa\Core\Console\OutboxWorkCommand;
+use Hapa\Core\Configuration\Environment;
+use Hapa\Core\Console\SystemCheckCommand;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Dotenv\Dotenv;
 
@@ -14,8 +15,9 @@ if (is_file($basePath . '/.env')) {
     (new Dotenv())->usePutenv()->loadEnv($basePath . '/.env');
 }
 
-date_default_timezone_set($_ENV['APP_TIMEZONE'] ?? 'Europe/Rome');
+$environment = Environment::load();
+date_default_timezone_set($environment->timezone);
 
-$application = new Application('HAPA', '0.1.0');
-$application->add(new OutboxWorkCommand());
+$application = new Application('HAPA', '0.2.0');
+$application->add(new SystemCheckCommand());
 $application->run();
