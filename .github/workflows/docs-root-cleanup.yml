@@ -1,0 +1,41 @@
+name: Documentation root cleanup
+
+on:
+  push:
+    branches:
+      - docs/cleanup-root-readme
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: docs/cleanup-root-readme
+          fetch-depth: 0
+
+      - name: Update documentation links and remove root pointers
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/ARCHITECTURE.md')
+          content = path.read_text(encoding='utf-8')
+          content = content.replace('[`TODO.md`](../TODO.md)', '[`TODO.md`](TODO.md)')
+          content = content.replace('[`SECURITY.md`](../SECURITY.md)', '[`SECURITY.md`](SECURITY.md)')
+          path.write_text(content, encoding='utf-8')
+          PY
+
+          git rm TODO.md SECURITY.md .github/workflows/docs-root-cleanup.yml
+
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/ARCHITECTURE.md
+          git commit -m 'docs: rimuove i puntatori root e corregge i collegamenti'
+          git push origin HEAD:docs/cleanup-root-readme
