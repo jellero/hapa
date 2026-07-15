@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
         env:
           POSTGRES_DB: hapa_test
           POSTGRES_USER: hapa
@@ -45,8 +45,8 @@ jobs:
       REDIS_PASSWORD: ci-redis-password
       LOG_LEVEL: warning
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
           extensions: pdo_pgsql, redis, intl, zip
@@ -60,34 +60,22 @@ jobs:
       - name: Validate production Compose
         env:
           APP_URL: https://hapa.example.com
-          DB_PASSWORD: ci-production-database-secret
-          REDIS_PASSWORD: ci-production-redis-secret
-        run: docker compose -f docker-compose.prod.yml config --quiet
+          DB_PASSWORD_FILE: /tmp/hapa-db-secret
+          REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
+        run: |
+          printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
+          printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
+          docker compose -f docker-compose.prod.yml config --quiet
 
   static-analysis:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
           extensions: pdo_pgsql, redis, intl, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist --quiet
-      - name: Run PHPStan
-        id: phpstan
-        continue-on-error: true
-        run: vendor/bin/phpstan analyse --error-format=json > phpstan-report.json
-      - name: Upload PHPStan report
-        if: steps.phpstan.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: phpstan-report
-          path: phpstan-report.json
-          retention-days: 3
-      - name: Fail on PHPStan errors
-        if: steps.phpstan.outcome == 'failure'
-        run: |
-          cat phpstan-report.json
-          exit 1
+      - run: composer analyse
