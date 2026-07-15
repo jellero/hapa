@@ -55,7 +55,9 @@ jobs:
       - run: composer validate --strict
       - run: composer audit --locked
       - run: vendor/bin/phinx migrate -e testing
-      - run: composer ci
+      - run: composer architecture:check
+      - run: composer test
+      - run: composer analyse
       - name: Validate production Compose
         env:
           APP_URL: https://hapa.example.com
