@@ -68,7 +68,7 @@ final class KernelTest extends TestCase
             public array $records = [];
 
             /** @param array<string, mixed> $context */
-            public function log($level, string|Stringable $message, array $context = []): void
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
             {
                 $this->records[] = [
                     'message' => (string) $message,
