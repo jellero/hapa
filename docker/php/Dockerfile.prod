@@ -14,6 +14,7 @@ FROM php-base AS dependencies
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY composer.json composer.lock ./
+COPY app ./app
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -35,6 +36,7 @@ RUN mkdir -p storage/cache storage/logs storage/labels storage/uploads \
     && find app bin config public -type d -exec chmod 0755 {} + \
     && find app config public -type f -exec chmod 0644 {} + \
     && test -f vendor/autoload.php \
+    && php -r "require 'vendor/autoload.php'; class_exists('Hapa\\Core\\Configuration\\EnvironmentReader') || exit(1);" \
     && php -m | grep -qx pdo_pgsql \
     && php -m | grep -qx redis
 USER www-data
@@ -42,7 +44,6 @@ CMD ["php-fpm"]
 
 FROM runtime AS migration
 USER root
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY phinx.php ./
 COPY database ./database
 RUN find database -type d -exec chmod 0755 {} + \
