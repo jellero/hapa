@@ -37,6 +37,7 @@ $routes->add('health_ready', new Route(
     '/health/ready',
     ['_controller' => static function (Request $request) use ($production): JsonResponse {
         $result = (new ReadinessCheck(new ConnectionFactory()))->check();
+        /** @var array<string, mixed> $payload */
         $payload = [
             'status' => $result['ready'] ? 'ready' : 'unavailable',
             'correlation_id' => $request->attributes->getString('correlation_id'),
