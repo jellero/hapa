@@ -34,14 +34,19 @@
     "test": "phpunit",
     "test:unit": "phpunit --testsuite Unit",
     "test:integration": "phpunit --testsuite Integration",
-    "test:architecture": "phpunit --testsuite Architecture",
     "analyse": "phpstan analyse",
     "security:audit": "composer audit --locked",
-    "ci": [
+    "ci:fast": [
       "@architecture:check",
       "@test",
       "@analyse"
-    ]
+    ],
+    "ci:full": [
+      "composer validate --strict",
+      "@security:audit",
+      "@ci:fast"
+    ],
+    "ci": "@ci:fast"
   },
   "config": {
     "sort-packages": true,
