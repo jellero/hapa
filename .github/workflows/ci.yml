@@ -87,12 +87,16 @@ jobs:
         run: docker compose -f docker-compose.prod.yml config --quiet
       - name: Build production images
         run: docker compose -f docker-compose.prod.yml build php migration nginx redis
-      - name: Start infrastructure
-        run: docker compose -f docker-compose.prod.yml up -d --wait postgres redis
+      - name: Start PostgreSQL
+        run: docker compose -f docker-compose.prod.yml up -d --wait postgres
+      - name: Start Redis
+        run: docker compose -f docker-compose.prod.yml up -d --wait redis
       - name: Apply production migrations
         run: docker compose -f docker-compose.prod.yml --profile tools run --rm migration
-      - name: Start application
-        run: docker compose -f docker-compose.prod.yml up -d --wait php nginx
+      - name: Start PHP
+        run: docker compose -f docker-compose.prod.yml up -d --wait php
+      - name: Start Nginx
+        run: docker compose -f docker-compose.prod.yml up -d --wait nginx
       - name: Verify liveness
         run: curl --fail --silent http://127.0.0.1:18080/health/live
       - name: Show container diagnostics
