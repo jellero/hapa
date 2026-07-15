@@ -11,9 +11,9 @@ use Symfony\Component\Routing\RouteCollection;
 
 final class KernelFactory
 {
-    public function create(string $basePath): Kernel
+    public function create(string $basePath, ?Environment $environment = null): Kernel
     {
-        $environment = Environment::load();
+        $environment ??= Environment::load();
         $routesFile = $basePath . '/config/routes.php';
 
         if (!is_file($routesFile)) {
