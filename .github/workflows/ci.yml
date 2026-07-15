@@ -57,10 +57,22 @@ jobs:
       - run: vendor/bin/phinx migrate -e testing
       - run: composer architecture:check
       - run: composer test
-      - run: composer analyse
       - name: Validate production Compose
         env:
           APP_URL: https://hapa.example.com
           DB_PASSWORD: ci-production-database-secret
           REDIS_PASSWORD: ci-production-redis-secret
         run: docker compose -f docker-compose.prod.yml config --quiet
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, redis, intl, zip
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --quiet
+      - run: composer analyse
