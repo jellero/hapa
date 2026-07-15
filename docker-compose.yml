@@ -1,7 +1,7 @@
 x-app-environment: &app-environment
   APP_ENV: ${APP_ENV:-development}
   APP_DEBUG: ${APP_DEBUG:-true}
-  APP_URL: ${APP_URL:-http://localhost}
+  APP_URL: ${APP_URL:-http://localhost:8080}
   APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
   DB_CONNECTION: pgsql
   DB_HOST: postgres
@@ -9,8 +9,11 @@ x-app-environment: &app-environment
   DB_DATABASE: ${DB_DATABASE:-hapa}
   DB_USERNAME: ${DB_USERNAME:-hapa}
   DB_PASSWORD: ${DB_PASSWORD:-hapa-local-change-me}
+  DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-5}
   REDIS_HOST: redis
   REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-hapa-local-redis-change-me}
+  REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-2.0}
   LOG_LEVEL: ${LOG_LEVEL:-debug}
 
 services:
@@ -27,22 +30,11 @@ services:
       redis:
         condition: service_healthy
     networks: [backend]
-
-  worker:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile
-    command: ["php", "bin/console", "outbox:work", "--sleep=2"]
-    environment: *app-environment
-    volumes:
-      - ./:/var/www/html
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks: [backend]
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t >/dev/null 2>&1 && test -f /var/www/html/vendor/autoload.php"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   nginx:
     build:
@@ -51,8 +43,14 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - php
+      php:
+        condition: service_healthy
     networks: [frontend, backend]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:17-alpine
@@ -71,9 +69,10 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-hapa-local-redis-change-me}"]
     networks: [backend]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:-hapa-local-redis-change-me}' ping | grep PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
