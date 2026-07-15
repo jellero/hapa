@@ -129,11 +129,23 @@ jobs:
           curl --fail --silent --show-error \
             -H 'Host: hapa.example.com' \
             http://127.0.0.1:18080/health/ready
-      - name: Show production diagnostics
+      - name: Capture Redis diagnostics
         if: failure()
         run: |
-          docker compose -f docker-compose.prod.yml ps -a
-          docker compose -f docker-compose.prod.yml logs --no-color --tail=120
+          mkdir -p diagnostics
+          docker compose -f docker-compose.prod.yml ps -a > diagnostics/redis.txt 2>&1 || true
+          docker compose -f docker-compose.prod.yml logs --no-color redis >> diagnostics/redis.txt 2>&1 || true
+          container_id="$(docker compose -f docker-compose.prod.yml ps -aq redis)"
+          if [ -n "$container_id" ]; then
+            docker inspect "$container_id" >> diagnostics/redis.txt 2>&1 || true
+          fi
+      - name: Upload Redis diagnostics
+        if: failure()
+        uses: actions/upload-artifact@84480863f228bb9747b473957fcc9e309aa96097 # v4.4.2
+        with:
+          name: redis-production-diagnostics
+          path: diagnostics/redis.txt
+          retention-days: 1
       - name: Stop production stack
         if: always()
         run: docker compose -f docker-compose.prod.yml down -v --remove-orphans
