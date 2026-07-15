@@ -105,15 +105,23 @@ jobs:
           printf '%s' 'ci-production-database-secret' > secrets/db_password.txt
           printf '%s' 'ci-production-redis-secret' > secrets/redis_password.txt
           chmod 600 secrets/*.txt
-      - name: Validate and build production images
+      - name: Validate production Compose
+        run: docker compose -f docker-compose.prod.yml config --quiet
+      - name: Build production images
+        run: docker compose -f docker-compose.prod.yml build --quiet php migration nginx redis
+      - name: Start production stack
+        run: docker compose -f docker-compose.prod.yml up -d --wait postgres redis php nginx
+      - name: Apply production migrations
+        run: docker compose -f docker-compose.prod.yml run --rm migration migrate -e production
+      - name: Verify application liveness
+        run: curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/live
+      - name: Verify application readiness
+        run: curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/ready
+      - name: Show production diagnostics
+        if: failure()
         run: |
-          docker compose -f docker-compose.prod.yml config --quiet
-          docker compose -f docker-compose.prod.yml build php migration nginx redis
-      - name: Run production smoke test
-        run: |
-          set -euo pipefail
-          trap 'docker compose -f docker-compose.prod.yml down -v --remove-orphans' EXIT
-          docker compose -f docker-compose.prod.yml up -d --wait postgres redis php nginx
-          docker compose -f docker-compose.prod.yml run --rm migration migrate -e production
-          curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/live
-          curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/ready
+          docker compose -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.prod.yml logs --no-color --tail=80
+      - name: Stop production stack
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v --remove-orphans
