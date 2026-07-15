@@ -109,10 +109,14 @@ jobs:
         run: docker compose -f docker-compose.prod.yml config --quiet
       - name: Build production images
         run: docker compose -f docker-compose.prod.yml build --quiet php migration nginx redis
-      - name: Start production stack
-        run: docker compose -f docker-compose.prod.yml up -d --wait postgres redis php nginx
+      - name: Start production datastores
+        run: docker compose -f docker-compose.prod.yml up -d --wait postgres redis
       - name: Apply production migrations
         run: docker compose -f docker-compose.prod.yml run --rm migration migrate -e production
+      - name: Start production PHP
+        run: docker compose -f docker-compose.prod.yml up -d --wait php
+      - name: Start production Nginx
+        run: docker compose -f docker-compose.prod.yml up -d --wait nginx
       - name: Verify application liveness
         run: |
           curl --fail --silent --show-error \
@@ -126,8 +130,8 @@ jobs:
       - name: Show production diagnostics
         if: failure()
         run: |
-          docker compose -f docker-compose.prod.yml ps
-          docker compose -f docker-compose.prod.yml logs --no-color --tail=80
+          docker compose -f docker-compose.prod.yml ps -a
+          docker compose -f docker-compose.prod.yml logs --no-color --tail=120
       - name: Stop production stack
         if: always()
         run: docker compose -f docker-compose.prod.yml down -v --remove-orphans
