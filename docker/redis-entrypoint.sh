@@ -25,4 +25,5 @@ umask 077
 } > /tmp/hapa-redis.conf
 
 unset password escaped_password
-exec redis-server /tmp/hapa-redis.conf
+chown redis:redis /tmp/hapa-redis.conf /data
+exec /usr/local/bin/docker-entrypoint.sh redis-server /tmp/hapa-redis.conf
