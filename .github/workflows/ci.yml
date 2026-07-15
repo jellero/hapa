@@ -114,9 +114,15 @@ jobs:
       - name: Apply production migrations
         run: docker compose -f docker-compose.prod.yml run --rm migration migrate -e production
       - name: Verify application liveness
-        run: curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/live
+        run: |
+          curl --fail --silent --show-error \
+            -H 'Host: hapa.example.com' \
+            http://127.0.0.1:18080/health/live
       - name: Verify application readiness
-        run: curl --fail --silent --show-error -H 'Host: hapa.example.com' http://127.0.0.1:18080/health/ready
+        run: |
+          curl --fail --silent --show-error \
+            -H 'Host: hapa.example.com' \
+            http://127.0.0.1:18080/health/ready
       - name: Show production diagnostics
         if: failure()
         run: |
