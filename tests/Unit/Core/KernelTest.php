@@ -81,7 +81,10 @@ final class KernelTest extends TestCase
 
         self::assertCount(1, $logger->records);
         self::assertArrayNotHasKey('message', $logger->records[0]['context']);
-        self::assertNotContains('database-password-must-not-leak', $logger->records[0]['context'], true);
+        self::assertStringNotContainsString(
+            'database-password-must-not-leak',
+            json_encode($logger->records[0]['context'], JSON_THROW_ON_ERROR),
+        );
     }
 
     private function failingRoutes(): RouteCollection
