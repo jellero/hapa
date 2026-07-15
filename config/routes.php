@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Hapa\Core\Configuration\Environment;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Health\ReadinessCheck;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -11,6 +12,7 @@ use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
 $routes = new RouteCollection();
+$production = Environment::load()->isProduction();
 
 $routes->add('home', new Route(
     '/',
@@ -33,15 +35,19 @@ $routes->add('health_live', new Route(
 
 $routes->add('health_ready', new Route(
     '/health/ready',
-    ['_controller' => static function (Request $request): JsonResponse {
+    ['_controller' => static function (Request $request) use ($production): JsonResponse {
         $result = (new ReadinessCheck(new ConnectionFactory()))->check();
+        $payload = [
+            'status' => $result['ready'] ? 'ready' : 'unavailable',
+            'correlation_id' => $request->attributes->getString('correlation_id'),
+        ];
+
+        if (!$production) {
+            $payload['components'] = $result['components'];
+        }
 
         return new JsonResponse(
-            [
-                'status' => $result['ready'] ? 'ready' : 'unavailable',
-                'components' => $result['components'],
-                'correlation_id' => $request->attributes->getString('correlation_id'),
-            ],
+            $payload,
             $result['ready'] ? Response::HTTP_OK : Response::HTTP_SERVICE_UNAVAILABLE,
         );
     }],
