@@ -16,7 +16,7 @@ final class ConnectionFactory
         $port = (int) Environment::value('DB_PORT', '5432');
         $database = Environment::value('DB_DATABASE', 'hapa');
         $username = Environment::value('DB_USERNAME', 'hapa');
-        $password = Environment::value('DB_PASSWORD', '');
+        $password = Environment::secret('DB_PASSWORD', '');
         $connectTimeout = max(1, (int) Environment::value('DB_CONNECT_TIMEOUT', '5'));
 
         if ($port < 1 || $port > 65535) {
