@@ -1,6 +1,8 @@
 /vendor/
 /.env
+/.env.*.local
 /.phpunit.cache/
+/coverage/
 /storage/cache/*
 /storage/logs/*
 /storage/labels/*
@@ -9,7 +11,6 @@
 !/storage/logs/.gitkeep
 !/storage/labels/.gitkeep
 !/storage/uploads/.gitkeep
-composer.lock
 .DS_Store
 .idea/
 .vscode/
