@@ -18,12 +18,40 @@ $env = static function (string $name, ?string $default = null): string {
     return (string) $value;
 };
 
+$secret = static function (string $name, ?string $default = null) use ($env): string {
+    $file = $env($name . '_FILE', '');
+
+    if ($file !== '') {
+        if (!is_file($file) || !is_readable($file)) {
+            throw new RuntimeException(sprintf('Secret file non leggibile per %s.', $name));
+        }
+
+        $contents = file_get_contents($file);
+        if ($contents === false) {
+            throw new RuntimeException(sprintf('Impossibile leggere il secret file per %s.', $name));
+        }
+
+        $value = rtrim($contents, "\r\n");
+        if ($value !== '') {
+            return $value;
+        }
+
+        if ($default === null) {
+            throw new RuntimeException(sprintf('Secret file vuoto per %s.', $name));
+        }
+
+        return $default;
+    }
+
+    return $env($name, $default);
+};
+
 $selectedEnvironment = strtolower($env('APP_ENV', 'development'));
 if (!in_array($selectedEnvironment, ['development', 'testing', 'production'], true)) {
     throw new RuntimeException(sprintf('Ambiente Phinx non valido: %s', $selectedEnvironment));
 }
 
-$password = $env('DB_PASSWORD', '');
+$password = $secret('DB_PASSWORD', '');
 if ($selectedEnvironment === 'production' && strlen($password) < 16) {
     throw new RuntimeException('DB_PASSWORD deve essere configurata esplicitamente in produzione.');
 }
