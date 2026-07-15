@@ -3,7 +3,7 @@ x-app-environment: &app-environment
   APP_DEBUG: ${APP_DEBUG:-true}
   APP_URL: ${APP_URL:-http://localhost:8080}
   APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
-  DB_CONNECTION: pgsql
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
   DB_HOST: postgres
   DB_PORT: 5432
   DB_DATABASE: ${DB_DATABASE:-hapa}
@@ -29,7 +29,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [backend]
+    networks: [edge, data]
     healthcheck:
       test: ["CMD-SHELL", "php-fpm -t >/dev/null 2>&1 && test -f /var/www/html/vendor/autoload.php"]
       interval: 15s
@@ -45,7 +45,7 @@ services:
     depends_on:
       php:
         condition: service_healthy
-    networks: [frontend, backend]
+    networks: [edge]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health/live || exit 1"]
       interval: 15s
@@ -60,7 +60,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-hapa-local-change-me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks: [backend]
+    networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hapa} -d ${DB_DATABASE:-hapa}"]
       interval: 5s
@@ -70,16 +70,16 @@ services:
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-hapa-local-redis-change-me}"]
-    networks: [backend]
+    networks: [data]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:-hapa-local-redis-change-me}' ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:-hapa-local-redis-change-me}' ping | grep -qx PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
 
 networks:
-  frontend: {}
-  backend:
+  edge: {}
+  data:
     internal: true
 
 volumes:
