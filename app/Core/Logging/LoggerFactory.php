@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Logging;
 
+use Hapa\Core\Configuration\Environment;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\StreamHandler;
+use Monolog\Level;
 use Monolog\Logger;
 use Monolog\LogRecord;
 use Psr\Log\LoggerInterface;
@@ -14,7 +16,7 @@ final class LoggerFactory
 {
     public function create(): LoggerInterface
     {
-        $level = strtoupper($_ENV['LOG_LEVEL'] ?? (string) getenv('LOG_LEVEL') ?: 'INFO');
+        $level = Level::fromName(Environment::value('LOG_LEVEL', 'info'));
         $handler = new StreamHandler('php://stderr', $level);
         $handler->setFormatter(new JsonFormatter());
 
