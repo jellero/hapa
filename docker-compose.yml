@@ -1,0 +1,87 @@
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-development}
+  APP_DEBUG: ${APP_DEBUG:-true}
+  APP_URL: ${APP_URL:-http://localhost}
+  APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${DB_DATABASE:-hapa}
+  DB_USERNAME: ${DB_USERNAME:-hapa}
+  DB_PASSWORD: ${DB_PASSWORD:-hapa-local-change-me}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+services:
+  php:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    environment: *app-environment
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    command: ["php", "bin/console", "outbox:work", "--sleep=2"]
+    environment: *app-environment
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx.Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - php
+    networks: [frontend, backend]
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-hapa}
+      POSTGRES_USER: ${DB_USERNAME:-hapa}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hapa-local-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hapa} -d ${DB_DATABASE:-hapa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+
+volumes:
+  postgres_data:
