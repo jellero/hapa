@@ -1,0 +1,50 @@
+{
+  "name": "hapa/platform",
+  "description": "Piattaforma proprietaria per gestione ordini marketplace, Space API, magazzino e GLS.",
+  "license": "proprietary",
+  "type": "project",
+  "require": {
+    "php": "^8.4",
+    "ext-pdo": "*",
+    "ext-pdo_pgsql": "*",
+    "monolog/monolog": "^3.7",
+    "robmorgan/phinx": "^0.16.6",
+    "symfony/console": "^7.2",
+    "symfony/dependency-injection": "^7.2",
+    "symfony/dotenv": "^7.2",
+    "symfony/event-dispatcher": "^7.2",
+    "symfony/http-foundation": "^7.2",
+    "symfony/routing": "^7.2",
+    "symfony/validator": "^7.2"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^11.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "Hapa\\": "app/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Hapa\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "architecture:check": "php scripts/check-architecture.php",
+    "test": "phpunit",
+    "analyse": "phpstan analyse",
+    "ci": [
+      "@architecture:check",
+      "@test",
+      "@analyse"
+    ]
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "php-http/discovery": true
+    }
+  }
+}
