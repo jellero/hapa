@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Hapa\Modules\Gls\Contract;
 
+use Hapa\Modules\Gls\Contract\Dto\ShipmentRequest;
+use Hapa\Modules\Gls\Contract\Dto\ShipmentResult;
+
 interface GlsAdapter
 {
-    /**
-     * @param array<string, mixed> $shipment
-     * @return array{shipment_id: string, tracking_number: string, label_reference: string}
-     */
-    public function createShipment(array $shipment, string $idempotencyKey): array;
+    public function createShipment(ShipmentRequest $shipment, string $idempotencyKey): ShipmentResult;
 
     public function fetchLabel(string $labelReference): string;
 }
