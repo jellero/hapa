@@ -6,8 +6,11 @@ namespace Hapa\Tests\Unit\Core;
 
 use Hapa\Core\Kernel;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use Stringable;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Route;
@@ -51,6 +54,38 @@ final class KernelTest extends TestCase
 
     public function testItDoesNotExposeExceptionDetailsWhenDebugIsDisabled(): void
     {
+        $routes = $this->failingRoutes();
+        $response = $this->kernel($routes)->handle(Request::create('/failure'));
+
+        self::assertSame(500, $response->getStatusCode());
+        self::assertStringNotContainsString('database-password', (string) $response->getContent());
+    }
+
+    public function testItDoesNotWriteExceptionMessageToProductionLogs(): void
+    {
+        $logger = new class () extends AbstractLogger {
+            /** @var list<array{message: string, context: array<string, mixed>}> */
+            public array $records = [];
+
+            /** @param array<string, mixed> $context */
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                $this->records[] = [
+                    'message' => (string) $message,
+                    'context' => $context,
+                ];
+            }
+        };
+
+        $this->kernel($this->failingRoutes(), $logger)->handle(Request::create('/failure'));
+
+        self::assertCount(1, $logger->records);
+        self::assertArrayNotHasKey('message', $logger->records[0]['context']);
+        self::assertNotContains('database-password-must-not-leak', $logger->records[0]['context'], true);
+    }
+
+    private function failingRoutes(): RouteCollection
+    {
         $routes = new RouteCollection();
         $routes->add('failure', new Route('/failure', [
             '_controller' => static function (): never {
@@ -58,14 +93,11 @@ final class KernelTest extends TestCase
             },
         ]));
 
-        $response = $this->kernel($routes)->handle(Request::create('/failure'));
-
-        self::assertSame(500, $response->getStatusCode());
-        self::assertStringNotContainsString('database-password', (string) $response->getContent());
+        return $routes;
     }
 
-    private function kernel(RouteCollection $routes): Kernel
+    private function kernel(RouteCollection $routes, ?LoggerInterface $logger = null): Kernel
     {
-        return new Kernel($routes, new NullLogger(), false);
+        return new Kernel($routes, $logger ?? new NullLogger(), false);
     }
 }
