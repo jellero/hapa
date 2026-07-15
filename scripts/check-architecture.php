@@ -44,7 +44,7 @@ foreach ($iterator as $file) {
 
     preg_match_all('/^use\s+([^;]+);/m', $content, $useMatches);
     /** @var list<string> $imports */
-    $imports = array_map('trim', $useMatches[1] ?? []);
+    $imports = array_map('trim', $useMatches[1]);
 
     if (str_starts_with($namespace, 'Hapa\\Core')) {
         foreach ($imports as $import) {
