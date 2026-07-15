@@ -64,7 +64,8 @@ jobs:
       - run: composer audit --locked
       - run: vendor/bin/phinx migrate -e testing
       - run: composer architecture:check
-      - run: composer test
+      - run: composer test:unit
+      - run: composer test:integration
 
   production-smoke:
     runs-on: ubuntu-latest
