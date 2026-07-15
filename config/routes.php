@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Hapa\Core\Database\ConnectionFactory;
+use Hapa\Core\Health\ReadinessCheck;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
@@ -13,18 +16,35 @@ $routes->add('home', new Route(
     '/',
     ['_controller' => static fn (Request $request): JsonResponse => new JsonResponse([
         'application' => 'HAPA',
-        'status' => 'operational',
-        'environment' => $_ENV['APP_ENV'] ?? 'development',
+        'status' => 'bootstrapped',
+        'correlation_id' => $request->attributes->getString('correlation_id'),
     ])],
     methods: ['GET'],
 ));
 
-$routes->add('health', new Route(
-    '/health',
-    ['_controller' => static fn (): JsonResponse => new JsonResponse([
+$routes->add('health_live', new Route(
+    '/health/live',
+    ['_controller' => static fn (Request $request): JsonResponse => new JsonResponse([
         'status' => 'ok',
-        'timestamp' => (new DateTimeImmutable())->format(DATE_ATOM),
+        'correlation_id' => $request->attributes->getString('correlation_id'),
     ])],
+    methods: ['GET'],
+));
+
+$routes->add('health_ready', new Route(
+    '/health/ready',
+    ['_controller' => static function (Request $request): JsonResponse {
+        $result = (new ReadinessCheck(new ConnectionFactory()))->check();
+
+        return new JsonResponse(
+            [
+                'status' => $result['ready'] ? 'ready' : 'unavailable',
+                'components' => $result['components'],
+                'correlation_id' => $request->attributes->getString('correlation_id'),
+            ],
+            $result['ready'] ? Response::HTTP_OK : Response::HTTP_SERVICE_UNAVAILABLE,
+        );
+    }],
     methods: ['GET'],
 ));
 
