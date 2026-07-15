@@ -15,7 +15,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -23,18 +23,26 @@ jobs:
           POSTGRES_DB: hapa_test
           POSTGRES_USER: hapa
           POSTGRES_PASSWORD: ci-postgres-password
-        ports:
-          - 5432:5432
+        ports: [5432:5432]
         options: >-
           --health-cmd "pg_isready -U hapa -d hapa_test"
           --health-interval 5s
           --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
           --health-retries 10
     env:
       APP_ENV: testing
       APP_DEBUG: "false"
       APP_URL: http://localhost
       APP_TIMEZONE: UTC
+      TRUSTED_PROXIES: ""
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_DATABASE: hapa_test
@@ -42,7 +50,7 @@ jobs:
       DB_PASSWORD: ci-postgres-password
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ci-redis-password
+      REDIS_PASSWORD: ""
       LOG_LEVEL: warning
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -56,16 +64,49 @@ jobs:
       - run: composer audit --locked
       - run: vendor/bin/phinx migrate -e testing
       - run: composer architecture:check
-      - run: composer test
-      - name: Validate production Compose
-        env:
-          APP_URL: https://hapa.example.com
-          DB_PASSWORD_FILE: /tmp/hapa-db-secret
-          REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
+      - run: composer test:unit
+      - run: composer test:integration
+
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_URL: https://hapa.example.com
+      TRUSTED_PROXIES: 127.0.0.1,REMOTE_ADDR
+      IMAGE_TAG: ${{ github.sha }}
+      HAPA_HTTP_PORT: 18080
+      DB_PASSWORD_FILE: /tmp/hapa-db-secret
+      REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Prepare production secrets
         run: |
           printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
           printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
-          docker compose -f docker-compose.prod.yml config --quiet
+      - name: Validate production Compose
+        run: docker compose -f docker-compose.prod.yml config --quiet
+      - name: Build production images
+        run: docker compose -f docker-compose.prod.yml build php migration nginx redis
+      - name: Start PostgreSQL
+        run: docker compose -f docker-compose.prod.yml up -d --wait postgres
+      - name: Start Redis
+        run: docker compose -f docker-compose.prod.yml up -d --wait redis
+      - name: Apply production migrations
+        run: docker compose -f docker-compose.prod.yml --profile tools run --rm migration
+      - name: Start PHP
+        run: docker compose -f docker-compose.prod.yml up -d --wait php
+      - name: Start Nginx
+        run: docker compose -f docker-compose.prod.yml up -d --wait nginx
+      - name: Verify liveness
+        run: curl --fail --silent http://127.0.0.1:18080/health/live
+      - name: Show container diagnostics
+        if: failure()
+        run: |
+          docker compose -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.prod.yml logs --no-color --tail=200
+      - name: Stop production stack
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v
 
   static-analysis:
     runs-on: ubuntu-latest

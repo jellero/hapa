@@ -14,6 +14,8 @@ final readonly class Environment
         public bool $debug,
         public string $appUrl,
         public string $timezone,
+        /** @var list<string> */
+        public array $trustedProxies,
     ) {
     }
 
@@ -23,6 +25,10 @@ final readonly class Environment
         $debug = filter_var(self::value('APP_DEBUG', 'false'), FILTER_VALIDATE_BOOL);
         $appUrl = rtrim(self::value('APP_URL', 'http://localhost:8080'), '/');
         $timezone = self::value('APP_TIMEZONE', 'Europe/Rome');
+        $trustedProxies = array_values(array_filter(array_map(
+            'trim',
+            explode(',', self::value('TRUSTED_PROXIES', '')),
+        )));
 
         if (!in_array($name, ['development', 'testing', 'production'], true)) {
             throw new RuntimeException(sprintf('APP_ENV non valido: %s', $name));
@@ -41,11 +47,15 @@ final readonly class Environment
                 throw new RuntimeException('APP_URL deve usare HTTPS in produzione.');
             }
 
+            if ($trustedProxies === []) {
+                throw new RuntimeException('TRUSTED_PROXIES deve essere configurato in produzione.');
+            }
+
             self::assertProductionSecret('DB_PASSWORD');
             self::assertProductionSecret('REDIS_PASSWORD');
         }
 
-        return new self($name, $debug, $appUrl, $timezone);
+        return new self($name, $debug, $appUrl, $timezone, $trustedProxies);
     }
 
     public function isProduction(): bool
@@ -55,51 +65,12 @@ final readonly class Environment
 
     public static function value(string $name, ?string $default = null): string
     {
-        $environmentValue = $_ENV[$name] ?? null;
-
-        if (is_string($environmentValue) && $environmentValue !== '') {
-            return $environmentValue;
-        }
-
-        $processValue = getenv($name);
-        if (is_string($processValue) && $processValue !== '') {
-            return $processValue;
-        }
-
-        if ($default === null) {
-            throw new RuntimeException(sprintf('Variabile ambiente obbligatoria assente: %s', $name));
-        }
-
-        return $default;
+        return EnvironmentReader::value($name, $default);
     }
 
     public static function secret(string $name, ?string $default = null): string
     {
-        $file = self::value($name . '_FILE', '');
-
-        if ($file !== '') {
-            if (!is_file($file) || !is_readable($file)) {
-                throw new RuntimeException(sprintf('Secret file non leggibile per %s.', $name));
-            }
-
-            $contents = file_get_contents($file);
-            if ($contents === false) {
-                throw new RuntimeException(sprintf('Impossibile leggere il secret file per %s.', $name));
-            }
-
-            $secret = rtrim($contents, "\r\n");
-            if ($secret !== '') {
-                return $secret;
-            }
-
-            if ($default === null) {
-                throw new RuntimeException(sprintf('Secret file vuoto per %s.', $name));
-            }
-
-            return $default;
-        }
-
-        return self::value($name, $default);
+        return EnvironmentReader::secret($name, $default);
     }
 
     private static function assertProductionSecret(string $name): void

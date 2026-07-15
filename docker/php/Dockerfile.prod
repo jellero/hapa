@@ -9,37 +9,45 @@ RUN apk add --no-cache icu-libs libzip libpq \
 
 COPY docker/php/conf.d/security.ini /usr/local/etc/php/conf.d/zz-hapa-security.ini
 COPY docker/php/conf.d/security-prod.ini /usr/local/etc/php/conf.d/zzz-hapa-production.ini
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 FROM php-base AS dependencies
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY composer.json composer.lock ./
+COPY app ./app
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
     --no-scripts \
-    --no-autoloader \
     --classmap-authoritative
 
 FROM php-base AS runtime
 WORKDIR /var/www/html
 COPY --from=dependencies /var/www/html/vendor ./vendor
-COPY composer.json composer.lock phinx.php ./
+COPY composer.json composer.lock ./
 COPY app ./app
 COPY bin ./bin
 COPY config ./config
-COPY database ./database
 COPY public ./public
-RUN composer dump-autoload --no-dev --classmap-authoritative \
-    && mkdir -p storage/cache storage/logs storage/labels storage/uploads \
+RUN mkdir -p storage/cache storage/logs storage/labels storage/uploads \
     && chown -R www-data:www-data storage \
     && chmod 0755 bin/console \
-    && find app bin config database public -type d -exec chmod 0755 {} + \
-    && find app config database public -type f -exec chmod 0644 {} + \
+    && find app bin config public -type d -exec chmod 0755 {} + \
+    && find app config public -type f -exec chmod 0644 {} + \
     && test -f vendor/autoload.php \
+    && php -r "require 'vendor/autoload.php'; class_exists('Hapa\\Core\\Configuration\\EnvironmentReader') || exit(1);" \
     && php -m | grep -qx pdo_pgsql \
     && php -m | grep -qx redis
-
 USER www-data
 CMD ["php-fpm"]
+
+FROM runtime AS migration
+USER root
+COPY phinx.php ./
+COPY database ./database
+RUN find database -type d -exec chmod 0755 {} + \
+    && find database -type f -exec chmod 0644 {} +
+USER www-data
+ENTRYPOINT ["php", "vendor/bin/phinx"]
+CMD ["migrate", "-e", "production"]

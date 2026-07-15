@@ -11,6 +11,8 @@ use Throwable;
 
 final readonly class ReadinessCheck
 {
+    private const MINIMUM_SCHEMA_VERSION = 20260715201000;
+
     public function __construct(private ConnectionFactory $connections)
     {
     }
@@ -33,9 +35,11 @@ final readonly class ReadinessCheck
     private function databaseReady(): bool
     {
         try {
-            $statement = $this->connections->create()->query('SELECT 1');
+            $pdo = $this->connections->create();
+            $statement = $pdo->query("SELECT COALESCE(MAX(version), 0) FROM phinxlog");
 
-            return $statement !== false && $statement->fetchColumn() !== false;
+            return $statement !== false
+                && (int) $statement->fetchColumn() >= self::MINIMUM_SCHEMA_VERSION;
         } catch (Throwable) {
             return false;
         }

@@ -3,21 +3,15 @@
 
 declare(strict_types=1);
 
-use Hapa\Core\Configuration\Environment;
+use Hapa\Core\Bootstrap;
 use Hapa\Core\Console\SystemCheckCommand;
 use Symfony\Component\Console\Application;
-use Symfony\Component\Dotenv\Dotenv;
 
 $basePath = dirname(__DIR__);
 require $basePath . '/vendor/autoload.php';
 
-if (is_file($basePath . '/.env')) {
-    (new Dotenv())->usePutenv()->loadEnv($basePath . '/.env');
-}
+$bootstrap = Bootstrap::initialize($basePath);
 
-$environment = Environment::load();
-date_default_timezone_set($environment->timezone);
-
-$application = new Application('HAPA', '0.2.0');
-$application->add(new SystemCheckCommand());
+$application = new Application('HAPA', '0.3.0');
+$application->add(new SystemCheckCommand($bootstrap->readiness));
 $application->run();
