@@ -87,7 +87,7 @@ final class DatabaseConstraintsTest extends TestCase
         /** @var array<int, list<string>> $matches */
         $matches = [];
         preg_match_all("/'([^']+)'/", $definition, $matches);
-        $databaseStatuses = array_values(array_unique($matches[1] ?? []));
+        $databaseStatuses = array_values(array_unique($matches[1]));
         $domainStatuses = array_map(
             static fn (OrderStatus $status): string => $status->value,
             OrderStatus::cases(),
