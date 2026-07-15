@@ -6,13 +6,21 @@ namespace Hapa\Core\Health;
 
 use Hapa\Core\Configuration\Environment;
 use Hapa\Core\Database\ConnectionFactory;
+use Psr\Log\LoggerInterface;
 use Redis;
+use RuntimeException;
 use Throwable;
 
-final readonly class ReadinessCheck
+final class ReadinessCheck
 {
-    public function __construct(private ConnectionFactory $connections)
-    {
+    /** @var array<string, int> */
+    private static array $lastLogAt = [];
+
+    public function __construct(
+        private readonly ConnectionFactory $connections,
+        private readonly LoggerInterface $logger,
+        private readonly string $expectedSchemaVersion,
+    ) {
     }
 
     /** @return array{ready: bool, components: array{database: bool, redis: bool}} */
@@ -33,10 +41,26 @@ final readonly class ReadinessCheck
     private function databaseReady(): bool
     {
         try {
-            $statement = $this->connections->create()->query('SELECT 1');
+            $pdo = $this->connections->create();
+            $table = $pdo->query("SELECT to_regclass('public.phinxlog')");
+            if ($table === false || $table->fetchColumn() === null) {
+                throw new RuntimeException('Schema migrations assente.');
+            }
 
-            return $statement !== false && $statement->fetchColumn() !== false;
-        } catch (Throwable) {
+            $statement = $pdo->query('SELECT version FROM phinxlog ORDER BY version DESC LIMIT 1');
+            $version = $statement === false ? false : $statement->fetchColumn();
+            if (!is_string($version) && !is_int($version)) {
+                throw new RuntimeException('Versione schema non disponibile.');
+            }
+
+            if ((int) $version < (int) $this->expectedSchemaVersion) {
+                throw new RuntimeException('Schema applicativo non aggiornato.');
+            }
+
+            return true;
+        } catch (Throwable $exception) {
+            $this->logFailure('database', $exception);
+
             return false;
         }
     }
@@ -53,16 +77,22 @@ final readonly class ReadinessCheck
             );
 
             if (!$connected) {
-                return false;
+                throw new RuntimeException('Connessione Redis non disponibile.');
             }
 
             $password = Environment::secret('REDIS_PASSWORD', '');
             if ($password !== '' && !$redis->auth($password)) {
-                return false;
+                throw new RuntimeException('Autenticazione Redis fallita.');
             }
 
-            return $redis->ping() !== false;
-        } catch (Throwable) {
+            if ($redis->ping() === false) {
+                throw new RuntimeException('Ping Redis fallito.');
+            }
+
+            return true;
+        } catch (Throwable $exception) {
+            $this->logFailure('redis', $exception);
+
             return false;
         } finally {
             try {
@@ -70,5 +100,21 @@ final readonly class ReadinessCheck
             } catch (Throwable) {
             }
         }
+    }
+
+    private function logFailure(string $component, Throwable $exception): void
+    {
+        $now = time();
+        $last = self::$lastLogAt[$component] ?? 0;
+        if ($now - $last < 60) {
+            return;
+        }
+
+        self::$lastLogAt[$component] = $now;
+        $this->logger->warning('Componente readiness non disponibile.', [
+            'component' => $component,
+            'exception' => $exception::class,
+            'exception_code' => (string) $exception->getCode(),
+        ]);
     }
 }
