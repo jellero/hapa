@@ -43,8 +43,9 @@ final readonly class ReadinessCheck
 
     private function redisReady(): bool
     {
+        $redis = new Redis();
+
         try {
-            $redis = new Redis();
             $connected = $redis->connect(
                 Environment::value('REDIS_HOST', 'redis'),
                 (int) Environment::value('REDIS_PORT', '6379'),
@@ -55,17 +56,19 @@ final readonly class ReadinessCheck
                 return false;
             }
 
-            $password = Environment::value('REDIS_PASSWORD', '');
+            $password = Environment::secret('REDIS_PASSWORD', '');
             if ($password !== '' && !$redis->auth($password)) {
                 return false;
             }
 
-            $ready = $redis->ping() !== false;
-            $redis->close();
-
-            return $ready;
+            return $redis->ping() !== false;
         } catch (Throwable) {
             return false;
+        } finally {
+            try {
+                $redis->close();
+            } catch (Throwable) {
+            }
         }
     }
 }
