@@ -101,10 +101,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Prepare smoke secrets
         run: |
-          mkdir -p secrets
+          install -d -m 0700 secrets
           printf '%s' 'ci-production-database-secret' > secrets/db_password.txt
           printf '%s' 'ci-production-redis-secret' > secrets/redis_password.txt
-          chmod 600 secrets/*.txt
+          chmod 0444 secrets/*.txt
       - name: Validate production Compose
         run: docker compose -f docker-compose.prod.yml config --quiet
       - name: Build production images
