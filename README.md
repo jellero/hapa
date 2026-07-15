@@ -17,6 +17,7 @@ app/Core       runtime e servizi trasversali
 app/Modules    dominio e contratti applicativi
 config         composizione e routing
 database       migrazioni PostgreSQL
+docs           architettura, sicurezza e roadmap
 tests          test unitari e integration
 docker         immagini e configurazioni runtime
 ```
@@ -82,4 +83,10 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d php n
 
 Nginx viene pubblicato per impostazione predefinita su `127.0.0.1:8080`. Il reverse proxy esterno gestisce TLS e HSTS. PostgreSQL e Redis restano sulla rete interna; `/health/ready` è limitato alle reti private.
 
-La documentazione architetturale è in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); la politica di sicurezza è in [`SECURITY.md`](SECURITY.md).
+## Documentazione
+
+L’indice è in [`docs/README.md`](docs/README.md). I riferimenti principali sono:
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
+- [`docs/SECURITY.md`](docs/SECURITY.md);
+- [`docs/TODO.md`](docs/TODO.md).
