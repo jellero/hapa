@@ -17,6 +17,9 @@ fi
 escaped_password="$(printf '%s' "$password" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 umask 077
 {
+    printf '%s\n' 'bind 0.0.0.0'
+    printf '%s\n' 'protected-mode yes'
+    printf '%s\n' 'dir /data'
     printf '%s\n' 'appendonly yes'
     printf 'requirepass "%s"\n' "$escaped_password"
 } > /tmp/hapa-redis.conf
