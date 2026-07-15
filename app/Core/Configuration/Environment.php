@@ -55,17 +55,22 @@ final readonly class Environment
 
     public static function value(string $name, ?string $default = null): string
     {
-        $value = $_ENV[$name] ?? getenv($name);
+        $environmentValue = $_ENV[$name] ?? null;
 
-        if ($value === false || $value === null || $value === '') {
-            if ($default === null) {
-                throw new RuntimeException(sprintf('Variabile ambiente obbligatoria assente: %s', $name));
-            }
-
-            return $default;
+        if (is_string($environmentValue) && $environmentValue !== '') {
+            return $environmentValue;
         }
 
-        return (string) $value;
+        $processValue = getenv($name);
+        if (is_string($processValue) && $processValue !== '') {
+            return $processValue;
+        }
+
+        if ($default === null) {
+            throw new RuntimeException(sprintf('Variabile ambiente obbligatoria assente: %s', $name));
+        }
+
+        return $default;
     }
 
     private static function assertProductionSecret(string $name): void
