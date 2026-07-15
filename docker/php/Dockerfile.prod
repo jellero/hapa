@@ -1,4 +1,9 @@
-FROM php:8.4-fpm-alpine AS php-base
+ARG PHP_BASE_IMAGE=php:8.4-fpm-alpine
+ARG COMPOSER_BASE_IMAGE=composer:2
+
+FROM ${COMPOSER_BASE_IMAGE} AS composer-bin
+
+FROM ${PHP_BASE_IMAGE} AS php-base
 
 RUN apk add --no-cache icu-libs libzip libpq \
     && apk add --no-cache --virtual .build-deps icu-dev libzip-dev postgresql-dev $PHPIZE_DEPS \
@@ -9,10 +14,10 @@ RUN apk add --no-cache icu-libs libzip libpq \
 
 COPY docker/php/conf.d/security.ini /usr/local/etc/php/conf.d/zz-hapa-security.ini
 COPY docker/php/conf.d/security-prod.ini /usr/local/etc/php/conf.d/zzz-hapa-production.ini
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 FROM php-base AS dependencies
 WORKDIR /var/www/html
+COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 COPY composer.json composer.lock ./
 RUN composer install \
     --no-dev \
@@ -22,8 +27,9 @@ RUN composer install \
     --no-autoloader \
     --classmap-authoritative
 
-FROM php-base AS runtime
+FROM php-base AS application-build
 WORKDIR /var/www/html
+COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 COPY --from=dependencies /var/www/html/vendor ./vendor
 COPY composer.json composer.lock phinx.php ./
 COPY app ./app
@@ -41,5 +47,20 @@ RUN composer dump-autoload --no-dev --classmap-authoritative \
     && php -m | grep -qx pdo_pgsql \
     && php -m | grep -qx redis
 
+FROM php-base AS runtime
+WORKDIR /var/www/html
+COPY --from=application-build /var/www/html/vendor ./vendor
+COPY --from=application-build /var/www/html/composer.json ./composer.json
+COPY --from=application-build /var/www/html/composer.lock ./composer.lock
+COPY --from=application-build /var/www/html/app ./app
+COPY --from=application-build /var/www/html/bin ./bin
+COPY --from=application-build /var/www/html/config ./config
+COPY --from=application-build /var/www/html/public ./public
+COPY --from=application-build --chown=www-data:www-data /var/www/html/storage ./storage
 USER www-data
 CMD ["php-fpm"]
+
+FROM application-build AS migration
+USER www-data
+ENTRYPOINT ["vendor/bin/phinx"]
+CMD ["migrate", "-e", "production"]
