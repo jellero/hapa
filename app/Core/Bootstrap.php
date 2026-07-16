@@ -7,6 +7,7 @@ namespace Hapa\Core;
 use Hapa\Composition\ContainerFactory;
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Configuration\ConfigurationLoader;
+use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use RuntimeException;
@@ -73,6 +74,16 @@ final readonly class Bootstrap
         $command = $this->container->get(OutboxRelayCommand::class);
         if (!$command instanceof OutboxRelayCommand) {
             throw new RuntimeException('Il container non ha prodotto il comando outbox:relay.');
+        }
+
+        return $command;
+    }
+
+    public function inboxConsumeCommand(): InboxConsumeCommand
+    {
+        $command = $this->container->get(InboxConsumeCommand::class);
+        if (!$command instanceof InboxConsumeCommand) {
+            throw new RuntimeException('Il container non ha prodotto il comando inbox:consume.');
         }
 
         return $command;
