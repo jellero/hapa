@@ -1,6 +1,6 @@
 # HAPA
 
-HAPA è la piattaforma proprietaria che governa anagrafiche clienti e ordini, ciclo marketplace, Space API, magazzino e GLS, predisponendo l’origine ordini del futuro e-commerce B2C.
+HAPA è la piattaforma proprietaria che governa anagrafiche clienti e ordini, ciclo marketplace, Space API, magazzino e corrieri GLS e BRT (Bartolini), predisponendo l’origine ordini del futuro e-commerce B2C.
 
 Il progetto usa un **framework custom proprietario in PHP 8.4**, costruito su componenti Symfony selezionati e su confini applicativi espliciti. PostgreSQL conserva lo stato autorevole del processo; Redis supporta coordinamento e capacità temporanee; le integrazioni esterne attraversano adapter tipizzati, transactional outbox, retry e riconciliazione.
 
@@ -17,7 +17,7 @@ Il flusso completo previsto comprende:
 7. aggiornamento della disponibilità;
 8. picking barcode completo o parziale;
 9. definizione di colli, peso reale, volumetrico e tariffabile;
-10. creazione spedizione ed etichetta GLS;
+10. creazione spedizione ed etichetta tramite il corriere selezionato;
 11. restituzione di tracking e fulfilment al marketplace;
 12. controllo operativo tramite audit, retry e riconciliazione.
 
@@ -36,9 +36,10 @@ Il flusso completo previsto comprende:
 - Docker development e production;
 - runtime applicativo separato dall’immagine migrazioni;
 - CI con audit Composer, PostgreSQL, Redis, PHPUnit, PHPStan e smoke test production;
-- contratti iniziali tipizzati per Marketplace, Space e GLS;
+- contratto Shipping provider-neutral e contratti iniziali tipizzati per Marketplace, Space, GLS e BRT;
 - distinzione tipizzata tra canale marketplace e connettore tecnico;
-- invarianti runtime sui contratti Marketplace, Space e GLS;
+- invarianti runtime sui contratti Marketplace, Space e Shipping;
+- dipendenze tra moduli dichiarate e verificate automaticamente, senza cicli;
 - canali futuri registrati per Amazon, eMAG, Temu e IBS, con SellRapido come connettore aggregatore;
 - anagrafica clienti con stato, tipo, contatti, dati fiscali, identità esterne e indirizzi predefiniti;
 - anagrafica ordini con numero interno, cliente, origine vincolata e snapshot distinti di spedizione e fatturazione;
@@ -60,7 +61,7 @@ La roadmap parte dalla composizione applicativa e dal dominio ordine:
 5. scrittura di dominio e outbox nella stessa transazione;
 6. prima vertical slice Marketplace → HAPA → Space.
 
-Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e GLS, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). Il modello delle anagrafiche è documentato in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md); la strategia per SellRapido, Amazon, eMAG, Temu e IBS è definita in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md).
+Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e spedizione, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). Il modello delle anagrafiche è documentato in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md); le strategie per marketplace e corrieri sono definite rispettivamente in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) e [`docs/CARRIERS.md`](docs/CARRIERS.md).
 
 ## Architettura
 
@@ -71,11 +72,14 @@ app/
 bin/
   console                  ingresso CLI
 config/
+  module-dependencies.php  dipendenze ammesse tra moduli
   routes.php               composizione HTTP e routing
 database/
   migrations/              schema PostgreSQL versionato
 docs/
   ARCHITECTURE.md           riferimento architetturale
+  CARRIERS.md               contratto Shipping, GLS e BRT
+  DEVELOPMENT_WORKFLOW.md   percorso canonico di sviluppo
   SYMFONY_ALIGNMENT.md      adozione selettiva delle primitive Symfony
   SECURITY.md               requisiti e policy di sicurezza
   TODO.md                   roadmap e gate di completamento
@@ -205,12 +209,15 @@ L’indice documentale è [`docs/README.md`](docs/README.md).
 | Documento | Contenuto |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini, dominio, persistenza, flussi, runtime, deploy e operatività |
+| [`docs/CARRIERS.md`](docs/CARRIERS.md) | ownership Shipping, GLS e BRT, discovery, failure mode e gate operativi |
 | [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | modello canonico di clienti, identità, indirizzi, ordini e confine B2C |
+| [`docs/DEVELOPMENT_WORKFLOW.md`](docs/DEVELOPMENT_WORKFLOW.md) | ownership, livelli applicativi, dipendenze e Definition of Done |
 | [`docs/INTERFACE.md`](docs/INTERFACE.md) | architettura UI, mappa delle schermate, accessibilità e sicurezza |
 | [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) | canali futuri, connettori, gate di discovery e prevenzione dei duplicati |
 | [`docs/SYMFONY_ALIGNMENT.md`](docs/SYMFONY_ALIGNMENT.md) | componenti Symfony adottati, esclusi o valutati |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | autenticazione, sessione, provider, worker, dati e produzione |
 | [`docs/TODO.md`](docs/TODO.md) | sequenza esecutiva, gate e criterio end-to-end |
+| [`docs/PR_CHECKLIST.md`](docs/PR_CHECKLIST.md) | controlli di perimetro, sicurezza, test, CI e rilascio |
 
 Ogni modifica a una decisione architetturale, a un requisito di sicurezza o alla sequenza di sviluppo aggiorna il documento corrispondente nello stesso changeset.
 

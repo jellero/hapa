@@ -33,7 +33,7 @@ La direzione consigliata comprende:
 
 - `symfony/dependency-injection` per il container compilato;
 - `symfony/config` soltanto dove serve validazione strutturata di configurazioni complesse;
-- `symfony/http-client` per gli adapter Marketplace, Space e GLS;
+- `symfony/http-client` per gli adapter Marketplace, Space, GLS e BRT;
 - `symfony/validator` per validazione ai confini HTTP e provider;
 - `symfony/serializer` quando riduce il mapping ripetitivo, mantenendo DTO espliciti e mapping controllato;
 - `symfony/clock` per tempo deterministico in dominio, retry, lock e scheduler;
@@ -131,7 +131,7 @@ Messaggi outbox, payload persistiti e DTO destinati a sopravvivere a un deploy i
 
 Symfony HttpClient offre scoped client, timeout complessivi, retry configurabile e client mockabili. HAPA adotta un client dedicato per provider.
 
-Ogni client Marketplace, Space o GLS definisce:
+Ogni client Marketplace, Space, GLS o BRT definisce:
 
 - base URI fissa e validata;
 - credenziali iniettate tramite secret;
@@ -283,7 +283,7 @@ Esistono tre livelli distinti:
 
 1. frontiera: protezione volumetrica e DoS sul reverse proxy;
 2. applicazione: login, endpoint sensibili e azioni costose;
-3. integrazione: quote Marketplace, Space e GLS.
+3. integrazione: quote Marketplace, Space, GLS e BRT.
 
 Le quote provider usano bucket separati per account, operazione e credenziale. Lo stato distribuito può risiedere in Redis; il fallimento di Redis deve seguire una policy esplicita per ciascun limiter.
 

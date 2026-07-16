@@ -15,8 +15,8 @@
 <div class="inline-notice inline-notice--warning" role="note">
     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
     <div>
-        <strong>Un solo percorso di import per account e canale</strong>
-        <span>SellRapido e un adapter diretto non devono importare contemporaneamente gli ordini dello stesso account-canale.</span>
+        <strong>Confini di integrazione espliciti</strong>
+        <span>Per i marketplace resta attivo un solo import per account-canale; GLS e BRT condividono il contratto Shipping ma mantengono configurazioni e adapter separati.</span>
     </div>
 </div>
 
@@ -24,7 +24,7 @@
     <div class="section-heading">
         <div>
             <p class="eyebrow">Portafoglio</p>
-            <h2 id="integrations-grid-title">Canali e servizi</h2>
+            <h2 id="integrations-grid-title">Canali, servizi e corrieri</h2>
         </div>
         <span class="section-heading__meta"><?= $e(count($integrations)) ?> integrazioni censite</span>
     </div>
@@ -57,10 +57,10 @@
             <p class="eyebrow">Discovery</p>
             <h2 id="discovery-title">Gate prima dell’attivazione</h2>
         </div>
-        <span class="section-heading__meta">Riferimento: docs/MARKETPLACES.md</span>
+        <span class="section-heading__meta">Riferimenti: MARKETPLACES.md e CARRIERS.md</span>
     </div>
     <ol class="gate-grid">
-        <li><span>01</span><strong>Specifiche e account test</strong><small>Contratto tecnico, sandbox e permessi reali</small></li>
+        <li><span>01</span><strong>Specifiche e account test</strong><small>Contratto tecnico, ambiente prova e permessi reali</small></li>
         <li><span>02</span><strong>Capacità e limiti</strong><small>Operazioni, quote, paginazione e dati personali</small></li>
         <li><span>03</span><strong>Conformità adapter</strong><small>Fake, errori tipizzati e test condivisi</small></li>
         <li><span>04</span><strong>Pilot controllato</strong><small>Un account-canale, metriche e arresto rapido</small></li>

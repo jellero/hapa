@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Hapa\Modules\Gls\Contract;
+namespace Hapa\Modules\Brt\Contract;
 
 use Hapa\Modules\Shipping\Contract\CarrierAdapter;
 
-interface GlsAdapter extends CarrierAdapter
+interface BrtAdapter extends CarrierAdapter
 {
 }

@@ -129,7 +129,7 @@ Ogni confine applicativo applica validazione strutturata:
 
 - request HTTP e form;
 - parametri route e query;
-- payload Marketplace, Space e GLS;
+- payload Marketplace, Space, GLS e BRT;
 - messaggi outbox persistiti;
 - file o label ricevuti dai provider;
 - configurazioni e feature flag.
@@ -174,7 +174,7 @@ La protezione è distribuita su tre livelli:
 
 1. reverse proxy o frontiera per traffico volumetrico e DoS;
 2. applicazione per login, endpoint sensibili e azioni costose;
-3. integrazione per quote Marketplace, Space e GLS.
+3. integrazione per quote Marketplace, Space, GLS e BRT.
 
 Symfony RateLimiter o un componente equivalente può gestire i limiti applicativi. Lo stato condiviso risiede in Redis o altro backend distribuito; ogni limiter dichiara comportamento in caso di indisponibilità del backend.
 
@@ -271,6 +271,6 @@ Ogni incidente deve essere collegato tramite correlation ID a log applicativi, d
 4. rotazione dei segreti coinvolti;
 5. revoca di sessioni e token;
 6. verifica di integrità di ordini, spedizioni e tracking;
-7. riconciliazione con Marketplace, Space e GLS;
+7. riconciliazione con Marketplace, Space e il corriere coinvolto;
 8. ripristino;
 9. verifica post-incidente e azioni correttive.

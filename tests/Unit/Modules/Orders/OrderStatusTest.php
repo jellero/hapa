@@ -20,5 +20,7 @@ final class OrderStatusTest extends TestCase
         self::assertContains('fulfilment_completed', $values);
         self::assertNotContains('complete', $values);
         self::assertNotContains('completed', $values);
+        self::assertContains('ready_for_carrier', $values);
+        self::assertNotContains('ready_for_gls', $values);
     }
 }

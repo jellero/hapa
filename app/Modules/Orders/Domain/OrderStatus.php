@@ -16,7 +16,7 @@ enum OrderStatus: string
     case PartialAvailable = 'partial_available';
     case Picking = 'picking';
     case PartialConfirmed = 'partial_confirmed';
-    case ReadyForGls = 'ready_for_gls';
+    case ReadyForCarrier = 'ready_for_carrier';
     case LabelAvailable = 'label_available';
     case TrackingSent = 'tracking_sent';
     case FulfilmentCompleted = 'fulfilment_completed';

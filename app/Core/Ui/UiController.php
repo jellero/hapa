@@ -46,14 +46,14 @@ final readonly class UiController
                 ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Repository ordini non collegato', 'tone' => 'neutral'],
                 ['label' => 'Clienti censiti', 'value' => '—', 'detail' => 'Repository clienti non collegato', 'tone' => 'info'],
                 ['label' => 'Revisione manuale', 'value' => '—', 'detail' => 'Disponibile con il dominio Order', 'tone' => 'warning'],
-                ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter GLS non collegato', 'tone' => 'success'],
+                ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter corriere non collegati', 'tone' => 'success'],
             ],
             'workstreams' => [
                 ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'integration'],
                 ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Schema pronto', 'tone' => 'info', 'icon' => 'customer'],
                 ['label' => 'Space', 'detail' => 'Invio ordine e disponibilità', 'status' => 'Contratto pronto', 'tone' => 'info', 'icon' => 'automation'],
                 ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'scan'],
-                ['label' => 'GLS', 'detail' => 'Colli, etichette e tracking', 'status' => 'Contratto pronto', 'tone' => 'info', 'icon' => 'truck'],
+                ['label' => 'Corrieri', 'detail' => 'GLS e BRT (Bartolini)', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'truck'],
             ],
         ]);
     }
@@ -135,12 +135,12 @@ final readonly class UiController
         return $this->collection($request, 'shipments', [
             'title' => 'Spedizioni',
             'eyebrow' => 'Logistica',
-            'description' => 'Controlla colli, pesi, etichette GLS, tracking e riconciliazioni.',
+            'description' => 'Controlla corriere, colli, pesi, etichette, tracking e riconciliazioni per GLS e BRT (Bartolini).',
             'searchLabel' => 'Cerca ordine, spedizione o tracking',
             'filters' => ['Tutte le spedizioni', 'Da creare', 'Etichetta pronta', 'Spedite', 'Con errore', 'Annullate'],
-            'columns' => ['Spedizione', 'Ordine', 'Colli', 'Peso', 'Stato GLS', 'Azioni'],
+            'columns' => ['Spedizione', 'Ordine', 'Corriere', 'Colli', 'Peso', 'Stato', 'Azioni'],
             'emptyTitle' => 'Nessuna spedizione disponibile',
-            'emptyBody' => 'Le spedizioni compariranno dopo il completamento del dominio colli e dell’adapter GLS.',
+            'emptyBody' => 'Le spedizioni compariranno dopo il completamento del dominio colli e degli adapter GLS e BRT.',
             'emptyIcon' => 'truck',
             'primaryAction' => 'Crea spedizione',
         ]);
@@ -167,7 +167,7 @@ final readonly class UiController
         return $this->operational($request, 'ui/integrations', 'integrations', [
             'title' => 'Integrazioni',
             'eyebrow' => 'Ecosistema',
-            'description' => 'Configura account, canali e percorsi tecnici mantenendo separati canale e connettore.',
+            'description' => 'Configura account marketplace, servizi e corrieri mantenendo separati canale, connettore e provider.',
             'integrations' => [
                 ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore', 'code' => 'sellrapido', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'Amazon', 'kind' => 'Canale · SP-API', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
@@ -175,7 +175,8 @@ final readonly class UiController
                 ['name' => 'Temu', 'kind' => 'Canale · Partner Platform', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'IBS', 'kind' => 'Canale · via SellRapido', 'code' => 'ibs', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'Space', 'kind' => 'Approvvigionamento', 'code' => 'space', 'status' => 'Contratto pronto', 'tone' => 'info'],
-                ['name' => 'GLS', 'kind' => 'Spedizioni', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
+                ['name' => 'GLS', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
+                ['name' => 'BRT (Bartolini)', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'brt', 'status' => 'Contratto pronto', 'tone' => 'info'],
             ],
         ]);
     }

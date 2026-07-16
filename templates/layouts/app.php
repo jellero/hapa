@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#132238">
     <meta name="description" content="<?= $e($description ?? 'Centro operativo HAPA') ?>">
     <title><?= $e($title ?? 'HAPA') ?> · HAPA</title>
-    <link rel="stylesheet" href="/assets/ui.css?v=3">
-    <script defer src="/assets/ui.js?v=3"></script>
+    <link rel="stylesheet" href="/assets/ui.css?v=4">
+    <script defer src="/assets/ui.js?v=4"></script>
 </head>
 <body class="app-body" data-ui-shell>
     <a class="skip-link" href="#main-content">Vai al contenuto</a>
@@ -52,7 +52,7 @@
                     <span class="environment-pill__dot" aria-hidden="true"></span>
                     <span>Ambiente <?= $e($environment) ?></span>
                 </div>
-                <p>Interfaccia operativa v0.5</p>
+                <p>Interfaccia operativa v0.6</p>
             </div>
         </aside>
 

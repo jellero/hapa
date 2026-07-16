@@ -7,6 +7,8 @@ Questo documento ordina il lavoro per dipendenze tecniche, valore operativo e ri
 Riferimenti:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md);
+- [`CARRIERS.md`](CARRIERS.md);
+- [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md);
 - [`INTERFACE.md`](INTERFACE.md);
 - [`MARKETPLACES.md`](MARKETPLACES.md);
 - [`SYMFONY_ALIGNMENT.md`](SYMFONY_ALIGNMENT.md);
@@ -29,7 +31,8 @@ Riferimenti:
 - [x] PostgreSQL con migrazioni, `JSONB`, `TIMESTAMPTZ` e vincoli principali.
 - [x] Docker development e production con runtime separato dalle migrazioni.
 - [x] CI con audit Composer, PostgreSQL, Redis, PHPStan e smoke test production.
-- [x] Contratti iniziali tipizzati per Marketplace, Space e GLS.
+- [x] Contratto Shipping provider-neutral e contratti iniziali tipizzati per Marketplace, Space, GLS e BRT.
+- [x] Dipendenze tra moduli dichiarate e verificate contro import illegittimi e cicli.
 - [x] Distinzione tipizzata tra canale marketplace e connettore tecnico.
 - [x] Portafoglio futuro definito per SellRapido, Amazon, eMAG, Temu e IBS.
 - [x] Schema e tipi di dominio iniziali per clienti, identità esterne e indirizzi.
@@ -119,6 +122,8 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 - [x] Introdurre `ExternalOrderLine` al posto degli array strutturati.
 - [x] Introdurre `MarketplaceChannel`, `MarketplaceConnector` ed `ExternalOrderReference`.
+- [x] Estrarre `CarrierAdapter`, `CarrierCode`, `ShipmentRequest` e `ShipmentResult` nel contratto comune `Shipping`.
+- [x] Registrare i moduli provider GLS e BRT dietro il contratto comune.
 - [ ] Introdurre `SpaceOrderLine` al posto degli array strutturati.
 - [ ] Introdurre `ShipmentPackage` con peso, lunghezza, larghezza e altezza.
 - [ ] Definire peso reale, peso volumetrico e peso tariffabile.
@@ -205,12 +210,19 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 **Gate:** il sistema ricostruisce chi ha preparato ogni riga, quali barcode sono stati letti e come sono state determinate le quantità finali.
 
-## Fase 7 — GLS, colli e tracking
+## Fase 7 — Corrieri, colli e tracking
 
+- [x] Introdurre il confine provider-neutral `Shipping` e i codici persistiti `GLS`/`BRT`.
+- [x] Rendere provider-neutral lo stato ordine `ready_for_carrier`.
 - [ ] Modellare uno o più colli per spedizione.
 - [ ] Calcolare peso volumetrico e peso tariffabile per collo.
-- [ ] Completare `ShipmentRequest` con contatti, servizio, note e opzioni GLS.
+- [ ] Completare `ShipmentRequest` con contatti e dati logistici comuni.
+- [ ] Completare la discovery verificata GLS descritta in [`CARRIERS.md`](CARRIERS.md).
+- [ ] Completare la discovery verificata BRT descritta in [`CARRIERS.md`](CARRIERS.md).
+- [ ] Definire DTO provider-specifici per servizi, note e opzioni senza contaminare il contratto comune.
 - [ ] Implementare creazione spedizione GLS.
+- [ ] Implementare creazione spedizione BRT.
+- [ ] Implementare una suite di conformità condivisa per tutti gli adapter corriere.
 - [ ] Implementare generazione, memorizzazione e accesso controllato all’etichetta.
 - [ ] Implementare verifica di content type, dimensione e filename delle label.
 - [ ] Implementare ristampa e recupero label.
@@ -219,7 +231,7 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 - [ ] Inviare tracking e fulfilment al marketplace.
 - [ ] Gestire tracking e quantità per ordini parziali.
 
-**Gate:** ordine, colli, label e tracking risultano collegati, idempotenti, autorizzati e riconciliabili con GLS e marketplace.
+**Gate:** ordine, colli, label e tracking risultano collegati, idempotenti, autorizzati e riconciliabili con il corriere selezionato e il marketplace; almeno GLS e BRT superano la stessa suite di conformità prima dell’attivazione.
 
 ## Fase 8 — Autenticazione e pannello operativo
 
@@ -312,7 +324,7 @@ Il primo traguardo di prodotto è un ordine reale che attraversa integralmente:
 5. invio a Space;
 6. aggiornamento disponibilità;
 7. picking completo o parziale;
-8. generazione colli, spedizione ed etichetta GLS;
+8. generazione colli, spedizione ed etichetta tramite GLS o BRT;
 9. invio tracking e fulfilment al marketplace;
 10. visibilità completa nel pannello, nei log, nell’audit, nelle delivery e nelle riconciliazioni.
 

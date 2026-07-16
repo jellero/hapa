@@ -59,6 +59,19 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $content);
     }
 
+    public function testItPresentsBrtAndProviderNeutralShipmentCopy(): void
+    {
+        $controller = $this->controller();
+
+        $integrations = (string) $controller->integrations($this->request('/ui/integrations'))->getContent();
+        $shipments = (string) $controller->shipments($this->request('/ui/shipments'))->getContent();
+
+        self::assertStringContainsString('BRT (Bartolini)', $integrations);
+        self::assertStringContainsString('GLS e BRT (Bartolini)', $shipments);
+        self::assertStringContainsString('<th scope="col">Corriere</th>', $shipments);
+        self::assertStringNotContainsString('Stato GLS', $shipments);
+    }
+
     public function testItIgnoresUnknownCollectionFilters(): void
     {
         $request = $this->request('/ui/orders?status=not-a-real-status');

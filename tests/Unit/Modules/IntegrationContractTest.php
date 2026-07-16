@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Modules;
 
-use Hapa\Modules\Gls\Contract\ShipmentRequest;
-use Hapa\Modules\Gls\Contract\ShipmentResult;
+use Hapa\Modules\Brt\Contract\BrtAdapter;
+use Hapa\Modules\Gls\Contract\GlsAdapter;
+use Hapa\Modules\Shipping\Contract\CarrierAdapter;
+use Hapa\Modules\Shipping\Contract\CarrierCode;
+use Hapa\Modules\Shipping\Contract\ShipmentRequest;
+use Hapa\Modules\Shipping\Contract\ShipmentResult;
 use Hapa\Modules\Space\Contract\AvailabilityLine;
 use Hapa\Modules\Space\Contract\SpaceOrderRequest;
 use InvalidArgumentException;
@@ -14,7 +18,7 @@ use PHPUnit\Framework\TestCase;
 
 final class IntegrationContractTest extends TestCase
 {
-    public function testItAcceptsValidSpaceAndGlsContracts(): void
+    public function testItAcceptsValidSpaceAndShippingContracts(): void
     {
         $spaceOrder = new SpaceOrderRequest('order-1', [['sku' => 'SKU-1', 'quantity' => 2]]);
         $availability = new AvailabilityLine('SKU-1', 2, 1, 1);
@@ -25,6 +29,13 @@ final class IntegrationContractTest extends TestCase
         self::assertSame(1, $availability->available);
         self::assertSame('1.250', $shipment->weightKg);
         self::assertSame('tracking-1', $result->trackingNumber);
+    }
+
+    public function testItRegistersGlsAndBrtBehindTheSharedCarrierContract(): void
+    {
+        self::assertSame(['GLS', 'BRT'], array_column(CarrierCode::cases(), 'value'));
+        self::assertTrue(is_subclass_of(GlsAdapter::class, CarrierAdapter::class));
+        self::assertTrue(is_subclass_of(BrtAdapter::class, CarrierAdapter::class));
     }
 
     /** @param non-empty-list<array{sku: string, quantity: int}> $lines */

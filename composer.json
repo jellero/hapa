@@ -1,6 +1,6 @@
 {
   "name": "hapa/platform",
-  "description": "Piattaforma proprietaria per anagrafiche clienti e ordini, marketplace, Space API, magazzino, GLS e futuro B2C.",
+  "description": "Piattaforma proprietaria per anagrafiche clienti e ordini, marketplace, Space API, magazzino, corrieri GLS/BRT e futuro B2C.",
   "license": "proprietary",
   "type": "project",
   "require": {

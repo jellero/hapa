@@ -60,7 +60,7 @@ La logica di business non entra nei template. Controller, view model e template 
 | `/ui/picking` | sessioni di picking | tabella e stato vuoto |
 | `/ui/shipments` | colli, label e tracking | tabella e stato vuoto |
 | `/ui/automation` | outbox, retry e dead letter | tabella e stato vuoto |
-| `/ui/integrations` | marketplace, Space e GLS | portafoglio pianificato |
+| `/ui/integrations` | marketplace, Space, GLS e BRT (Bartolini) | portafoglio pianificato e contratti corrieri pronti |
 | `/ui/audit` | eventi operativi e di sicurezza | tabella e stato vuoto |
 | `/ui/users` | utenti, ruoli e MFA | presentazione, azioni disabilitate |
 | `/ui/settings` | preferenze operative | presentazione, azioni disabilitate |

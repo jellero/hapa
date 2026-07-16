@@ -6,6 +6,7 @@ namespace Hapa\Tests\Integration;
 
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Modules\Orders\Domain\OrderStatus;
+use Hapa\Modules\Shipping\Contract\CarrierCode;
 use PDO;
 use PDOException;
 use PHPUnit\Framework\TestCase;
@@ -96,6 +97,32 @@ final class DatabaseConstraintsTest extends TestCase
         sort($databaseStatuses);
         sort($domainStatuses);
         self::assertSame($domainStatuses, $databaseStatuses);
+    }
+
+    public function testDatabaseShipmentProvidersMatchCarrierEnum(): void
+    {
+        $statement = $this->pdo->query(
+            "SELECT pg_get_constraintdef(oid)
+             FROM pg_constraint
+             WHERE conname = 'shipments_provider_check'",
+        );
+        self::assertNotFalse($statement);
+
+        $definition = $statement->fetchColumn();
+        self::assertIsString($definition);
+
+        /** @var array<int, list<string>> $matches */
+        $matches = [];
+        preg_match_all("/'([^']+)'/", $definition, $matches);
+        $databaseProviders = array_values(array_unique($matches[1]));
+        $domainProviders = array_map(
+            static fn (CarrierCode $carrier): string => $carrier->value,
+            CarrierCode::cases(),
+        );
+
+        sort($databaseProviders);
+        sort($domainProviders);
+        self::assertSame($domainProviders, $databaseProviders);
     }
 
     private function createOrder(string $suffix): int

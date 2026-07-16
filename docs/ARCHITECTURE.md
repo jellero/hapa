@@ -10,13 +10,13 @@ La documentazione distingue sempre tre livelli di maturità:
 - **parziale**: struttura o contratto presente, comportamento operativo ancora incompleto;
 - **pianificato**: definito come direzione architetturale e riportato nella roadmap.
 
-La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md). Il portafoglio e i gate delle integrazioni marketplace sono mantenuti in [`MARKETPLACES.md`](MARKETPLACES.md). Il layer di presentazione è descritto in [`INTERFACE.md`](INTERFACE.md).
+La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md). Marketplace e corrieri sono descritti in [`MARKETPLACES.md`](MARKETPLACES.md) e [`CARRIERS.md`](CARRIERS.md). Il percorso di sviluppo è in [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md) e il layer di presentazione in [`INTERFACE.md`](INTERFACE.md).
 
 ---
 
 ## 2. Obiettivo del sistema
 
-HAPA governa anagrafiche clienti e ordini e il ciclo operativo tra marketplace, Space API, magazzino e GLS. Il modello accetta inoltre come origine il futuro e-commerce B2C, che resta una capacità pianificata e non un canale operativo.
+HAPA governa anagrafiche clienti e ordini e il ciclo operativo tra marketplace, Space API, magazzino e corrieri GLS/BRT. Il modello accetta inoltre come origine il futuro e-commerce B2C, che resta una capacità pianificata e non un canale operativo.
 
 Il sistema deve:
 
@@ -28,11 +28,11 @@ Il sistema deve:
 6. inviare l’ordine a Space tramite API;
 7. aggiornare disponibilità e quantità gestibili;
 8. supportare picking completo o parziale tramite barcode;
-9. produrre colli, spedizione ed etichetta GLS;
+9. produrre colli, spedizione ed etichetta tramite il corriere selezionato;
 10. restituire tracking e fulfilment al marketplace;
 11. offrire controllo operativo, audit, retry e riconciliazione.
 
-HAPA mantiene lo **stato autorevole del processo interno**. Marketplace, Space e GLS restano sistemi esterni con stato proprio; la coerenza tra i sistemi viene raggiunta mediante idempotenza, delivery persistite e riconciliazione.
+HAPA mantiene lo **stato autorevole del processo interno**. Marketplace, Space, GLS e BRT restano sistemi esterni con stato proprio; la coerenza tra i sistemi viene raggiunta mediante idempotenza, delivery persistite e riconciliazione.
 
 ---
 
@@ -79,18 +79,18 @@ Le funzionalità vengono realizzate come flussi completi, con dominio, persisten
 ## 4. Contesto del sistema
 
 ```mermaid
-flowchart LR
+flowchart TB
     Operator[Operatore HAPA]
     Marketplace[Marketplace]
     Space[Space API]
-    Gls[GLS]
+    Carriers[Corrieri GLS e BRT]
     Hapa[HAPA]
     Database[(PostgreSQL)]
     Cache[(Redis)]
 
     Marketplace <--> Hapa
     Hapa <--> Space
-    Hapa <--> Gls
+    Hapa <--> Carriers
     Operator <--> Hapa
     Hapa <--> Database
     Hapa <--> Cache
@@ -104,7 +104,8 @@ flowchart LR
 | Connettori marketplace | percorso tecnico verso uno o più canali | SellRapido aggregatore oppure adapter diretto |
 | Futuro e-commerce B2C | account cliente, checkout e origine ordine diretta | pianificato, nessuna route pubblica attiva |
 | Space | ricezione ordine, approvvigionamento e disponibilità | API |
-| GLS | spedizione, label, tracking e gestione operativa della spedizione | API o servizio integrato GLS |
+| GLS | spedizione, label e tracking | adapter dedicato, pianificato |
+| BRT (Bartolini) | spedizione, label e tracking | adapter dedicato, pianificato |
 | Reverse proxy | TLS, HSTS, routing di frontiera, eventuale rate limiting | infrastruttura esterna al Compose applicativo |
 
 ### 4.2 Canali e connettori marketplace
@@ -157,6 +158,7 @@ app/
 bin/
   console                 entry point CLI
 config/
+  module-dependencies.php dipendenze ammesse tra moduli
   routes.php              composizione delle route HTTP
 database/
   migrations/             schema PostgreSQL versionato
@@ -186,10 +188,12 @@ tests/
 1. `app/Core` resta indipendente da `app/Modules`.
 2. Ogni file sotto `app/Modules/<Modulo>` dichiara namespace coerente.
 3. Una dipendenza diretta tra moduli è ammessa attraverso namespace `Contract`.
-4. Infrastruttura e adapter dipendono dai contratti applicativi, mentre il dominio conserva indipendenza dai dettagli dei provider.
-5. Entry point e composizione possono conoscere più moduli perché rappresentano il composition root.
+4. Ogni dipendenza cross-module è dichiarata in `config/module-dependencies.php`.
+5. Il grafo non contiene cicli, auto-dipendenze o moduli non registrati.
+6. Infrastruttura e adapter dipendono dai contratti applicativi, mentre il dominio conserva indipendenza dai dettagli dei provider.
+7. Entry point e composizione possono conoscere più moduli perché rappresentano il composition root.
 
-Lo script `scripts/check-architecture.php` verifica automaticamente namespace e dipendenze principali.
+Lo script `scripts/check-architecture.php` verifica automaticamente namespace, manifesto, direzione degli import, contratti pubblici e cicli. Il grafo iniziale dichiara `Gls -> Shipping` e `Brt -> Shipping`; `Shipping` non dipende dai provider.
 
 ---
 
@@ -230,7 +234,7 @@ Contiene:
 Contiene:
 
 - repository PostgreSQL;
-- adapter Marketplace, Space e GLS;
+- adapter Marketplace, Space, GLS e BRT;
 - client HTTP;
 - serializzazione e mapping dei payload;
 - implementazione outbox e worker;
@@ -249,6 +253,12 @@ Contiene:
 - endpoint tecnici di health.
 
 **Stato:** bootstrap, route tecniche, Kernel, comando diagnostico e layer di presentazione del pannello implementati. Autenticazione, query e comandi applicativi restano da collegare.
+
+### 7.5 Responsabilità operative dei componenti
+
+Il controller traduce request e risultato in HTTP, senza SQL, transazioni o chiamate provider. L’application service possiede il caso d’uso, coordina validazione, policy, transazione, audit e outbox. Il repository esegue operazioni parametrizzate e atomiche senza conoscere sessione o risposta HTTP. Validator puri non interrogano il database; le policy aggiungono vincoli di dominio e non sostituiscono i permessi della route.
+
+Questa è la struttura obbligatoria per il codice nuovo. Dove application service, repository, autenticazione o guardie non sono ancora presenti, la capacità resta marcata parziale o pianificata.
 
 ---
 
@@ -453,12 +463,20 @@ Responsabilità:
 
 **Stato:** vincoli quantitativi presenti; casi d’uso pianificati.
 
-### 10.7 GLS
+### 10.7 Shipping, GLS e BRT
 
-Responsabilità:
+Il modulo `Shipping` possiede:
 
 - modellazione colli;
 - peso reale, volumetrico e tariffabile;
+- codici corriere normalizzati;
+- contratto comune per creazione spedizione e recupero label;
+- risultato normalizzato con identificativo, tracking e riferimento label.
+
+I moduli `Gls` e `Brt` possiedono:
+
+- mapping verso il provider;
+- configurazione e credenziali specifiche;
 - creazione spedizione;
 - generazione e recupero label;
 - ristampa;
@@ -469,13 +487,14 @@ Responsabilità:
 Contratto attuale:
 
 ```php
+carrier(): CarrierCode
 createShipment(ShipmentRequest $shipment, string $idempotencyKey): ShipmentResult
 fetchLabel(string $labelReference): string
 ```
 
-**Implementato:** contratto e DTO iniziali.
+**Implementato:** `CarrierCode` con `GLS`/`BRT`, contratto `CarrierAdapter`, DTO iniziali provider-neutral, contratti `GlsAdapter`/`BrtAdapter`, manifesto delle dipendenze e vincolo PostgreSQL sui provider.
 
-**Pianificato:** `ShipmentPackage`, dimensioni, servizi GLS, opzioni, contatti, annullamento e riconciliazione.
+**Pianificato:** `ShipmentPackage`, dimensioni, contatti, adapter HTTP, servizi e opzioni provider-specifiche, annullamento, suite di conformità e riconciliazione. Le specifiche BRT e GLS non vengono dedotte: richiedono la discovery di [`CARRIERS.md`](CARRIERS.md).
 
 ### 10.8 Automation
 
@@ -524,7 +543,7 @@ Invarianti principali:
 - quantità da spedire minore o uguale alla quantità disponibile;
 - somma di spedito e annullato minore o uguale all’ordinato;
 - indirizzo obbligatorio prima della generazione della spedizione;
-- almeno un collo valido prima della richiesta GLS;
+- almeno un collo valido prima della richiesta al corriere;
 - tracking inviabile dopo la creazione della spedizione;
 - transizioni consentite dalla macchina a stati;
 - aggiornamento protetto da versione ottimistica.
@@ -542,7 +561,7 @@ goods_available
 partial_available
 picking
 partial_confirmed
-ready_for_gls
+ready_for_carrier
 label_available
 tracking_sent
 fulfilment_completed
@@ -579,7 +598,7 @@ Imported
   -> WaitingGoods
   -> GoodsAvailable | PartialAvailable
   -> Picking
-  -> ReadyForGls
+  -> ReadyForCarrier
   -> LabelAvailable
   -> TrackingSent
   -> FulfilmentCompleted
@@ -749,11 +768,15 @@ SpaceOrderRequest
 AvailabilityLine
 ```
 
-GLS:
+Shipping:
 
 ```text
+CarrierCode
+CarrierAdapter
 ShipmentRequest
 ShipmentResult
+GlsAdapter
+BrtAdapter
 ```
 
 ### 14.3 Tipi da aggiungere
@@ -765,7 +788,7 @@ PackageDimensions
 BillableWeight
 MarketplaceOperationResult
 SpaceOperationResult
-GlsOperationResult
+CarrierOperationResult
 AdapterFailure
 TemporaryFailure
 PermanentFailure
@@ -822,7 +845,7 @@ OrderSubmittedToSpace
 AvailabilityRefreshRequested
 PickingCompleted
 PartialOrderApproved
-GlsShipmentRequested
+CarrierShipmentRequested
 TrackingNotificationRequested
 ReconciliationRequested
 ```
@@ -929,12 +952,12 @@ space:submit-order:<internal-order-id>:<domain-version>
 
 La delivery conserva l’identificativo Space restituito. In caso di timeout dopo l’invio, il worker tenta il recupero tramite idempotency key o riconciliazione.
 
-### 17.3 GLS
+### 17.3 Corrieri
 
 Chiave proposta:
 
 ```text
-gls:create-shipment:<shipment-id>:<shipment-version>
+carrier:<carrier-code>:create-shipment:<shipment-id>:<shipment-version>
 ```
 
 La tabella `shipments` protegge unicità per provider e identificativo esterno.
@@ -1017,13 +1040,13 @@ Passaggi previsti:
 9. un parziale richiede decisione e approvazione;
 10. HAPA produce la richiesta di spedizione.
 
-### 18.3 GLS e tracking
+### 18.3 Corriere e tracking
 
 1. l’operatore o il sistema definisce uno o più colli;
 2. ogni collo contiene peso e dimensioni;
 3. HAPA calcola peso volumetrico e tariffabile;
 4. il caso d’uso valida indirizzo, quantità e colli;
-5. dominio e richiesta GLS vengono persistiti con outbox;
+5. dominio e richiesta al corriere selezionato vengono persistiti con outbox;
 6. worker crea la spedizione;
 7. HAPA salva identificativo, tracking e riferimento label;
 8. label viene acquisita e archiviata secondo retention;
@@ -1037,7 +1060,7 @@ La riconciliazione confronta periodicamente:
 - stato interno;
 - stato marketplace;
 - stato Space;
-- stato GLS;
+- stato del corriere selezionato;
 - delivery pendenti o ambigue.
 
 Divergenze risolvibili producono eventi correttivi. Divergenze con rischio operativo entrano in `manual_review`.
@@ -1070,7 +1093,7 @@ volumetric_weight_kg = length_cm × width_cm × height_cm / divisor
 billable_weight_kg   = max(actual_weight_kg, volumetric_weight_kg)
 ```
 
-Il divisore sarà configurato per servizio o contratto GLS. Formula, divisore e risultato verranno salvati per audit tariffario.
+Il divisore sarà configurato per servizio o contratto del corriere. Formula, divisore e risultato verranno salvati per audit tariffario.
 
 ### 19.3 Spedizioni parziali
 
@@ -1302,7 +1325,7 @@ flowchart LR
     Migration[Migration job] --> Postgres
     Worker[Worker futuri] --> Postgres
     Worker --> Redis
-    Worker --> Providers[Marketplace / Space / GLS]
+    Worker --> Providers[Marketplace / Space / GLS / BRT]
 ```
 
 Servizi attuali del Compose production:
@@ -1486,7 +1509,7 @@ Marketplace fake
   -> Space fake
   -> disponibilità
   -> picking
-  -> GLS fake
+  -> corriere fake GLS o BRT
   -> label
   -> tracking marketplace
 ```
@@ -1586,7 +1609,7 @@ Sezioni previste:
 - disponibilità Space;
 - picking e scansioni;
 - parziale e decisioni;
-- colli e GLS;
+- colli, corriere e label;
 - tracking marketplace;
 - outbox;
 - delivery esterne;
@@ -1629,6 +1652,7 @@ La UI presenta elenco e dettaglio cliente con profilo, contatti, identità ester
 | cliente canonico separato dalle identità esterne | riconciliazione controllata senza deduplicazione fragile basata sull’email |
 | snapshot indirizzi sull’ordine | integrità storica indipendente dalle modifiche della rubrica cliente |
 | origine B2C predisposta ma non operativa | evoluzione dello schema senza fingere checkout o pagamenti già disponibili |
+| contratto Shipping provider-neutral | dominio logistico stabile e adapter GLS/BRT isolati dietro una porta comune |
 
 Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`.
 
@@ -1649,7 +1673,9 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | migrazioni PostgreSQL | implementato | schema foundation e vincoli |
 | contratti Marketplace | parziale | canali/connettori e righe tipizzati; adapter reali e funzioni avanzate assenti |
 | contratti Space | parziale | adapter reale e riconciliazione assenti |
-| contratti GLS | parziale | colli, dimensioni e adapter reale assenti |
+| contratto Shipping | parziale | codici GLS/BRT e DTO comuni presenti; colli tipizzati e casi d’uso assenti |
+| adapter GLS | parziale | contratto provider presente; discovery e adapter reale assenti |
+| adapter BRT | parziale | contratto provider presente; discovery e adapter reale assenti |
 | dominio Order | parziale | enum presente, aggregato pianificato |
 | anagrafica clienti | parziale | schema, vincoli, tipi dominio e UI presenti; repository e casi d’uso pianificati |
 | anagrafica ordini | parziale | numero, cliente, origine e snapshot presenti; repository e aggregato pianificati |
@@ -1694,7 +1720,7 @@ La prima milestone funzionale richiede un ordine che attraversi integralmente:
 6. aggiornamento disponibilità;
 7. picking completo o parziale;
 8. definizione colli;
-9. creazione spedizione ed etichetta GLS;
+9. creazione spedizione ed etichetta tramite GLS o BRT;
 10. invio tracking al marketplace;
 11. visibilità nel pannello;
 12. audit, log, delivery e riconciliazione consultabili;

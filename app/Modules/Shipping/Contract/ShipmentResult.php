@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Hapa\Modules\Gls\Contract;
+namespace Hapa\Modules\Shipping\Contract;
 
 use InvalidArgumentException;
 
