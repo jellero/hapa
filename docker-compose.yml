@@ -23,6 +23,21 @@ x-app-environment: &app-environment
   RABBITMQ_CONNECT_TIMEOUT: ${RABBITMQ_CONNECT_TIMEOUT:-5.0}
   RABBITMQ_READ_WRITE_TIMEOUT: ${RABBITMQ_READ_WRITE_TIMEOUT:-30.0}
   RABBITMQ_HEARTBEAT: ${RABBITMQ_HEARTBEAT:-30}
+  RABBITMQ_CONSUMER_ENABLED: ${RABBITMQ_CONSUMER_ENABLED:-false}
+  RABBITMQ_CONSUMER_HOST: ${RABBITMQ_CONSUMER_HOST:-rabbitmq}
+  RABBITMQ_CONSUMER_PORT: ${RABBITMQ_CONSUMER_PORT:-5672}
+  RABBITMQ_CONSUMER_VHOST: ${RABBITMQ_CONSUMER_VHOST:-/}
+  RABBITMQ_CONSUMER_USERNAME: ${RABBITMQ_CONSUMER_USERNAME:-hapa_automation}
+  RABBITMQ_CONSUMER_PASSWORD: ${RABBITMQ_CONSUMER_PASSWORD:-hapa-automation-rabbit-change-me}
+  RABBITMQ_CONSUMER_EXCHANGE: ${RABBITMQ_CONSUMER_EXCHANGE:-hapa.events}
+  RABBITMQ_CONSUMER_DEAD_EXCHANGE: ${RABBITMQ_CONSUMER_DEAD_EXCHANGE:-hapa.dead}
+  RABBITMQ_CONSUMER_QUEUE: ${RABBITMQ_CONSUMER_QUEUE:-hapa.inbound.events}
+  RABBITMQ_CONSUMER_DEAD_QUEUE: ${RABBITMQ_CONSUMER_DEAD_QUEUE:-hapa.inbound.dead}
+  RABBITMQ_CONSUMER_BINDINGS: ${RABBITMQ_CONSUMER_BINDINGS:-integration.transport.#}
+  RABBITMQ_CONSUMER_CONNECT_TIMEOUT: ${RABBITMQ_CONSUMER_CONNECT_TIMEOUT:-5.0}
+  RABBITMQ_CONSUMER_READ_WRITE_TIMEOUT: ${RABBITMQ_CONSUMER_READ_WRITE_TIMEOUT:-30.0}
+  RABBITMQ_CONSUMER_HEARTBEAT: ${RABBITMQ_CONSUMER_HEARTBEAT:-30}
+  RABBITMQ_CONSUMER_MAX_ATTEMPTS: ${RABBITMQ_CONSUMER_MAX_ATTEMPTS:-5}
   OUTBOX_RELAY_WORKER_ID: ${OUTBOX_RELAY_WORKER_ID:-hapa-relay-local-1}
   OUTBOX_RELAY_BATCH_SIZE: ${OUTBOX_RELAY_BATCH_SIZE:-50}
   OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS: ${OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS:-300}
@@ -59,6 +74,18 @@ services:
     build: *php-build
     environment: *app-environment
     command: ["php", "bin/console", "outbox:relay"]
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend, messaging]
+    profiles: [messaging]
+
+  inbox-consumer:
+    build: *php-build
+    environment: *app-environment
+    command: ["php", "bin/console", "inbox:consume"]
     volumes:
       - ./:/var/www/html
     depends_on:
