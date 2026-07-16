@@ -4,7 +4,6 @@
 declare(strict_types=1);
 
 use Hapa\Core\Bootstrap;
-use Hapa\Core\Console\SystemCheckCommand;
 use Symfony\Component\Console\Application;
 
 $basePath = dirname(__DIR__);
@@ -13,5 +12,6 @@ require $basePath . '/vendor/autoload.php';
 $bootstrap = Bootstrap::initialize($basePath);
 
 $application = new Application('HAPA', '0.3.0');
-$application->add(new SystemCheckCommand($bootstrap->readiness));
+$application->add($bootstrap->systemCheckCommand());
+$application->add($bootstrap->automationRunCommand());
 $application->run();

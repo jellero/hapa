@@ -227,7 +227,7 @@ Contiene:
 - produzione degli eventi outbox;
 - autorizzazione applicativa delle azioni.
 
-**Stato:** pianificato per la prima vertical slice.
+**Stato:** parziale. Il salvataggio ordine usa transaction manager, repository e outbox atomica; autorizzazione e casi d’uso delle vertical slice provider restano pianificati.
 
 ### 7.3 Infrastructure
 
@@ -240,7 +240,7 @@ Contiene:
 - implementazione outbox e worker;
 - integrazione Redis.
 
-**Stato:** connection factory, migrazioni e contratti presenti; repository e adapter reali pianificati.
+**Stato:** connection factory, migrazioni, repository `Order`, outbox, worker e scheduler presenti; repository restanti e adapter provider reali pianificati.
 
 ### 7.4 Delivery
 
@@ -272,12 +272,12 @@ Il bootstrap attuale:
 2. valida `APP_ENV`, `APP_DEBUG`, `APP_URL`, timezone e trusted proxy;
 3. configura la timezone;
 4. configura i trusted proxy di HttpFoundation;
-5. costruisce l’oggetto `Environment`;
-6. costruisce il readiness check e le dipendenze trasversali iniziali.
+5. carica configurazioni tipizzate tramite l’unico reader autorizzato;
+6. compila il container e risolve l’entry point richiesto.
 
-### 8.1 Evoluzione prevista
+### 8.1 Configurazioni tipizzate
 
-Gli accessi statici all’ambiente verranno sostituiti progressivamente con configurazioni tipizzate:
+Il composition root registra configurazioni immutabili:
 
 ```text
 ApplicationConfig
@@ -285,9 +285,10 @@ DatabaseConfig
 RedisConfig
 ProxyConfig
 IntegrationConfig
+AutomationConfig
 ```
 
-Questi oggetti entreranno nei servizi tramite costruttore. Il composition root rimarrà l’unico punto autorizzato a leggere variabili ambiente e secret.
+I servizi le ricevono tramite costruttore. `ConfigurationLoader` ed `EnvironmentReader` confinano la lettura di ambiente e secret all’avvio; il resto dell’applicazione non legge direttamente `$_ENV` o `getenv()`.
 
 ---
 
@@ -508,9 +509,9 @@ Responsabilità:
 - riconciliazione;
 - metriche asincrone.
 
-**Implementato:** schema outbox e indici preparatori.
+**Implementato:** outbox transazionale, schema versione, claim concorrente, worker one-shot, retry/dead letter, lock recovery, registry taggato, scheduler persistente e handler audit ordine idempotente. I sette job del flusso ordini/spedizioni sono censiti a dieci minuti e disabilitati per impostazione predefinita.
 
-**Pianificato:** worker e handler reali.
+**Pianificato:** handler provider reali, heartbeat/timeout dei job lunghi, metriche e gestione autorizzata delle dead letter. Vedere [`AUTOMATIONS.md`](AUTOMATIONS.md).
 
 ### 10.9 Operational Dashboard
 
@@ -638,6 +639,7 @@ Il collegamento ordine-cliente è opzionale e usa `ON DELETE SET NULL`, così l�
 | `order_transitions` | storico versionato dei cambi di stato ordine |
 | `shipments` | spedizione, tracking e label |
 | `outbox_messages` | intenzioni asincrone persistite |
+| `automation_jobs` | pianificazione persistente, watermark e lock dei job periodici |
 | `external_deliveries` | singoli tentativi verso provider |
 | `audit_logs` | variazioni e azioni tracciate |
 | `phinxlog` | versione dello schema |
@@ -706,7 +708,7 @@ La readiness legge la versione minima da `config/schema.php`. Ogni nuova migrazi
 
 ## 13. Repository e accesso ai dati
 
-I repository pianificati espongono operazioni orientate al dominio, evitando query distribuite nei controller o negli adapter.
+I repository espongono operazioni orientate al dominio, evitando query distribuite nei controller o negli adapter. `OrderRepository` e la sua implementazione PostgreSQL sono presenti; le altre porte restano da completare.
 
 Contratti iniziali previsti:
 
@@ -729,10 +731,10 @@ Responsabilità dei repository:
 - transazioni gestite dal layer applicativo;
 - nessuna chiamata a provider esterni.
 
-Il transaction manager esporrà un confine esplicito, per esempio:
+Il transaction manager espone un confine esplicito. `PostgresOrderRepository` lo usa per confermare insieme aggregato, righe, transizioni e outbox, per esempio:
 
 ```php
-$transactions->run(function () use ($command): Result {
+$transactions->transactional(function () use ($command): Result {
     // dominio + persistenza + outbox
 });
 ```
@@ -866,6 +868,7 @@ ReconciliationRequested
 - payload JSONB;
 - stato;
 - idempotency key;
+- correlation ID e versione schema;
 - tentativi e massimo tentativi;
 - disponibilità temporale;
 - lock token;
@@ -873,9 +876,9 @@ ReconciliationRequested
 - timestamp di lock, completamento e fallimento;
 - ultimo errore.
 
-### 16.3 Worker previsto
+### 16.3 Worker implementato
 
-Algoritmo di claim:
+Il repository esegue il claim con una CTE atomica equivalente a:
 
 ```sql
 BEGIN;
@@ -898,20 +901,19 @@ WHERE id = ANY(:ids);
 COMMIT;
 ```
 
-Elaborazione:
+Elaborazione attuale:
 
 1. carica il messaggio claimed;
 2. risolve l’handler tramite event type;
-3. costruisce l’idempotency key del provider;
-4. registra l’inizio in `external_deliveries`;
-5. invoca l’adapter con timeout;
-6. classifica il risultato;
-7. aggiorna delivery e outbox;
-8. produce eventuali eventi successivi in una nuova transazione.
+3. invoca l’handler idempotente;
+4. classifica errore temporaneo, definitivo o inatteso;
+5. completa, ripianifica o sposta in dead letter verificando worker e lock token.
+
+Gli handler provider aggiungeranno la registrazione `external_deliveries`, timeout, invocazione adapter e riconciliazione prima di poter essere attivati.
 
 ### 16.4 Retry
 
-Il ritardo seguirà backoff esponenziale limitato con jitter:
+Il ritardo segue backoff esponenziale limitato con jitter:
 
 ```text
 next_delay = min(max_delay, base * 2^attempt) + random_jitter
@@ -921,7 +923,7 @@ La classificazione dell’errore decide retry, dead letter o revisione manuale.
 
 ### 16.5 Lock scaduti
 
-Un processo di recovery riporterà in retry messaggi `processing` con lock oltre la soglia. Il recupero verificherà lock token e worker identity per evitare completamenti tardivi incoerenti.
+All’inizio del batch il recovery riporta in retry i messaggi `processing` con lock oltre la soglia, oppure in dead letter quando i tentativi sono esauriti. Completamento, retry e dead letter verificano lock token e worker identity per evitare aggiornamenti tardivi incoerenti.
 
 ### 16.6 Dead letter
 
@@ -933,7 +935,7 @@ I messaggi terminali conserveranno:
 - correlation ID;
 - azione operativa richiesta.
 
-Il pannello offrirà retry controllato, chiusura manuale e riconciliazione.
+Il pannello espone oggi piano e stato di maturità; retry controllato, chiusura manuale e riconciliazione restano azioni autorizzate da implementare.
 
 ---
 
@@ -1330,7 +1332,7 @@ flowchart LR
     PHP --> Postgres[(PostgreSQL)]
     PHP --> Redis[(Redis)]
     Migration[Migration job] --> Postgres
-    Worker[Worker futuri] --> Postgres
+    Worker[Worker automation:run] --> Postgres
     Worker --> Redis
     Worker --> Providers[Marketplace / Space / GLS / BRT]
 ```
@@ -1345,7 +1347,7 @@ Servizi attuali del Compose production:
 | `postgres` | database autorevole |
 | `redis` | cache e coordinamento |
 
-Worker e scheduler verranno aggiunti come processi separati basati sulla stessa immagine applicativa o su target dedicati.
+Il comando one-shot `automation:run` usa la stessa immagine applicativa. Un servizio supervisionato o un CronJob dedicato verrà aggiunto quando saranno attivati i primi handler provider.
 
 ### 23.3 Storage
 
@@ -1685,12 +1687,12 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | adapter BRT | parziale | contratto provider presente; discovery e adapter reale assenti |
 | dominio Order | implementato | aggregato, righe, invarianti, macchina a stati, eventi e storico presenti |
 | anagrafica clienti | parziale | schema, vincoli, tipi dominio e UI presenti; repository e casi d’uso pianificati |
-| anagrafica ordini | parziale | numero, cliente, origine, snapshot e dominio presenti; repository e casi d’uso pianificati |
+| anagrafica ordini | parziale | dominio e repository PostgreSQL transazionale presenti; query UI e casi d’uso autorizzati pianificati |
 | e-commerce B2C | pianificato | sola compatibilità dell’origine ordine presente |
-| repository | pianificato | prima vertical slice |
-| transaction manager | pianificato | prima vertical slice |
-| outbox worker | pianificato | schema presente |
-| scheduler | pianificato | insieme al worker |
+| repository | parziale | repository Order implementato; Customer, Marketplace e query read model pianificati |
+| transaction manager | implementato | boundary PostgreSQL riutilizzabile e nesting controllato |
+| outbox worker | parziale | claim concorrente, retry, dead letter e handler audit implementati; operazioni manuali e metriche pianificate |
+| scheduler | parziale | runtime e sette job censiti; handler provider disattivati fino alla discovery |
 | picking | parziale | UI presentazionale presente; modello e casi d’uso assenti |
 | gestione parziali | pianificato | vincoli preparatori presenti |
 | autenticazione e ruoli | pianificato | prima del collegamento di dati e azioni UI |

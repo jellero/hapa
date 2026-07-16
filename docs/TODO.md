@@ -42,34 +42,38 @@ Riferimenti:
 - [x] Design system e interfaccia operativa responsive per tutte le aree previste.
 - [x] Viste presentazionali per elenco e dettaglio clienti.
 - [x] Schema iniziale transactional outbox.
+- [x] Composition root separato, container compilato, configurazioni tipizzate e Clock iniettato.
+- [x] Repository PostgreSQL ordine, transaction manager, optimistic locking e outbox atomica.
+- [x] Worker outbox one-shot con claim concorrente, retry, dead letter e lock recovery.
+- [x] Scheduler persistente con i sette job ordini/spedizioni censiti e disattivati fino agli adapter reali.
 - [x] Documentazione architetturale completa.
 - [x] Confronto architetturale con le pratiche Symfony attuali.
 - [x] Pull request tecniche sostituite chiuse.
 
 ## Priorità immediata
 
-La prossima sequenza deve collegare il dominio ordine verificato alla persistenza transazionale:
+La prossima sequenza deve collegare clienti, sicurezza e primo provider alla base transazionale ora disponibile:
 
-1. container dependency injection compilato;
-2. configurazioni tipizzate e Clock iniettato;
-3. porte repository e mapping PostgreSQL per clienti e ordini;
-4. transaction boundary e optimistic locking atomico;
-5. persistenza degli eventi outbox nella stessa transazione.
+1. aggregato e repository cliente, query paginata per clienti e ordini;
+2. autenticazione, autorizzazione, CSRF e audit delle azioni;
+3. discovery e adapter del primo account-canale;
+4. vertical slice Marketplace → HAPA → Space;
+5. osservabilità e gestione autorizzata delle dead letter.
 
 ## Fase 0 — Composition root e primitive condivise
 
-- [ ] Introdurre il container basato su `symfony/dependency-injection`.
-- [ ] Configurare servizi privati per impostazione predefinita.
-- [ ] Usare constructor injection in ogni servizio applicativo e infrastrutturale.
-- [ ] Definire alias espliciti tra interfacce e implementazioni.
+- [x] Introdurre il container basato su `symfony/dependency-injection`.
+- [x] Configurare servizi privati per impostazione predefinita.
+- [x] Usare constructor injection nei servizi applicativi e infrastrutturali implementati.
+- [x] Definire alias espliciti tra interfacce e implementazioni.
 - [ ] Definire named alias per client e adapter multipli.
-- [ ] Definire tag e tagged iterator per handler outbox, adapter e policy.
-- [ ] Compilare e validare il container in CI.
+- [x] Definire tag e tagged iterator per gli handler outbox.
+- [x] Compilare e validare il container nei test e in CI.
 - [ ] Generare la cache del container production associata al commit.
-- [ ] Introdurre `ApplicationConfig`, `DatabaseConfig`, `RedisConfig`, `ProxyConfig` e `IntegrationConfig`.
-- [ ] Confinare lettura di ambiente e secret al composition root.
-- [ ] Introdurre un’interfaccia Clock e implementazioni system/test.
-- [ ] Aggiungere test del grafo servizi, alias, tag e configurazioni mancanti.
+- [x] Introdurre `ApplicationConfig`, `DatabaseConfig`, `RedisConfig`, `ProxyConfig`, `IntegrationConfig` e `AutomationConfig`.
+- [x] Confinare lettura di ambiente e secret al configuration loader del composition root.
+- [x] Introdurre un’interfaccia Clock e implementazioni system/test.
+- [x] Aggiungere test del grafo servizi, alias e configurazioni mancanti.
 
 **Gate:** l’applicazione avvia HTTP, CLI e test attraverso lo stesso container compilabile; servizi di dominio e casi d’uso ricevono dipendenze tramite costruttore.
 
@@ -109,13 +113,14 @@ La prossima sequenza deve collegare il dominio ordine verificato alla persistenz
 ## Fase 2 — Persistenza e transazioni
 
 - [ ] Definire le porte `CustomerRepository`, `OrderRepository` e `MarketplaceRepository`.
-- [ ] Implementare repository PostgreSQL espliciti.
-- [ ] Definire il transaction boundary applicativo.
-- [ ] Implementare transaction manager o Unit of Work esplicita.
-- [ ] Persistire dominio e messaggi outbox nella stessa transazione PostgreSQL.
-- [ ] Implementare mapping tra record, aggregato e value object.
-- [ ] Implementare controllo versione atomico per optimistic locking.
-- [ ] Aggiungere test integration su rollback, concorrenza, optimistic locking e idempotenza.
+- [x] Implementare il repository PostgreSQL esplicito per `Order` (restano Customer e Marketplace).
+- [x] Definire il transaction boundary applicativo per il salvataggio ordine.
+- [x] Implementare transaction manager esplicito.
+- [x] Persistire ordine e messaggi outbox nella stessa transazione PostgreSQL.
+- [x] Implementare mapping tra record, aggregato ordine e value object.
+- [x] Implementare controllo versione atomico per optimistic locking ordine.
+- [x] Aggiungere integration test su mapping, optimistic locking, outbox e handler idempotente.
+- [ ] Aggiungere test multi-connessione su rollback e concorrenza reale.
 
 **Gate:** un aggiornamento ordine e il relativo evento outbox vengono confermati o annullati insieme.
 
@@ -132,7 +137,7 @@ La prossima sequenza deve collegare il dominio ordine verificato alla persistenz
 - [ ] Introdurre errori tipizzati: temporaneo, definitivo, validazione, autenticazione e rate limit.
 - [ ] Integrare `symfony/validator` ai confini HTTP e provider.
 - [ ] Valutare `symfony/serializer` per mapping controllato verso DTO.
-- [ ] Definire versione di schema per messaggi e payload persistiti.
+- [x] Definire versione di schema per messaggi e payload persistiti.
 - [ ] Integrare `symfony/http-client` con scoped client per provider.
 - [ ] Configurare base URI, TLS, timeout di connessione, inattività e durata massima.
 - [ ] Limitare redirect e dimensione delle risposte.
@@ -148,17 +153,18 @@ La prossima sequenza deve collegare il dominio ordine verificato alla persistenz
 ## Fase 4 — Transactional outbox, worker e scheduler
 
 - [x] Schema outbox con idempotency key, tentativi, lock token, worker identity e stati terminali.
-- [ ] Implementare scrittura outbox tramite repository transazionale.
-- [ ] Implementare claim atomico con `FOR UPDATE SKIP LOCKED`.
-- [ ] Implementare worker concorrenti con identity univoca.
-- [ ] Implementare lock con scadenza e recovery.
+- [x] Implementare scrittura outbox tramite repository transazionale.
+- [x] Implementare claim atomico con `FOR UPDATE SKIP LOCKED`.
+- [x] Implementare worker concorrenti con identity univoca.
+- [x] Implementare lock con scadenza e recovery.
 - [ ] Implementare heartbeat per handler di lunga durata.
 - [ ] Implementare timeout per handler.
-- [ ] Implementare retry con exponential backoff e jitter.
-- [ ] Implementare dead letter e gestione manuale degli errori definitivi.
-- [ ] Implementare handler registry tramite servizi taggati.
-- [ ] Rendere ogni handler idempotente o protetto da chiave stabile.
-- [ ] Aggiungere versione schema ai messaggi persistiti.
+- [x] Implementare retry con exponential backoff e jitter.
+- [x] Implementare lo stato terminale dead letter.
+- [ ] Implementare la gestione manuale autorizzata degli errori definitivi.
+- [x] Implementare handler registry tramite servizi taggati.
+- [x] Proteggere l’handler audit ordine con chiave outbox stabile.
+- [x] Aggiungere versione schema ai messaggi persistiti.
 - [ ] Gestire messaggi indecodificabili dopo variazioni di codice.
 - [ ] Resettare servizi stateful tra job.
 - [ ] Implementare graceful shutdown su `SIGTERM` e `SIGINT`.
@@ -166,8 +172,8 @@ La prossima sequenza deve collegare il dominio ordine verificato alla persistenz
 - [ ] Definire supervisor o orchestratore e strategia di restart.
 - [ ] Esporre liveness, readiness e statistiche del worker.
 - [ ] Implementare comandi autorizzati per inspect, retry, replay e rimozione dead letter.
-- [ ] Implementare scheduler per import ordini, disponibilità, tracking e riconciliazione.
-- [ ] Proteggere scheduler leader e job globali tramite lock distribuito.
+- [x] Implementare scheduler persistente e censire i sette job ordini/spedizioni a dieci minuti.
+- [x] Proteggere claim scheduler e job globali tramite lock PostgreSQL.
 - [ ] Definire timezone, jitter, overlap policy e misfire policy per ogni job.
 - [ ] Persistire cursori e watermark dei job nel database.
 - [ ] Implementare quote provider tramite rate limiter distribuito.

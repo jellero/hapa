@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
+use Hapa\Core\Automation\AutomationCatalog;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use PHPUnit\Framework\TestCase;
@@ -72,6 +73,18 @@ final class UiControllerTest extends TestCase
         self::assertStringNotContainsString('Stato GLS', $shipments);
     }
 
+    public function testItPresentsTheConcreteAutomationPlanAndRuntime(): void
+    {
+        $content = (string) $this->controller()->automation($this->request('/ui/automation'))->getContent();
+
+        self::assertStringContainsString('7 job censiti', $content);
+        self::assertStringContainsString('Accetta ordini completi', $content);
+        self::assertStringContainsString('Esporta verso Space', $content);
+        self::assertStringContainsString('Gestisci parziali confermati', $content);
+        self::assertStringContainsString('bin/console automation:run', $content);
+        self::assertStringContainsString('BRT', $content);
+    }
+
     public function testItIgnoresUnknownCollectionFilters(): void
     {
         $request = $this->request('/ui/orders?status=not-a-real-status');
@@ -121,7 +134,7 @@ final class UiControllerTest extends TestCase
 
     private function controller(): UiController
     {
-        return new UiController($this->renderer(), 'testing');
+        return new UiController($this->renderer(), 'testing', new AutomationCatalog());
     }
 
     private function renderer(): ViewRenderer

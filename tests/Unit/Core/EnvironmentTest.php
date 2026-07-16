@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
-use Hapa\Core\Configuration\Environment;
+use Hapa\Core\Configuration\ConfigurationLoader;
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -43,7 +44,7 @@ final class EnvironmentTest extends TestCase
         $this->setEnvironment($this->productionEnvironment(['APP_DEBUG' => 'true']));
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('APP_DEBUG');
-        Environment::load();
+        ConfigurationLoader::load();
     }
 
     public function testItRejectsAnInvalidDebugValue(): void
@@ -58,7 +59,7 @@ final class EnvironmentTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('APP_DEBUG');
-        Environment::load();
+        ConfigurationLoader::load();
     }
 
     public function testItRejectsAnInvalidApplicationUrl(): void
@@ -73,7 +74,7 @@ final class EnvironmentTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('APP_URL');
-        Environment::load();
+        ConfigurationLoader::load();
     }
 
     public function testItRejectsApplicationUrlCredentials(): void
@@ -88,7 +89,7 @@ final class EnvironmentTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('APP_URL');
-        Environment::load();
+        ConfigurationLoader::load();
     }
 
     public function testItRejectsApplicationUrlQueryAndFragment(): void
@@ -103,7 +104,23 @@ final class EnvironmentTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('APP_URL');
-        Environment::load();
+        ConfigurationLoader::load();
+    }
+
+    public function testItRejectsAnUnsafeAutomationBatchSize(): void
+    {
+        $this->setEnvironment([
+            'APP_ENV' => 'testing',
+            'APP_DEBUG' => 'false',
+            'APP_URL' => 'http://localhost',
+            'APP_TIMEZONE' => 'UTC',
+            'TRUSTED_PROXIES' => '',
+            'AUTOMATION_BATCH_SIZE' => '0',
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('AUTOMATION_BATCH_SIZE');
+        ConfigurationLoader::load();
     }
 
     public function testProductionRejectsMissingTrustedProxies(): void
@@ -111,17 +128,17 @@ final class EnvironmentTest extends TestCase
         $this->setEnvironment($this->productionEnvironment(['TRUSTED_PROXIES' => '']));
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('TRUSTED_PROXIES');
-        Environment::load();
+        ConfigurationLoader::load();
     }
 
     public function testProductionAcceptsExplicitSecureConfiguration(): void
     {
         $this->setEnvironment($this->productionEnvironment());
-        $environment = Environment::load();
+        $configuration = ConfigurationLoader::load();
 
-        self::assertTrue($environment->isProduction());
-        self::assertFalse($environment->debug);
-        self::assertSame(['127.0.0.1', 'REMOTE_ADDR'], $environment->trustedProxies);
+        self::assertTrue($configuration->application->isProduction());
+        self::assertFalse($configuration->application->debug);
+        self::assertSame(['127.0.0.1', 'REMOTE_ADDR'], $configuration->proxy->trustedProxies);
     }
 
     public function testProductionReadsSecretsFromFiles(): void
@@ -136,9 +153,10 @@ final class EnvironmentTest extends TestCase
             'REDIS_PASSWORD_FILE' => $redisSecret,
         ]));
 
-        self::assertTrue(Environment::load()->isProduction());
-        self::assertSame('database-secret-from-file', Environment::secret('DB_PASSWORD'));
-        self::assertSame('redis-secret-from-file', Environment::secret('REDIS_PASSWORD'));
+        $configuration = ConfigurationLoader::load();
+        self::assertTrue($configuration->application->isProduction());
+        self::assertSame('database-secret-from-file', $configuration->database->password);
+        self::assertSame('redis-secret-from-file', $configuration->redis->password);
     }
 
     /** @param array<string, string> $overrides

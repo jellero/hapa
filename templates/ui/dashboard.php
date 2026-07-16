@@ -65,15 +65,15 @@
         <ol class="priority-list">
             <li>
                 <span>01</span>
-                <div><strong>Composition root</strong><small>Container DI e configurazioni tipizzate</small></div>
+                <div><strong>Anagrafica cliente</strong><small>Aggregato, repository e query paginata</small></div>
             </li>
             <li>
                 <span>02</span>
-                <div><strong>Anagrafiche operative</strong><small>Aggregati e repository clienti/ordini</small></div>
+                <div><strong>Sicurezza operativa</strong><small>Autenticazione, ruoli, CSRF e audit</small></div>
             </li>
             <li>
                 <span>03</span>
-                <div><strong>Prima integrazione</strong><small>Discovery e vertical slice verso Space</small></div>
+                <div><strong>Prima integrazione</strong><small>SellRapido/marketplace → HAPA → Space</small></div>
             </li>
         </ol>
         <a class="button button--ghost button--wide" href="/ui/integrations">Esplora il piano integrazioni</a>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Ui;
 
+use Hapa\Core\Automation\AutomationCatalog;
 use Hapa\Core\View\ViewRenderer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,6 +14,7 @@ final readonly class UiController
     public function __construct(
         private ViewRenderer $views,
         private string $environment,
+        private AutomationCatalog $automationCatalog,
     ) {
     }
 
@@ -43,14 +45,14 @@ final readonly class UiController
             'eyebrow' => 'Panoramica',
             'description' => 'Controlla il ciclo ordine, le eccezioni e lo stato delle integrazioni da un unico punto.',
             'metrics' => [
-                ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Repository ordini non collegato', 'tone' => 'neutral'],
+                ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Read model operativo non collegato', 'tone' => 'neutral'],
                 ['label' => 'Clienti censiti', 'value' => '—', 'detail' => 'Repository clienti non collegato', 'tone' => 'info'],
                 ['label' => 'Revisione manuale', 'value' => '—', 'detail' => 'Disponibile con il dominio Order', 'tone' => 'warning'],
                 ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter corriere non collegati', 'tone' => 'success'],
             ],
             'workstreams' => [
                 ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'integration'],
-                ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Schema pronto', 'tone' => 'info', 'icon' => 'customer'],
+                ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Ordini persistenti', 'tone' => 'success', 'icon' => 'customer'],
                 ['label' => 'Space', 'detail' => 'Invio ordine e disponibilità', 'status' => 'Contratto pronto', 'tone' => 'info', 'icon' => 'automation'],
                 ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'scan'],
                 ['label' => 'Corrieri', 'detail' => 'GLS e BRT (Bartolini)', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'truck'],
@@ -96,7 +98,7 @@ final readonly class UiController
             'filters' => ['Tutti gli stati', 'Da accettare', 'In attesa merce', 'Picking', 'Revisione manuale', 'Completati'],
             'columns' => ['Ordine', 'Cliente', 'Origine', 'Stato', 'Righe', 'Aggiornato', 'Azioni'],
             'emptyTitle' => 'Nessun ordine disponibile',
-            'emptyBody' => 'Lo schema supporta ordini marketplace e la futura origine B2C; i dati compariranno dopo il collegamento del repository PostgreSQL.',
+            'emptyBody' => 'Il repository PostgreSQL transazionale supporta ordini marketplace e la futura origine B2C; l’elenco richiede ancora read model, autenticazione e autorizzazione.',
             'emptyIcon' => 'orders',
             'primaryAction' => 'Importa ordini',
         ]);
@@ -148,17 +150,11 @@ final readonly class UiController
 
     public function automation(Request $request): Response
     {
-        return $this->collection($request, 'automation', [
+        return $this->operational($request, 'ui/automation', 'automation', [
             'title' => 'Automazioni',
-            'eyebrow' => 'Affidabilità',
-            'description' => 'Ispeziona outbox, retry, dead letter, scheduler e riconciliazioni.',
-            'searchLabel' => 'Cerca evento, ordine, provider o correlation ID',
-            'filters' => ['Tutti i messaggi', 'Pending', 'Processing', 'Retry', 'Dead letter', 'Completati'],
-            'columns' => ['Evento', 'Aggregato', 'Provider', 'Tentativi', 'Disponibile da', 'Azioni'],
-            'emptyTitle' => 'Nessun messaggio operativo',
-            'emptyBody' => 'Lo schema outbox è pronto; i messaggi appariranno dopo l’implementazione del repository e del worker.',
-            'emptyIcon' => 'automation',
-            'primaryAction' => 'Riconcilia',
+            'eyebrow' => 'Scheduler e affidabilità',
+            'description' => 'Controlla il ciclo automatico ordini e spedizioni, con outbox transazionale, retry, dead letter e gate manuali.',
+            'automations' => $this->automationCatalog->definitions(),
         ]);
     }
 
@@ -207,7 +203,7 @@ final readonly class UiController
             'filters' => ['Tutti gli eventi', 'Clienti', 'Ordini', 'Spedizioni', 'Utenti', 'Retry e replay', 'Sicurezza'],
             'columns' => ['Data e ora', 'Attore', 'Azione', 'Entità', 'Correlation ID', 'Dettaglio'],
             'emptyTitle' => 'Nessun evento di audit',
-            'emptyBody' => 'Gli eventi verranno esposti quando i casi d’uso applicativi scriveranno nell’audit log.',
+            'emptyBody' => 'Gli eventi ordine vengono già proiettati in modo idempotente; la consultazione richiede ancora query repository, autenticazione e autorizzazione.',
             'emptyIcon' => 'audit',
             'primaryAction' => 'Esporta',
         ]);

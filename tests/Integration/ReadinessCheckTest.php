@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Integration;
 
+use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Database\SchemaManifest;
 use Hapa\Core\Health\ReadinessCheck;
@@ -15,7 +16,12 @@ final class ReadinessCheckTest extends TestCase
     {
         $basePath = dirname(__DIR__, 2);
         $manifest = SchemaManifest::load($basePath . '/config/schema.php');
-        $result = (new ReadinessCheck(new ConnectionFactory(), $manifest->minimumVersion))->check();
+        $configuration = ConfigurationLoader::load();
+        $result = (new ReadinessCheck(
+            new ConnectionFactory($configuration->database),
+            $configuration->redis,
+            $manifest->minimumVersion,
+        ))->check();
 
         self::assertTrue($result['components']['database']);
         self::assertTrue($result['components']['redis']);

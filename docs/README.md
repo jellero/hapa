@@ -3,6 +3,7 @@
 La documentazione tecnica è organizzata nei seguenti riferimenti principali:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): architettura applicativa, infrastrutturale e operativa; stato implementativo; decisioni e confini.
+- [`AUTOMATIONS.md`](AUTOMATIONS.md): flusso ordini e spedizioni, sette job schedulati, runtime outbox, retry e gate di attivazione.
 - [`CARRIERS.md`](CARRIERS.md): ownership del contratto Shipping, moduli GLS/BRT, discovery, idempotenza e failure mode.
 - [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md): anagrafiche canoniche, identità esterne, indirizzi, ordini e predisposizione B2C.
 - [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md): percorso canonico dal dato alla UI, responsabilità dei livelli e dipendenze tra moduli.

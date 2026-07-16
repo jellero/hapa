@@ -44,7 +44,7 @@ worker
   -> delivery, retry e riconciliazione
 ```
 
-La foundation HAPA corrente offre bootstrap, routing, risposta HTTP, configurazione, health check e UI presentazionale. Container DI compilato, autenticazione, permessi, CSRF, repository applicativi e worker outbox sono ancora gate di roadmap: il nuovo codice non deve descriverli come già operativi.
+La foundation HAPA corrente offre bootstrap, container DI compilato, configurazioni tipizzate, routing, risposta HTTP, health check, repository ordine, transaction manager, outbox, worker/scheduler one-shot e UI presentazionale. Autenticazione, permessi, CSRF, repository cliente/read model e adapter provider reali sono ancora gate di roadmap: il nuovo codice non deve descriverli come già operativi.
 
 ## Responsabilità dei livelli
 

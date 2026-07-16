@@ -14,7 +14,7 @@ final class SchemaManifestTest extends TestCase
     {
         $manifest = SchemaManifest::load(dirname(__DIR__, 3) . '/config/schema.php');
 
-        self::assertSame(20260716150000, $manifest->minimumVersion);
+        self::assertSame(20260716170000, $manifest->minimumVersion);
     }
 
     public function testItRejectsAMissingManifest(): void

@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
+use Hapa\Core\Automation\AutomationCatalog;
 use Hapa\Core\Bootstrap;
-use Hapa\Core\KernelFactory;
+use Hapa\Core\Configuration\ConfigurationLoader;
+use Hapa\Core\Database\ConnectionFactory;
+use Hapa\Core\Database\SchemaManifest;
+use Hapa\Core\Health\ReadinessCheck;
+use Hapa\Core\Ui\UiController;
+use Hapa\Core\View\ViewRenderer;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\RouteCollection;
@@ -37,7 +43,7 @@ final class UiRoutesTest extends TestCase
     public function testTheKernelServesTheDashboardWithSecurityHeaders(): void
     {
         $basePath = dirname(__DIR__, 3);
-        $kernel = (new KernelFactory())->create($basePath, Bootstrap::initialize($basePath));
+        $kernel = Bootstrap::initialize($basePath)->kernel();
         $response = $kernel->handle(Request::create('/ui'));
 
         self::assertSame(200, $response->getStatusCode());
@@ -49,7 +55,7 @@ final class UiRoutesTest extends TestCase
     public function testTheKernelServesCustomerMasterDataPages(): void
     {
         $basePath = dirname(__DIR__, 3);
-        $kernel = (new KernelFactory())->create($basePath, Bootstrap::initialize($basePath));
+        $kernel = Bootstrap::initialize($basePath)->kernel();
 
         $collection = $kernel->handle(Request::create('/ui/customers'));
         self::assertSame(200, $collection->getStatusCode());
@@ -64,7 +70,7 @@ final class UiRoutesTest extends TestCase
     public function testTheKernelServesTheBrandedNotFoundPageForNestedUiPaths(): void
     {
         $basePath = dirname(__DIR__, 3);
-        $kernel = (new KernelFactory())->create($basePath, Bootstrap::initialize($basePath));
+        $kernel = Bootstrap::initialize($basePath)->kernel();
         $response = $kernel->handle(Request::create('/ui/not/a/real/page'));
 
         self::assertSame(404, $response->getStatusCode());
@@ -75,9 +81,22 @@ final class UiRoutesTest extends TestCase
     private function routes(): RouteCollection
     {
         $basePath = dirname(__DIR__, 3);
-        /** @var \Closure(Bootstrap): RouteCollection $routeFactory */
+        $configuration = ConfigurationLoader::load();
+        /** @var \Closure(UiController, ReadinessCheck, \Hapa\Core\Configuration\ApplicationConfig): RouteCollection $routeFactory */
         $routeFactory = require $basePath . '/config/routes.php';
-        $routes = $routeFactory(Bootstrap::initialize($basePath));
+        $routes = $routeFactory(
+            new UiController(
+                new ViewRenderer($basePath . '/templates'),
+                $configuration->application->name,
+                new AutomationCatalog(),
+            ),
+            new ReadinessCheck(
+                new ConnectionFactory($configuration->database),
+                $configuration->redis,
+                SchemaManifest::load($basePath . '/config/schema.php')->minimumVersion,
+            ),
+            $configuration->application,
+        );
 
         return $routes;
     }

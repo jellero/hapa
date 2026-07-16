@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace Hapa\Core;
 
-use Hapa\Core\Configuration\Environment;
-use Hapa\Core\Database\ConnectionFactory;
-use Hapa\Core\Database\SchemaManifest;
-use Hapa\Core\Health\ReadinessCheck;
+use Hapa\Composition\ContainerFactory;
+use Hapa\Core\Configuration\ApplicationConfig;
+use Hapa\Core\Configuration\ConfigurationLoader;
+use Hapa\Core\Console\AutomationRunCommand;
+use Hapa\Core\Console\SystemCheckCommand;
+use RuntimeException;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 final readonly class Bootstrap
 {
-    public function __construct(
-        public Environment $environment,
-        public ReadinessCheck $readiness,
+    private function __construct(
+        public ApplicationConfig $application,
+        private ContainerBuilder $container,
     ) {
     }
 
@@ -25,12 +28,12 @@ final readonly class Bootstrap
             (new Dotenv())->usePutenv()->loadEnv($basePath . '/.env');
         }
 
-        $environment = Environment::load();
-        date_default_timezone_set($environment->timezone);
+        $configuration = ConfigurationLoader::load();
+        date_default_timezone_set($configuration->application->timezone);
 
-        if ($environment->trustedProxies !== []) {
+        if ($configuration->proxy->trustedProxies !== []) {
             Request::setTrustedProxies(
-                $environment->trustedProxies,
+                $configuration->proxy->trustedProxies,
                 Request::HEADER_X_FORWARDED_FOR
                 | Request::HEADER_X_FORWARDED_HOST
                 | Request::HEADER_X_FORWARDED_PORT
@@ -40,11 +43,43 @@ final readonly class Bootstrap
         }
 
         return new self(
-            $environment,
-            new ReadinessCheck(
-                new ConnectionFactory(),
-                SchemaManifest::load($basePath . '/config/schema.php')->minimumVersion,
-            ),
+            $configuration->application,
+            (new ContainerFactory())->create($basePath, $configuration),
         );
+    }
+
+    public function kernel(): Kernel
+    {
+        $kernel = $this->container->get(Kernel::class);
+        if (!$kernel instanceof Kernel) {
+            throw new RuntimeException('Il container non ha prodotto il Kernel applicativo.');
+        }
+
+        return $kernel;
+    }
+
+    public function systemCheckCommand(): SystemCheckCommand
+    {
+        $command = $this->container->get(SystemCheckCommand::class);
+        if (!$command instanceof SystemCheckCommand) {
+            throw new RuntimeException('Il container non ha prodotto il comando system:check.');
+        }
+
+        return $command;
+    }
+
+    public function automationRunCommand(): AutomationRunCommand
+    {
+        $command = $this->container->get(AutomationRunCommand::class);
+        if (!$command instanceof AutomationRunCommand) {
+            throw new RuntimeException('Il container non ha prodotto il comando automation:run.');
+        }
+
+        return $command;
+    }
+
+    public function container(): ContainerBuilder
+    {
+        return $this->container;
     }
 }

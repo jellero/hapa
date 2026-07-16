@@ -11,6 +11,7 @@
     "monolog/monolog": "^3.7",
     "robmorgan/phinx": "^0.16.6",
     "symfony/console": "^7.2",
+    "symfony/dependency-injection": "^7.4",
     "symfony/dotenv": "^7.2",
     "symfony/http-foundation": "^7.2",
     "symfony/routing": "^7.2"

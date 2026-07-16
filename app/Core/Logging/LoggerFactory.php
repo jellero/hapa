@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Logging;
 
-use Hapa\Core\Configuration\Environment;
+use Hapa\Core\Configuration\ApplicationConfig;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
@@ -13,11 +13,15 @@ use Monolog\LogRecord;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 
-final class LoggerFactory
+final readonly class LoggerFactory
 {
+    public function __construct(private ApplicationConfig $config)
+    {
+    }
+
     public function create(): LoggerInterface
     {
-        $level = $this->parseLevel(Environment::value('LOG_LEVEL', 'info'));
+        $level = $this->parseLevel($this->config->logLevel);
         $handler = new StreamHandler('php://stderr', $level);
         $handler->setFormatter(new JsonFormatter());
 

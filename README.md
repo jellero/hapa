@@ -26,6 +26,8 @@ Il flusso completo previsto comprende:
 ### Implementato e verificato
 
 - bootstrap condiviso HTTP e CLI;
+- composition root separato con container Symfony compilato, servizi privati, alias e handler taggati;
+- configurazioni tipizzate e `Clock` iniettato;
 - configurazione ambiente validata e secret file centralizzati;
 - trusted proxy espliciti;
 - Kernel HTTP con correlation ID, error handling e header di sicurezza;
@@ -48,27 +50,34 @@ Il flusso completo previsto comprende:
 - origine `b2c_ecommerce` predisposta nel modello, con e-commerce completo mantenuto in roadmap;
 - interfaccia operativa server-rendered, responsive e accessibile per tutte le aree previste;
 - schermate di accesso, dashboard, clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
-- schema iniziale della transactional outbox;
+- repository PostgreSQL dell’aggregato ordine con mapping completo e optimistic locking atomico;
+- transaction manager e scrittura di ordine, transizioni e outbox nello stesso commit;
+- transactional outbox operativa con schema versione, correlation ID e deduplica;
+- worker concorrente con `FOR UPDATE SKIP LOCKED`, lock recovery, retry con backoff e jitter e dead letter;
+- scheduler persistente con sette job ordini/spedizioni a intervallo di dieci minuti, censiti ma disattivati fino agli adapter reali;
+- handler interno idempotente che proietta gli eventi ordine nell’audit log;
+- comando CLI one-shot `automation:run`, adatto a cron o orchestratore;
 - manifest versionato per la readiness dello schema PostgreSQL;
 - documentazione architetturale, sicurezza e roadmap.
 
 ### Prossima sequenza
 
-La roadmap prosegue dalla composizione applicativa verso la persistenza del dominio:
+La roadmap prosegue dalla base transazionale ora operativa verso le vertical slice reali:
 
-1. container Dependency Injection compilato;
-2. configurazioni tipizzate e Clock iniettato;
-3. aggregato cliente e casi d’uso per clienti e ordini;
-4. repository PostgreSQL, mapping dell’aggregato ordine e optimistic locking atomico;
-5. transaction boundary con scrittura di dominio e outbox nella stessa transazione;
-6. prima vertical slice Marketplace → HAPA → Space.
+1. aggregato e repository cliente, query paginata per clienti e ordini;
+2. autenticazione, autorizzazione, CSRF e audit delle azioni UI;
+3. discovery e adapter del primo canale SellRapido/marketplace;
+4. vertical slice Marketplace → HAPA → Space;
+5. picking, conferma manuale dei parziali e adapter GLS/BRT;
+6. metriche, gestione operativa delle dead letter e supervisione continuativa dei worker.
 
-Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e spedizione, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). Il modello delle anagrafiche è documentato in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md); le strategie per marketplace e corrieri sono definite rispettivamente in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) e [`docs/CARRIERS.md`](docs/CARRIERS.md).
+Gli adapter provider restano disattivati finché contratti, credenziali e sandbox non sono verificati. Il runtime delle automazioni non simula chiamate esterne. Il piano è documentato in [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md), le anagrafiche in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md), marketplace e corrieri rispettivamente in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) e [`docs/CARRIERS.md`](docs/CARRIERS.md).
 
 ## Architettura
 
 ```text
 app/
+  Composition/             composition root e grafo servizi
   Core/                    runtime e servizi trasversali
   Modules/                 dominio, casi d’uso, contratti e adapter
 bin/
@@ -138,6 +147,7 @@ Verifica dello stack:
 ```bash
 docker compose ps
 docker compose exec php php bin/console system:check
+docker compose exec php php bin/console automation:run --worker=hapa-local-1
 ```
 
 Endpoint tecnici:
@@ -157,7 +167,9 @@ GET http://localhost:8080/login
 GET http://localhost:8080/ui
 ```
 
-La UI è attualmente un layer di presentazione completo ma non espone dati reali o azioni mutative. Autenticazione, autorizzazione e collegamento ai casi d’uso restano gate obbligatori prima dell’esercizio operativo.
+La UI espone il piano delle sette automazioni e lo stato del runtime, ma non consente ancora azioni mutative né attiva provider reali. Autenticazione, autorizzazione e collegamento dei read model restano gate obbligatori prima dell’esercizio operativo.
+
+`automation:run` è one-shot: recupera lock scaduti, pianifica i job abilitati ed elabora un batch outbox. In produzione va richiamato da un cron o orchestratore con identità worker stabile. I sette job di integrazione sono creati disabilitati e devono essere attivati soltanto quando il relativo handler provider ha superato i test sandbox.
 
 ## Comandi di qualità
 
@@ -211,6 +223,7 @@ L’indice documentale è [`docs/README.md`](docs/README.md).
 | Documento | Contenuto |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini, dominio, persistenza, flussi, runtime, deploy e operatività |
+| [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md) | scheduler, outbox, sette job ordini/spedizioni, retry e criteri di attivazione |
 | [`docs/CARRIERS.md`](docs/CARRIERS.md) | ownership Shipping, GLS e BRT, discovery, failure mode e gate operativi |
 | [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | modello canonico di clienti, identità, indirizzi, ordini e confine B2C |
 | [`docs/DEVELOPMENT_WORKFLOW.md`](docs/DEVELOPMENT_WORKFLOW.md) | ownership, livelli applicativi, dipendenze e Definition of Done |

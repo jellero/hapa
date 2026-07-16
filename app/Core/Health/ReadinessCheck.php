@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Health;
 
-use Hapa\Core\Configuration\Environment;
+use Hapa\Core\Configuration\RedisConfig;
 use Hapa\Core\Database\ConnectionFactory;
 use Redis;
 use Throwable;
@@ -13,6 +13,7 @@ final readonly class ReadinessCheck
 {
     public function __construct(
         private ConnectionFactory $connections,
+        private RedisConfig $redis,
         private int $minimumSchemaVersion,
     ) {
     }
@@ -47,20 +48,24 @@ final readonly class ReadinessCheck
 
     private function redisReady(): bool
     {
+        if (!class_exists(Redis::class)) {
+            return false;
+        }
+
         $redis = new Redis();
 
         try {
             $connected = $redis->connect(
-                Environment::value('REDIS_HOST', 'redis'),
-                (int) Environment::value('REDIS_PORT', '6379'),
-                (float) Environment::value('REDIS_CONNECT_TIMEOUT', '2.0'),
+                $this->redis->host,
+                $this->redis->port,
+                $this->redis->connectTimeout,
             );
 
             if (!$connected) {
                 return false;
             }
 
-            $password = Environment::secret('REDIS_PASSWORD', '');
+            $password = $this->redis->password;
             if ($password !== '' && !$redis->auth($password)) {
                 return false;
             }

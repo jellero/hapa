@@ -272,6 +272,11 @@ final class Order
         return $this->version;
     }
 
+    public function lastOccurredAt(): DateTimeImmutable
+    {
+        return $this->lastOccurredAt;
+    }
+
     public function shippingAddress(): ?OrderAddress
     {
         return $this->shippingAddress;
@@ -306,6 +311,17 @@ final class Order
         $this->events = [];
 
         return $events;
+    }
+
+    /** @return list<OrderEvent> */
+    public function pendingEvents(): array
+    {
+        return $this->events;
+    }
+
+    public function clearEvents(): void
+    {
+        $this->events = [];
     }
 
     public function assertExpectedVersion(int $expectedVersion): void

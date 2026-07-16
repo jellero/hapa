@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Hapa\Core\Bootstrap;
 use Hapa\Core\Http\HttpResponsePolicy;
-use Hapa\Core\KernelFactory;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,7 +14,7 @@ require $basePath . '/vendor/autoload.php';
 try {
     $bootstrap = Bootstrap::initialize($basePath);
     $request = Request::createFromGlobals();
-    $response = (new KernelFactory())->create($basePath, $bootstrap)->handle($request);
+    $response = $bootstrap->kernel()->handle($request);
 } catch (Throwable $exception) {
     $failureId = bin2hex(random_bytes(8));
     error_log(sprintf(

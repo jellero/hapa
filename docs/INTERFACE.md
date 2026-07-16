@@ -13,6 +13,7 @@ Lo stato corrente è **parziale**:
 - tutte le aree previste raggiungibili tramite route GET;
 - escaping centralizzato, CSP e header di isolamento implementati;
 - stati vuoti e indisponibilità espliciti, senza dati dimostrativi;
+- pagina Automazioni con i sette job reali di progetto, distinzione tra runtime pronto e adapter esterni da collegare;
 - autenticazione, autorizzazione, repository e azioni mutative non ancora collegati.
 
 Le schermate di login e recupero accesso sono presentazionali e mantengono i form disabilitati. Il pannello non espone dati reali né operazioni mutative finché i gate di sicurezza della fase 8 non sono completati.
@@ -59,7 +60,7 @@ La logica di business non entra nei template. Controller, view model e template 
 | `/ui/orders/{orderId}` | dettaglio ordine | cliente, origine, righe, snapshot indirizzi, delivery e audit |
 | `/ui/picking` | sessioni di picking | tabella e stato vuoto |
 | `/ui/shipments` | colli, label e tracking | tabella e stato vuoto |
-| `/ui/automation` | outbox, retry e dead letter | tabella e stato vuoto |
+| `/ui/automation` | scheduler, outbox, retry e dead letter | runtime implementato e sette job censiti; provider disattivati |
 | `/ui/integrations` | marketplace, Space, GLS e BRT (Bartolini) | portafoglio pianificato e contratti corrieri pronti |
 | `/ui/audit` | eventi operativi e di sicurezza | tabella e stato vuoto |
 | `/ui/users` | utenti, ruoli e MFA | presentazione, azioni disabilitate |

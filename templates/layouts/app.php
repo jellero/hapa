@@ -90,7 +90,7 @@
                 <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#shield"></use></svg>
                 <div>
                     <strong>Interfaccia pronta, dati non ancora collegati</strong>
-                    <span>Le schermate non espongono dati reali né azioni mutative finché autenticazione, dominio e repository non saranno attivi.</span>
+                    <span>Le schermate non espongono dati reali né azioni mutative finché autenticazione, autorizzazione e read model non saranno collegati.</span>
                 </div>
                 <button class="icon-button icon-button--compact" type="button" aria-label="Nascondi avviso" data-banner-dismiss>
                     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg>

@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-use Hapa\Core\Bootstrap;
+use Hapa\Core\Configuration\ApplicationConfig;
+use Hapa\Core\Health\ReadinessCheck;
 use Hapa\Core\Ui\UiController;
-use Hapa\Core\View\ViewRenderer;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
-return static function (Bootstrap $bootstrap): RouteCollection {
+return static function (
+    UiController $ui,
+    ReadinessCheck $readiness,
+    ApplicationConfig $application,
+): RouteCollection {
     $routes = new RouteCollection();
-    $ui = new UiController(
-        new ViewRenderer(dirname(__DIR__) . '/templates'),
-        $bootstrap->environment->name,
-    );
 
     $routes->add('home', new Route(
         '/',
@@ -139,14 +139,14 @@ return static function (Bootstrap $bootstrap): RouteCollection {
 
     $routes->add('health_ready', new Route(
         '/health/ready',
-        ['_controller' => static function (Request $request) use ($bootstrap): JsonResponse {
-            $result = $bootstrap->readiness->check();
+        ['_controller' => static function (Request $request) use ($readiness, $application): JsonResponse {
+            $result = $readiness->check();
             $payload = [
                 'status' => $result['ready'] ? 'ready' : 'unavailable',
                 'correlation_id' => $request->attributes->getString('correlation_id'),
             ];
 
-            if (!$bootstrap->environment->isProduction()) {
+            if (!$application->isProduction()) {
                 $payload['components'] = $result['components'];
             }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Integration;
 
+use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Modules\Customers\Domain\CustomerIdentitySource;
 use Hapa\Modules\Customers\Domain\CustomerStatus;
@@ -21,7 +22,7 @@ final class CustomerOrderMasterDataTest extends TestCase
     protected function setUp(): void
     {
         try {
-            $this->pdo = (new ConnectionFactory())->create();
+            $this->pdo = (new ConnectionFactory(ConfigurationLoader::load()->database))->create();
             $this->pdo->beginTransaction();
         } catch (Throwable $exception) {
             self::markTestSkipped('PostgreSQL di test non disponibile: ' . $exception->getMessage());

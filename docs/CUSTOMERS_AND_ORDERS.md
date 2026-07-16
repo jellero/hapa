@@ -12,7 +12,8 @@ Lo stato corrente è **parziale**:
 - value object e tipi di dominio iniziali implementati;
 - aggregato ordine, righe, transizioni ed eventi di dominio implementati e coperti da test;
 - elenco e dettaglio clienti, elenco e dettaglio ordini implementati come presentazione server-rendered;
-- repository, casi d’uso, autenticazione, autorizzazione e CRUD non ancora implementati;
+- repository PostgreSQL dell’aggregato ordine, optimistic locking e scrittura outbox atomica implementati;
+- repository cliente, query di elenco, casi d’uso, autenticazione, autorizzazione e CRUD non ancora implementati;
 - e-commerce B2C completo pianificato.
 
 ## Cliente canonico
@@ -88,7 +89,7 @@ L’identificativo ordine esterno resta univoco per marketplace; per il futuro B
 - versione incrementale, controllo della versione attesa ed eventi di dominio rilasciabili;
 - storico PostgreSQL con una sola transizione per versione ordine.
 
-La persistenza dell’aggregato, il controllo versione atomico durante l’`UPDATE` e la scrittura coordinata degli eventi nell’outbox appartengono alla fase repository e transazioni. Gli istanti sono già input espliciti delle operazioni; saranno prodotti dal Clock condiviso nei casi d’uso.
+`PostgresOrderRepository` ricostituisce aggregato, righe, indirizzi e transizioni. Il salvataggio usa un controllo versione atomico durante l’`UPDATE`; ordine, righe, nuove transizioni ed eventi outbox vengono confermati o annullati nello stesso transaction boundary. Gli eventi restano nell’aggregato in caso di rollback e vengono rimossi soltanto dopo il commit. Il `Clock` condiviso è disponibile nel container e verrà usato dai casi d’uso che orchestrano le decisioni di dominio.
 
 ## Confine del futuro e-commerce B2C
 
