@@ -149,7 +149,7 @@ jobs:
           docker compose -f docker-compose.prod.yml --profile tools run --rm -T migration 2>&1 \
             | tee production-migration.log
       - name: Upload production migration report
-        if: always()
+        if: always() && steps.production-build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: production-migration-report
