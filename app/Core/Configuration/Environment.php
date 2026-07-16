@@ -22,7 +22,8 @@ final readonly class Environment
     public static function load(): self
     {
         $name = strtolower(trim(self::value('APP_ENV', 'development')));
-        $debug = filter_var(self::value('APP_DEBUG', 'false'), FILTER_VALIDATE_BOOL);
+        $debugValue = trim(self::value('APP_DEBUG', 'false'));
+        $debug = filter_var($debugValue, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
         $appUrl = rtrim(self::value('APP_URL', 'http://localhost:8080'), '/');
         $timezone = self::value('APP_TIMEZONE', 'Europe/Rome');
         $trustedProxies = array_values(array_filter(array_map(
@@ -32,6 +33,18 @@ final readonly class Environment
 
         if (!in_array($name, ['development', 'testing', 'production'], true)) {
             throw new RuntimeException(sprintf('APP_ENV non valido: %s', $name));
+        }
+
+        if ($debug === null) {
+            throw new RuntimeException(sprintf('APP_DEBUG non valido: %s', $debugValue));
+        }
+
+        if (
+            filter_var($appUrl, FILTER_VALIDATE_URL) === false
+            || !in_array(parse_url($appUrl, PHP_URL_SCHEME), ['http', 'https'], true)
+            || !is_string(parse_url($appUrl, PHP_URL_HOST))
+        ) {
+            throw new RuntimeException(sprintf('APP_URL non valido: %s', $appUrl));
         }
 
         if (!in_array($timezone, DateTimeZone::listIdentifiers(), true)) {

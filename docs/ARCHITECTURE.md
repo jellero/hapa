@@ -10,7 +10,7 @@ La documentazione distingue sempre tre livelli di maturità:
 - **parziale**: struttura o contratto presente, comportamento operativo ancora incompleto;
 - **pianificato**: definito come direzione architetturale e riportato nella roadmap.
 
-La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md).
+La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md). Il portafoglio e i gate delle integrazioni marketplace sono mantenuti in [`MARKETPLACES.md`](MARKETPLACES.md). Il layer di presentazione è descritto in [`INTERFACE.md`](INTERFACE.md).
 
 ---
 
@@ -99,12 +99,21 @@ flowchart LR
 
 | Sistema | Responsabilità | Modalità prevista |
 |---|---|---|
-| Marketplace | origine ordine, accettazione, indirizzo, fulfilment, tracking | API tramite adapter dedicato |
+| Canali marketplace | origine ordine, accettazione, indirizzo, fulfilment, tracking | Amazon, eMAG, Temu e IBS tramite adapter |
+| Connettori marketplace | percorso tecnico verso uno o più canali | SellRapido aggregatore oppure adapter diretto |
 | Space | ricezione ordine, approvvigionamento e disponibilità | API |
 | GLS | spedizione, label, tracking e gestione operativa della spedizione | API o servizio integrato GLS |
 | Reverse proxy | TLS, HSTS, routing di frontiera, eventuale rate limiting | infrastruttura esterna al Compose applicativo |
 
-### 4.2 Confini di fiducia
+### 4.2 Canali e connettori marketplace
+
+HAPA distingue il canale sul quale nasce l’ordine dal connettore usato per trasportarlo. SellRapido è un connettore aggregatore; Amazon, eMAG, Temu e IBS sono canali di vendita. Gli adapter diretti mantengono invece lo stesso codice logico per canale e connettore.
+
+Un ordine conserva sempre il canale sorgente, anche quando arriva tramite SellRapido. Questa separazione impedisce che un cambio di percorso tecnico alteri l’identità di business e permette di bloccare import concorrenti dello stesso account-canale.
+
+Il portafoglio, i gate di discovery e la procedura di migrazione tra connettori sono definiti in [`MARKETPLACES.md`](MARKETPLACES.md).
+
+### 4.3 Confini di fiducia
 
 - il traffico pubblico termina sul reverse proxy;
 - Nginx applicativo ascolta su loopback per impostazione production;
@@ -156,9 +165,14 @@ docker/
 docs/
   ARCHITECTURE.md          questo documento
 public/
+  assets/                  CSS, JavaScript e sprite SVG dell’interfaccia
   index.php                front controller HTTP
 scripts/
   check-architecture.php   controllo dei confini di dipendenza
+templates/
+  auth/                    schermate di accesso
+  layouts/                 shell applicative
+  ui/                      viste operative
 tests/
   Unit/
   Integration/
@@ -229,10 +243,10 @@ Contiene:
 - front controller HTTP;
 - route e controller;
 - comandi console;
-- futuro pannello operativo;
+- pannello operativo server-rendered;
 - endpoint tecnici di health.
 
-**Stato:** bootstrap, route tecniche, Kernel e comando diagnostico implementati.
+**Stato:** bootstrap, route tecniche, Kernel, comando diagnostico e layer di presentazione del pannello implementati. Autenticazione, query e comandi applicativi restano da collegare.
 
 ---
 
@@ -351,15 +365,17 @@ Responsabilità:
 Contratto attuale:
 
 ```php
+connector(): MarketplaceConnector
+supportedChannels(): array
 importOpenOrders(): array
-acceptOrder(string $externalOrderId): void
-fetchShippingAddress(string $externalOrderId): ?ShippingAddress
+acceptOrder(ExternalOrderReference $order): void
+fetchShippingAddress(ExternalOrderReference $order): ?ShippingAddress
 sendTracking(TrackingNotification $notification): void
 ```
 
-**Implementato:** contratto e DTO iniziali.
+**Implementato:** contratto iniziale, distinzione tra canale e connettore, riferimento ordine esterno e righe ordine tipizzate.
 
-**Pianificato:** paginazione, cursori, recupero singolo ordine, gestione parziali, annullamenti, errori tipizzati e adapter reali.
+**Pianificato:** SellRapido, Amazon, eMAG, Temu e IBS secondo [`MARKETPLACES.md`](MARKETPLACES.md); paginazione, cursori, account configurati, recupero singolo ordine, capacità dichiarate, gestione parziali, annullamenti, errori tipizzati e adapter reali.
 
 ### 10.3 Space
 
@@ -471,7 +487,7 @@ Responsabilità:
 - ristampa label;
 - audit delle azioni.
 
-**Stato:** pianificato.
+**Stato:** parziale. Il layer di presentazione è implementato con dashboard, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni. Dati, autenticazione e azioni applicative restano pianificati e non vengono simulati.
 
 ---
 
@@ -676,6 +692,10 @@ Marketplace:
 
 ```text
 ExternalOrder
+ExternalOrderLine
+ExternalOrderReference
+MarketplaceChannel
+MarketplaceConnector
 ShippingAddress
 TrackingNotification
 ```
@@ -697,7 +717,6 @@ ShipmentResult
 ### 14.3 Tipi da aggiungere
 
 ```text
-ExternalOrderLine
 SpaceOrderLine
 ShipmentPackage
 PackageDimensions
@@ -850,13 +869,13 @@ Il pannello offrirà retry controllato, chiusura manuale e riconciliazione.
 
 ### 17.1 Import marketplace
 
-Chiave naturale:
+Ogni configurazione `marketplaces` rappresenta un solo account-canale, anche quando più canali condividono il connettore SellRapido. La chiave naturale corrente resta:
 
 ```text
 marketplace_id + external_order_id
 ```
 
-L’import aggiorna un ordine già presente soltanto attraverso regole esplicite e confronti di versione remota.
+Il payload tipizzato conserva anche il canale e deve coincidere con la configurazione risolta. L’import aggiorna un ordine già presente soltanto attraverso regole esplicite e confronti di versione remota. Un vincolo operativo impedisce di attivare contemporaneamente SellRapido e un adapter diretto per lo stesso account-canale.
 
 ### 17.2 Invio a Space
 
@@ -1577,7 +1596,7 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | Docker development | implementato | stack locale |
 | Docker production | implementato | hardening e smoke CI |
 | migrazioni PostgreSQL | implementato | schema foundation e vincoli |
-| contratti Marketplace | parziale | adapter reale e funzioni avanzate assenti |
+| contratti Marketplace | parziale | canali/connettori e righe tipizzati; adapter reali e funzioni avanzate assenti |
 | contratti Space | parziale | adapter reale e riconciliazione assenti |
 | contratti GLS | parziale | colli, dimensioni e adapter reale assenti |
 | dominio Order | parziale | enum presente, aggregato pianificato |
@@ -1585,10 +1604,10 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | transaction manager | pianificato | prima vertical slice |
 | outbox worker | pianificato | schema presente |
 | scheduler | pianificato | insieme al worker |
-| picking | pianificato | modello e UI |
+| picking | parziale | UI presentazionale presente; modello e casi d’uso assenti |
 | gestione parziali | pianificato | vincoli preparatori presenti |
-| autenticazione e ruoli | pianificato | prima del pannello operativo |
-| pannello operativo | pianificato | dopo i casi d’uso core |
+| autenticazione e ruoli | pianificato | prima del collegamento di dati e azioni UI |
+| pannello operativo | parziale | design system e schermate implementati; dati, auth e azioni non collegati |
 | metriche e tracing | pianificato | con workload reali |
 | backup e runbook | pianificato | requisito pre-esercizio |
 

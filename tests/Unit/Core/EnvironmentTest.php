@@ -46,6 +46,36 @@ final class EnvironmentTest extends TestCase
         Environment::load();
     }
 
+    public function testItRejectsAnInvalidDebugValue(): void
+    {
+        $this->setEnvironment([
+            'APP_ENV' => 'testing',
+            'APP_DEBUG' => 'not-a-boolean',
+            'APP_URL' => 'http://localhost',
+            'APP_TIMEZONE' => 'UTC',
+            'TRUSTED_PROXIES' => '',
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('APP_DEBUG');
+        Environment::load();
+    }
+
+    public function testItRejectsAnInvalidApplicationUrl(): void
+    {
+        $this->setEnvironment([
+            'APP_ENV' => 'testing',
+            'APP_DEBUG' => 'false',
+            'APP_URL' => 'localhost-without-scheme',
+            'APP_TIMEZONE' => 'UTC',
+            'TRUSTED_PROXIES' => '',
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('APP_URL');
+        Environment::load();
+    }
+
     public function testProductionRejectsMissingTrustedProxies(): void
     {
         $this->setEnvironment($this->productionEnvironment(['TRUSTED_PROXIES' => '']));

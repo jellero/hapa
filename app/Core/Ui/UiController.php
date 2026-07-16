@@ -1,0 +1,308 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Hapa\Core\Ui;
+
+use Hapa\Core\View\ViewRenderer;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+final readonly class UiController
+{
+    public function __construct(
+        private ViewRenderer $views,
+        private string $environment,
+    ) {
+    }
+
+    public function login(Request $request): Response
+    {
+        return $this->views->render('auth/login', [
+            'title' => 'Accedi',
+            'description' => 'Accedi al centro operativo HAPA.',
+            'environment' => $this->environment,
+            'correlationId' => $request->attributes->getString('correlation_id'),
+        ], 'layouts/auth');
+    }
+
+    public function recovery(Request $request): Response
+    {
+        return $this->views->render('auth/recovery', [
+            'title' => 'Recupera accesso',
+            'description' => 'Avvia il recupero sicuro delle credenziali.',
+            'environment' => $this->environment,
+            'correlationId' => $request->attributes->getString('correlation_id'),
+        ], 'layouts/auth');
+    }
+
+    public function dashboard(Request $request): Response
+    {
+        return $this->operational($request, 'ui/dashboard', 'dashboard', [
+            'title' => 'Centro operativo',
+            'eyebrow' => 'Panoramica',
+            'description' => 'Controlla il ciclo ordine, le eccezioni e lo stato delle integrazioni da un unico punto.',
+            'metrics' => [
+                ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Repository ordini non collegato', 'tone' => 'neutral'],
+                ['label' => 'Revisione manuale', 'value' => '—', 'detail' => 'Disponibile con il dominio Order', 'tone' => 'warning'],
+                ['label' => 'Messaggi outbox', 'value' => '—', 'detail' => 'Worker non ancora attivo', 'tone' => 'info'],
+                ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter GLS non collegato', 'tone' => 'success'],
+            ],
+            'workstreams' => [
+                ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['label' => 'Space', 'detail' => 'Invio ordine e disponibilità', 'status' => 'Contratto pronto', 'tone' => 'info'],
+                ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['label' => 'GLS', 'detail' => 'Colli, etichette e tracking', 'status' => 'Contratto pronto', 'tone' => 'info'],
+            ],
+        ]);
+    }
+
+    public function orders(Request $request): Response
+    {
+        return $this->collection($request, 'orders', [
+            'title' => 'Ordini',
+            'eyebrow' => 'Operatività',
+            'description' => 'Cerca e controlla gli ordini lungo l’intero flusso di fulfilment.',
+            'searchLabel' => 'Cerca per ordine, marketplace, SKU o tracking',
+            'filters' => ['Tutti gli stati', 'Da accettare', 'In attesa merce', 'Picking', 'Revisione manuale', 'Completati'],
+            'columns' => ['Ordine', 'Canale', 'Stato', 'Righe', 'Aggiornato', 'Azioni'],
+            'emptyTitle' => 'Nessun ordine disponibile',
+            'emptyBody' => 'Gli ordini compariranno qui dopo l’attivazione del primo adapter marketplace e del repository PostgreSQL.',
+            'emptyIcon' => 'orders',
+            'primaryAction' => 'Importa ordini',
+        ]);
+    }
+
+    public function orderDetail(Request $request): Response
+    {
+        $orderId = $request->attributes->getString('orderId');
+
+        return $this->operational($request, 'ui/order-detail', 'orders', [
+            'title' => sprintf('Ordine %s', $orderId),
+            'eyebrow' => 'Dettaglio ordine',
+            'description' => 'Vista completa di stato, righe, indirizzo, delivery esterne e audit.',
+            'orderId' => $orderId,
+        ]);
+    }
+
+    public function picking(Request $request): Response
+    {
+        return $this->collection($request, 'picking', [
+            'title' => 'Picking',
+            'eyebrow' => 'Magazzino',
+            'description' => 'Gestisci sessioni, scansioni barcode, anomalie e decisioni sui parziali.',
+            'searchLabel' => 'Cerca ordine, SKU, EAN o postazione',
+            'filters' => ['Tutte le sessioni', 'Da iniziare', 'In corso', 'Con anomalie', 'Completate'],
+            'columns' => ['Sessione', 'Ordine', 'Operatore', 'Avanzamento', 'Anomalie', 'Azioni'],
+            'emptyTitle' => 'Nessuna sessione di picking',
+            'emptyBody' => 'Le sessioni saranno create quando il modulo magazzino e le relative policy saranno disponibili.',
+            'emptyIcon' => 'scan',
+            'primaryAction' => 'Avvia picking',
+        ]);
+    }
+
+    public function shipments(Request $request): Response
+    {
+        return $this->collection($request, 'shipments', [
+            'title' => 'Spedizioni',
+            'eyebrow' => 'Logistica',
+            'description' => 'Controlla colli, pesi, etichette GLS, tracking e riconciliazioni.',
+            'searchLabel' => 'Cerca ordine, spedizione o tracking',
+            'filters' => ['Tutte le spedizioni', 'Da creare', 'Etichetta pronta', 'Spedite', 'Con errore', 'Annullate'],
+            'columns' => ['Spedizione', 'Ordine', 'Colli', 'Peso', 'Stato GLS', 'Azioni'],
+            'emptyTitle' => 'Nessuna spedizione disponibile',
+            'emptyBody' => 'Le spedizioni compariranno dopo il completamento del dominio colli e dell’adapter GLS.',
+            'emptyIcon' => 'truck',
+            'primaryAction' => 'Crea spedizione',
+        ]);
+    }
+
+    public function automation(Request $request): Response
+    {
+        return $this->collection($request, 'automation', [
+            'title' => 'Automazioni',
+            'eyebrow' => 'Affidabilità',
+            'description' => 'Ispeziona outbox, retry, dead letter, scheduler e riconciliazioni.',
+            'searchLabel' => 'Cerca evento, ordine, provider o correlation ID',
+            'filters' => ['Tutti i messaggi', 'Pending', 'Processing', 'Retry', 'Dead letter', 'Completati'],
+            'columns' => ['Evento', 'Aggregato', 'Provider', 'Tentativi', 'Disponibile da', 'Azioni'],
+            'emptyTitle' => 'Nessun messaggio operativo',
+            'emptyBody' => 'Lo schema outbox è pronto; i messaggi appariranno dopo l’implementazione del repository e del worker.',
+            'emptyIcon' => 'automation',
+            'primaryAction' => 'Riconcilia',
+        ]);
+    }
+
+    public function integrations(Request $request): Response
+    {
+        return $this->operational($request, 'ui/integrations', 'integrations', [
+            'title' => 'Integrazioni',
+            'eyebrow' => 'Ecosistema',
+            'description' => 'Configura account, canali e percorsi tecnici mantenendo separati canale e connettore.',
+            'integrations' => [
+                ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore', 'code' => 'sellrapido', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Amazon', 'kind' => 'Canale · SP-API', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'eMAG', 'kind' => 'Canale · Marketplace API', 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Temu', 'kind' => 'Canale · Partner Platform', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'IBS', 'kind' => 'Canale · via SellRapido', 'code' => 'ibs', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Space', 'kind' => 'Approvvigionamento', 'code' => 'space', 'status' => 'Contratto pronto', 'tone' => 'info'],
+                ['name' => 'GLS', 'kind' => 'Spedizioni', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
+            ],
+        ]);
+    }
+
+    public function users(Request $request): Response
+    {
+        return $this->collection($request, 'users', [
+            'title' => 'Utenti e ruoli',
+            'eyebrow' => 'Amministrazione',
+            'description' => 'Gestisci accessi, ruoli, sessioni e requisiti di sicurezza.',
+            'searchLabel' => 'Cerca per nome, email o ruolo',
+            'filters' => ['Tutti gli utenti', 'Amministratori', 'Operatori', 'Sola lettura', 'Sospesi'],
+            'columns' => ['Utente', 'Ruolo', 'MFA', 'Ultimo accesso', 'Stato', 'Azioni'],
+            'emptyTitle' => 'Gestione utenti non ancora attiva',
+            'emptyBody' => 'La UI è pronta per il futuro repository utenti, le sessioni sicure e l’autorizzazione deny-by-default.',
+            'emptyIcon' => 'users',
+            'primaryAction' => 'Invita utente',
+        ]);
+    }
+
+    public function audit(Request $request): Response
+    {
+        return $this->collection($request, 'audit', [
+            'title' => 'Audit',
+            'eyebrow' => 'Controllo',
+            'description' => 'Ricostruisci azioni operative, cambi di stato e accessi sensibili.',
+            'searchLabel' => 'Cerca attore, azione, entità o correlation ID',
+            'filters' => ['Tutti gli eventi', 'Ordini', 'Spedizioni', 'Utenti', 'Retry e replay', 'Sicurezza'],
+            'columns' => ['Data e ora', 'Attore', 'Azione', 'Entità', 'Correlation ID', 'Dettaglio'],
+            'emptyTitle' => 'Nessun evento di audit',
+            'emptyBody' => 'Gli eventi verranno esposti quando i casi d’uso applicativi scriveranno nell’audit log.',
+            'emptyIcon' => 'audit',
+            'primaryAction' => 'Esporta',
+        ]);
+    }
+
+    public function settings(Request $request): Response
+    {
+        return $this->operational($request, 'ui/settings', 'settings', [
+            'title' => 'Impostazioni',
+            'eyebrow' => 'Configurazione',
+            'description' => 'Consulta le preferenze operative. I valori infrastrutturali restano gestiti tramite ambiente e secret.',
+            'groups' => [
+                [
+                    'title' => 'Applicazione',
+                    'description' => 'Preferenze di visualizzazione e comportamento locale.',
+                    'fields' => [
+                        ['label' => 'Lingua', 'value' => 'Italiano'],
+                        ['label' => 'Fuso orario', 'value' => 'Europe/Rome'],
+                        ['label' => 'Formato data', 'value' => 'GG/MM/AAAA'],
+                    ],
+                ],
+                [
+                    'title' => 'Notifiche operative',
+                    'description' => 'Canali e soglie saranno disponibili insieme a metriche e alerting.',
+                    'fields' => [
+                        ['label' => 'Dead letter', 'value' => 'Non configurato'],
+                        ['label' => 'Provider indisponibile', 'value' => 'Non configurato'],
+                        ['label' => 'Ordini in revisione', 'value' => 'Non configurato'],
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    public function profile(Request $request): Response
+    {
+        return $this->operational($request, 'ui/settings', 'profile', [
+            'title' => 'Profilo',
+            'eyebrow' => 'Account',
+            'description' => 'Gestisci identità, password, MFA e sessioni attive.',
+            'groups' => [
+                [
+                    'title' => 'Identità',
+                    'description' => 'I dati saranno disponibili dopo l’attivazione del contesto di autenticazione.',
+                    'fields' => [
+                        ['label' => 'Nome', 'value' => 'Non disponibile'],
+                        ['label' => 'Email', 'value' => 'Non disponibile'],
+                        ['label' => 'Ruolo', 'value' => 'Non disponibile'],
+                    ],
+                ],
+                [
+                    'title' => 'Sicurezza',
+                    'description' => 'Password, MFA e revoca delle sessioni richiederanno una sessione autenticata.',
+                    'fields' => [
+                        ['label' => 'Password', 'value' => 'Gestione non attiva'],
+                        ['label' => 'MFA', 'value' => 'Gestione non attiva'],
+                        ['label' => 'Sessioni', 'value' => 'Nessun dato esposto'],
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    public function notFound(Request $request): Response
+    {
+        return $this->views->render('ui/error', [
+            'title' => 'Pagina non trovata',
+            'eyebrow' => 'Errore 404',
+            'description' => 'La pagina richiesta non appartiene all’interfaccia operativa HAPA.',
+            'active' => '',
+            'navigation' => $this->navigation(),
+            'environment' => $this->environment,
+            'correlationId' => $request->attributes->getString('correlation_id'),
+        ], status: Response::HTTP_NOT_FOUND);
+    }
+
+    /** @param array<string, mixed> $page */
+    private function collection(Request $request, string $active, array $page): Response
+    {
+        $page['query'] = trim($request->query->getString('q'));
+        $page['selectedFilter'] = $request->query->getString('status');
+        $page['clearUrl'] = $request->getPathInfo();
+
+        return $this->operational($request, 'ui/collection', $active, $page);
+    }
+
+    /** @param array<string, mixed> $page */
+    private function operational(Request $request, string $template, string $active, array $page): Response
+    {
+        return $this->views->render($template, array_replace($page, [
+            'active' => $active,
+            'navigation' => $this->navigation(),
+            'environment' => $this->environment,
+            'correlationId' => $request->attributes->getString('correlation_id'),
+        ]));
+    }
+
+    /** @return list<array{label: string, items: list<array{label: string, href: string, icon: string, active: string}>}> */
+    private function navigation(): array
+    {
+        return [
+            [
+                'label' => 'Operatività',
+                'items' => [
+                    ['label' => 'Dashboard', 'href' => '/ui', 'icon' => 'dashboard', 'active' => 'dashboard'],
+                    ['label' => 'Ordini', 'href' => '/ui/orders', 'icon' => 'orders', 'active' => 'orders'],
+                    ['label' => 'Picking', 'href' => '/ui/picking', 'icon' => 'scan', 'active' => 'picking'],
+                    ['label' => 'Spedizioni', 'href' => '/ui/shipments', 'icon' => 'truck', 'active' => 'shipments'],
+                ],
+            ],
+            [
+                'label' => 'Controllo',
+                'items' => [
+                    ['label' => 'Automazioni', 'href' => '/ui/automation', 'icon' => 'automation', 'active' => 'automation'],
+                    ['label' => 'Integrazioni', 'href' => '/ui/integrations', 'icon' => 'integration', 'active' => 'integrations'],
+                    ['label' => 'Audit', 'href' => '/ui/audit', 'icon' => 'audit', 'active' => 'audit'],
+                ],
+            ],
+            [
+                'label' => 'Amministrazione',
+                'items' => [
+                    ['label' => 'Utenti e ruoli', 'href' => '/ui/users', 'icon' => 'users', 'active' => 'users'],
+                    ['label' => 'Impostazioni', 'href' => '/ui/settings', 'icon' => 'settings', 'active' => 'settings'],
+                ],
+            ],
+        ];
+    }
+}

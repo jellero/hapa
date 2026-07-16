@@ -7,6 +7,8 @@ Questo documento ordina il lavoro per dipendenze tecniche, valore operativo e ri
 Riferimenti:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md);
+- [`INTERFACE.md`](INTERFACE.md);
+- [`MARKETPLACES.md`](MARKETPLACES.md);
 - [`SYMFONY_ALIGNMENT.md`](SYMFONY_ALIGNMENT.md);
 - [`SECURITY.md`](SECURITY.md).
 
@@ -28,6 +30,9 @@ Riferimenti:
 - [x] Docker development e production con runtime separato dalle migrazioni.
 - [x] CI con audit Composer, PostgreSQL, Redis, PHPStan e smoke test production.
 - [x] Contratti iniziali tipizzati per Marketplace, Space e GLS.
+- [x] Distinzione tipizzata tra canale marketplace e connettore tecnico.
+- [x] Portafoglio futuro definito per SellRapido, Amazon, eMAG, Temu e IBS.
+- [x] Design system e interfaccia operativa responsive per tutte le aree previste.
 - [x] Schema iniziale transactional outbox.
 - [x] Documentazione architetturale completa.
 - [x] Confronto architetturale con le pratiche Symfony attuali.
@@ -89,7 +94,8 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 ## Fase 3 — Contratti, DTO e client di integrazione
 
-- [ ] Introdurre `ExternalOrderLine` al posto degli array strutturati.
+- [x] Introdurre `ExternalOrderLine` al posto degli array strutturati.
+- [x] Introdurre `MarketplaceChannel`, `MarketplaceConnector` ed `ExternalOrderReference`.
 - [ ] Introdurre `SpaceOrderLine` al posto degli array strutturati.
 - [ ] Introdurre `ShipmentPackage` con peso, lunghezza, larghezza e altezza.
 - [ ] Definire peso reale, peso volumetrico e peso tariffabile.
@@ -144,7 +150,10 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 ## Fase 5 — Prima vertical slice Marketplace → HAPA → Space
 
-- [ ] Scegliere il primo marketplace di riferimento.
+- [ ] Completare la discovery descritta in [`MARKETPLACES.md`](MARKETPLACES.md) per SellRapido, Amazon, eMAG, Temu e IBS.
+- [ ] Scegliere il primo account-canale e il relativo connettore di riferimento.
+- [ ] Garantire un solo connettore di import attivo per account-canale.
+- [ ] Implementare una suite di conformità condivisa per tutti gli adapter marketplace.
 - [ ] Implementare import incrementale degli ordini.
 - [ ] Gestire paginazione, cursori e finestre temporali.
 - [ ] Rendere l’import idempotente su marketplace e ID ordine esterno.
@@ -191,6 +200,12 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 ## Fase 8 — Autenticazione e pannello operativo
 
+- [x] Implementare layout applicativo, navigazione responsive e componenti condivisi.
+- [x] Implementare le schermate di login e recupero accesso in stato non operativo.
+- [x] Implementare le viste di dashboard, ordini, dettaglio ordine, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni.
+- [x] Implementare stati vuoti espliciti senza dati dimostrativi.
+- [x] Applicare escaping centralizzato, CSP, no-store e header di isolamento alle risposte UI.
+- [ ] Introdurre view model immutabili collegati alle query applicative.
 - [ ] Integrare i componenti Symfony Security necessari al pannello.
 - [ ] Implementare utenti, ruoli e permessi.
 - [ ] Implementare password hashing aggiornabile e rehash trasparente.

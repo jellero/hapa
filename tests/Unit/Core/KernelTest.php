@@ -30,6 +30,12 @@ final class KernelTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('{"ok":true}', $response->getContent());
         self::assertMatchesRegularExpression('/^[a-f0-9]{32}$/', (string) $response->headers->get('X-Correlation-ID'));
+        self::assertSame('DENY', $response->headers->get('X-Frame-Options'));
+        self::assertSame('same-origin', $response->headers->get('Cross-Origin-Opener-Policy'));
+        self::assertStringContainsString(
+            "default-src 'self'",
+            (string) $response->headers->get('Content-Security-Policy'),
+        );
     }
 
     public function testItReturnsNotFoundForUnknownRoutes(): void

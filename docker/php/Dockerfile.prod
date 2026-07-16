@@ -30,11 +30,12 @@ COPY app ./app
 COPY bin ./bin
 COPY config ./config
 COPY public ./public
+COPY templates ./templates
 RUN mkdir -p storage/cache storage/logs storage/labels storage/uploads \
     && chown -R www-data:www-data storage \
     && chmod 0755 bin/console \
-    && find app bin config public -type d -exec chmod 0755 {} + \
-    && find app config public -type f -exec chmod 0644 {} + \
+    && find app bin config public templates -type d -exec chmod 0755 {} + \
+    && find app config public templates -type f -exec chmod 0644 {} + \
     && test -f vendor/autoload.php \
     && php -r "require 'vendor/autoload.php'; class_exists('Hapa\\Core\\Configuration\\EnvironmentReader') || exit(1);" \
     && php -m | grep -qx pdo_pgsql \

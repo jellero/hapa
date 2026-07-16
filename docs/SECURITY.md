@@ -71,6 +71,8 @@ Prima dell’attivazione degli adapter reali devono essere definite e verificate
 
 Il pannello operativo adotterà un contesto di autenticazione principale basato su sessione. Eventuali accessi macchina tramite token appartengono a un contesto distinto quando esiste un requisito effettivo.
 
+Il layer di presentazione corrente espone soltanto route GET, stati vuoti e controlli disabilitati. Login e recupero accesso sono schermate non operative: non ricevono credenziali finché sessione, throttling, CSRF e repository utenti non sono implementati. Nessun dato personale o operativo viene inserito per finalità dimostrative.
+
 Requisiti:
 
 - password hashing aggiornabile tramite algoritmo `auto` o equivalente;
@@ -144,6 +146,8 @@ Ogni provider usa un client dedicato con:
 URL derivati da payload esterni vengono validati contro schema e host autorizzati. Reti private, loopback, link-local e metadata endpoint vengono bloccati, salvo allowlist infrastrutturale esplicita.
 
 I retry HTTP vengono applicati soltanto a errori temporanei e operazioni idempotenti. Operazioni mutative richiedono idempotency key o riconciliazione sicura.
+
+Per i marketplace, credenziali, quote, cursori e audit sono isolati per account e connettore. Il canale sorgente viene conservato separatamente dal percorso tecnico: un ordine Amazon ricevuto tramite SellRapido non viene riclassificato come ordine SellRapido. L’attivazione concorrente di un adapter diretto e dell’aggregatore sullo stesso account-canale è vietata per prevenire doppie importazioni e doppie notifiche.
 
 ## Webhook e callback in ingresso
 

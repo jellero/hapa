@@ -35,6 +35,10 @@ Il flusso completo previsto comprende:
 - runtime applicativo separato dall’immagine migrazioni;
 - CI con audit Composer, PostgreSQL, Redis, PHPUnit, PHPStan e smoke test production;
 - contratti iniziali tipizzati per Marketplace, Space e GLS;
+- distinzione tipizzata tra canale marketplace e connettore tecnico;
+- canali futuri registrati per Amazon, eMAG, Temu e IBS, con SellRapido come connettore aggregatore;
+- interfaccia operativa server-rendered, responsive e accessibile per tutte le aree previste;
+- schermate di accesso, dashboard, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
 - schema iniziale della transactional outbox;
 - documentazione architetturale, sicurezza e roadmap.
 
@@ -49,7 +53,7 @@ La roadmap parte dalla composizione applicativa e dal dominio ordine:
 5. scrittura di dominio e outbox nella stessa transazione;
 6. prima vertical slice Marketplace → HAPA → Space.
 
-Le integrazioni provider reali, il worker outbox, il picking, GLS, l’autenticazione e il pannello operativo appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md).
+Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e GLS, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). La strategia per SellRapido, Amazon, eMAG, Temu e IBS è definita in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md).
 
 ## Architettura
 
@@ -72,9 +76,14 @@ docker/
   php/                      immagini e configurazioni PHP
   nginx.conf                frontiera HTTP applicativa
 public/
+  assets/                   design system, interazioni e icone UI
   index.php                 front controller HTTP
 scripts/
   check-architecture.php    verifica automatica dei confini
+templates/
+  auth/                     accesso e recupero credenziali
+  layouts/                  shell applicativa e autenticazione
+  ui/                       schermate operative
 tests/
   Unit/
   Integration/
@@ -128,6 +137,15 @@ GET http://localhost:8080/health/ready
 
 `/health/live` verifica il processo applicativo. `/health/ready` verifica dipendenze e versione minima dello schema.
 
+Interfaccia operativa:
+
+```text
+GET http://localhost:8080/login
+GET http://localhost:8080/ui
+```
+
+La UI è attualmente un layer di presentazione completo ma non espone dati reali o azioni mutative. Autenticazione, autorizzazione e collegamento ai casi d’uso restano gate obbligatori prima dell’esercizio operativo.
+
 ## Comandi di qualità
 
 ```bash
@@ -180,6 +198,8 @@ L’indice documentale è [`docs/README.md`](docs/README.md).
 | Documento | Contenuto |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini, dominio, persistenza, flussi, runtime, deploy e operatività |
+| [`docs/INTERFACE.md`](docs/INTERFACE.md) | architettura UI, mappa delle schermate, accessibilità e sicurezza |
+| [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) | canali futuri, connettori, gate di discovery e prevenzione dei duplicati |
 | [`docs/SYMFONY_ALIGNMENT.md`](docs/SYMFONY_ALIGNMENT.md) | componenti Symfony adottati, esclusi o valutati |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | autenticazione, sessione, provider, worker, dati e produzione |
 | [`docs/TODO.md`](docs/TODO.md) | sequenza esecutiva, gate e criterio end-to-end |

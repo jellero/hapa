@@ -99,6 +99,8 @@ jobs:
         run: docker compose -f docker-compose.prod.yml up -d --wait nginx
       - name: Verify liveness
         run: curl --fail --silent http://127.0.0.1:18080/health/live
+      - name: Verify operational interface
+        run: curl --fail --silent http://127.0.0.1:18080/ui | grep --quiet 'Centro operativo'
       - name: Show container diagnostics
         if: failure()
         run: |
