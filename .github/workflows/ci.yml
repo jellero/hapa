@@ -116,7 +116,20 @@ jobs:
       - name: Validate production Compose
         run: docker compose -f docker-compose.prod.yml config --quiet
       - name: Build production images
-        run: docker compose -f docker-compose.prod.yml build php migration nginx redis
+        id: production-build
+        continue-on-error: true
+        run: docker compose -f docker-compose.prod.yml build --progress=plain php migration nginx redis 2>&1 | tee production-build.log
+      - name: Upload production build report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build-report
+          path: production-build.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Fail on production build errors
+        if: steps.production-build.outcome == 'failure'
+        run: exit 1
       - name: Start PostgreSQL
         run: docker compose -f docker-compose.prod.yml up -d --wait postgres
       - name: Start Redis
