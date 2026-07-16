@@ -64,9 +64,21 @@ jobs:
       - run: composer audit --locked
       - run: vendor/bin/phinx migrate -e testing
       - run: composer architecture:check
-      - run: composer test:unit
+      - name: Run unit tests
+        id: unit
+        continue-on-error: true
+        run: vendor/bin/phpunit --testsuite Unit --log-junit unit-junit.xml
+      - name: Upload unit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-junit
+          path: unit-junit.xml
+          if-no-files-found: error
+          retention-days: 3
       - name: Run integration tests
         id: integration
+        if: always()
         continue-on-error: true
         run: vendor/bin/phpunit --testsuite Integration --log-junit integration-junit.xml
       - name: Upload integration report
@@ -77,8 +89,8 @@ jobs:
           path: integration-junit.xml
           if-no-files-found: error
           retention-days: 3
-      - name: Fail on integration errors
-        if: steps.integration.outcome == 'failure'
+      - name: Fail on test errors
+        if: steps.unit.outcome == 'failure' || steps.integration.outcome == 'failure'
         run: exit 1
 
   production-smoke:
