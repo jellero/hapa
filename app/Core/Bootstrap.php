@@ -7,12 +7,11 @@ namespace Hapa\Core;
 use Hapa\Composition\ContainerFactory;
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Configuration\ConfigurationLoader;
-use Hapa\Core\Console\AutomationRunCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use RuntimeException;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 final readonly class Bootstrap
 {
@@ -63,16 +62,6 @@ final readonly class Bootstrap
         $command = $this->container->get(SystemCheckCommand::class);
         if (!$command instanceof SystemCheckCommand) {
             throw new RuntimeException('Il container non ha prodotto il comando system:check.');
-        }
-
-        return $command;
-    }
-
-    public function automationRunCommand(): AutomationRunCommand
-    {
-        $command = $this->container->get(AutomationRunCommand::class);
-        if (!$command instanceof AutomationRunCommand) {
-            throw new RuntimeException('Il container non ha prodotto il comando automation:run.');
         }
 
         return $command;
