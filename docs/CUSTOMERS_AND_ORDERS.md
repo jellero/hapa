@@ -10,6 +10,7 @@ Lo stato corrente è **parziale**:
 
 - schema PostgreSQL, vincoli e indici implementati;
 - value object e tipi di dominio iniziali implementati;
+- aggregato ordine, righe, transizioni ed eventi di dominio implementati e coperti da test;
 - elenco e dettaglio clienti, elenco e dettaglio ordini implementati come presentazione server-rendered;
 - repository, casi d’uso, autenticazione, autorizzazione e CRUD non ancora implementati;
 - e-commerce B2C completo pianificato.
@@ -73,6 +74,21 @@ I vincoli PostgreSQL impediscono stati ambigui:
 | `b2c_ecommerce` | assente | obbligatorio |
 
 L’identificativo ordine esterno resta univoco per marketplace; per il futuro B2C è univoco all’interno dello storefront. Se il cliente viene cancellato o anonimizzato, l’ordine storico resta presente e il collegamento diventa nullo.
+
+### Ciclo di dominio dell’ordine
+
+`Order` è l’aggregate root e modifica le righe soltanto tramite operazioni controllate. Il modello implementato garantisce:
+
+- numeri riga positivi e univoci nell’ordine;
+- quantità ordinate, disponibili, da spedire e da annullare coerenti;
+- aggiornamenti di disponibilità completi e atomici su tutte le righe;
+- decisione esplicita prima di confermare un fulfilment parziale;
+- indirizzo di spedizione obbligatorio prima dell’invio a Space;
+- transizioni dichiarate, stati terminali e ritorno dalla revisione manuale al solo stato precedente;
+- versione incrementale, controllo della versione attesa ed eventi di dominio rilasciabili;
+- storico PostgreSQL con una sola transizione per versione ordine.
+
+La persistenza dell’aggregato, il controllo versione atomico durante l’`UPDATE` e la scrittura coordinata degli eventi nell’outbox appartengono alla fase repository e transazioni. Gli istanti sono già input espliciti delle operazioni; saranno prodotti dal Clock condiviso nei casi d’uso.
 
 ## Confine del futuro e-commerce B2C
 

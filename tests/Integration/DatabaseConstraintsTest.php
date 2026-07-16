@@ -39,10 +39,10 @@ final class DatabaseConstraintsTest extends TestCase
         $orderId = $this->createOrder($suffix);
         $statement = $this->pdo->prepare(
             'INSERT INTO order_lines (
-                order_id, sku, quantity_ordered, quantity_available,
+                order_id, line_number, sku, quantity_ordered, quantity_available,
                 quantity_to_ship, quantity_to_cancel, created_at, updated_at
              ) VALUES (
-                :order_id, :sku, 2, 2, 2, 1, NOW(), NOW()
+                :order_id, 1, :sku, 2, 2, 2, 1, NOW(), NOW()
              )',
         );
 
@@ -59,10 +59,10 @@ final class DatabaseConstraintsTest extends TestCase
         $orderId = $this->createOrder($suffix);
         $statement = $this->pdo->prepare(
             'INSERT INTO order_lines (
-                order_id, sku, quantity_ordered, quantity_available,
+                order_id, line_number, sku, quantity_ordered, quantity_available,
                 quantity_to_ship, quantity_to_cancel, created_at, updated_at
              ) VALUES (
-                :order_id, :sku, 3, 1, 2, 0, NOW(), NOW()
+                :order_id, 1, :sku, 3, 1, 2, 0, NOW(), NOW()
              )',
         );
 
@@ -123,6 +123,75 @@ final class DatabaseConstraintsTest extends TestCase
         sort($databaseProviders);
         sort($domainProviders);
         self::assertSame($domainProviders, $databaseProviders);
+    }
+
+    public function testOrderTransitionStatusesMatchDomainEnum(): void
+    {
+        $domainStatuses = array_map(
+            static fn (OrderStatus $status): string => $status->value,
+            OrderStatus::cases(),
+        );
+        sort($domainStatuses);
+
+        foreach (['order_transitions_from_status_check', 'order_transitions_to_status_check'] as $constraint) {
+            $statement = $this->pdo->prepare(
+                'SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :constraint',
+            );
+            $statement->execute(['constraint' => $constraint]);
+            $definition = $statement->fetchColumn();
+            self::assertIsString($definition);
+
+            /** @var array<int, list<string>> $matches */
+            $matches = [];
+            preg_match_all("/'([^']+)'/", $definition, $matches);
+            $databaseStatuses = array_values(array_unique($matches[1]));
+            sort($databaseStatuses);
+            self::assertSame($domainStatuses, $databaseStatuses);
+        }
+    }
+
+    public function testOrderLineNumberIsUniqueWithinAnOrder(): void
+    {
+        $suffix = bin2hex(random_bytes(6));
+        $orderId = $this->createOrder($suffix);
+        $statement = $this->pdo->prepare(
+            'INSERT INTO order_lines (
+                order_id, line_number, sku, quantity_ordered,
+                quantity_available, quantity_to_ship, quantity_to_cancel,
+                created_at, updated_at
+             ) VALUES (
+                :order_id, 1, :sku, 1, 0, 0, 0, NOW(), NOW()
+             )',
+        );
+        $statement->execute(['order_id' => $orderId, 'sku' => 'SKU-A-' . $suffix]);
+
+        $this->expectException(PDOException::class);
+        $statement->execute(['order_id' => $orderId, 'sku' => 'SKU-B-' . $suffix]);
+    }
+
+    public function testOrderTransitionVersionIsUniqueWithinAnOrder(): void
+    {
+        $suffix = bin2hex(random_bytes(6));
+        $orderId = $this->createOrder($suffix);
+        $statement = $this->pdo->prepare(
+            'INSERT INTO order_transitions (
+                order_id, from_status, to_status, reason, version, occurred_at
+             ) VALUES (
+                :order_id, :from_status, :to_status, NULL, 2, NOW()
+             )',
+        );
+        $statement->execute([
+            'order_id' => $orderId,
+            'from_status' => OrderStatus::Imported->value,
+            'to_status' => OrderStatus::Accepted->value,
+        ]);
+
+        $this->expectException(PDOException::class);
+        $statement->execute([
+            'order_id' => $orderId,
+            'from_status' => OrderStatus::Accepted->value,
+            'to_status' => OrderStatus::Cancelled->value,
+        ]);
     }
 
     private function createOrder(string $suffix): int

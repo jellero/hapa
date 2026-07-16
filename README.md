@@ -43,6 +43,8 @@ Il flusso completo previsto comprende:
 - canali futuri registrati per Amazon, eMAG, Temu e IBS, con SellRapido come connettore aggregatore;
 - anagrafica clienti con stato, tipo, contatti, dati fiscali, identità esterne e indirizzi predefiniti;
 - anagrafica ordini con numero interno, cliente, origine vincolata e snapshot distinti di spedizione e fatturazione;
+- aggregato `Order` con righe immutabili, invarianti sulle quantità, macchina a stati deterministica ed eventi di dominio;
+- storico versionato delle transizioni ordine e numero riga stabile, protetti da vincoli PostgreSQL;
 - origine `b2c_ecommerce` predisposta nel modello, con e-commerce completo mantenuto in roadmap;
 - interfaccia operativa server-rendered, responsive e accessibile per tutte le aree previste;
 - schermate di accesso, dashboard, clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
@@ -52,13 +54,13 @@ Il flusso completo previsto comprende:
 
 ### Prossima sequenza
 
-La roadmap parte dalla composizione applicativa e dal dominio ordine:
+La roadmap prosegue dalla composizione applicativa verso la persistenza del dominio:
 
 1. container Dependency Injection compilato;
 2. configurazioni tipizzate e Clock iniettato;
-3. aggregati e casi d’uso per clienti e ordini;
-4. repository PostgreSQL e transaction boundary per le anagrafiche;
-5. scrittura di dominio e outbox nella stessa transazione;
+3. aggregato cliente e casi d’uso per clienti e ordini;
+4. repository PostgreSQL, mapping dell’aggregato ordine e optimistic locking atomico;
+5. transaction boundary con scrittura di dominio e outbox nella stessa transazione;
 6. prima vertical slice Marketplace → HAPA → Space.
 
 Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e spedizione, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). Il modello delle anagrafiche è documentato in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md); le strategie per marketplace e corrieri sono definite rispettivamente in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) e [`docs/CARRIERS.md`](docs/CARRIERS.md).

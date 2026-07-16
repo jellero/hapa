@@ -37,6 +37,7 @@ Riferimenti:
 - [x] Portafoglio futuro definito per SellRapido, Amazon, eMAG, Temu e IBS.
 - [x] Schema e tipi di dominio iniziali per clienti, identità esterne e indirizzi.
 - [x] Anagrafica ordine estesa con numero interno, cliente, origine e snapshot di fatturazione.
+- [x] Aggregato ordine, righe immutabili, macchina a stati, eventi e storico versionato delle transizioni.
 - [x] Predisposizione vincolata dell’origine `b2c_ecommerce`, senza funzionalità e-commerce attive.
 - [x] Design system e interfaccia operativa responsive per tutte le aree previste.
 - [x] Viste presentazionali per elenco e dettaglio clienti.
@@ -47,13 +48,13 @@ Riferimenti:
 
 ## Priorità immediata
 
-La prossima sequenza deve consolidare il composition root e produrre la prima capacità di dominio verificabile:
+La prossima sequenza deve collegare il dominio ordine verificato alla persistenza transazionale:
 
 1. container dependency injection compilato;
 2. configurazioni tipizzate e Clock iniettato;
-3. aggregato ordine e transizioni deterministiche;
-4. repository PostgreSQL;
-5. persistenza dell’evento outbox nella stessa transazione.
+3. porte repository e mapping PostgreSQL per clienti e ordini;
+4. transaction boundary e optimistic locking atomico;
+5. persistenza degli eventi outbox nella stessa transazione.
 
 ## Fase 0 — Composition root e primitive condivise
 
@@ -74,15 +75,15 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 ## Fase 1 — Dominio ordine
 
-- [ ] Definire l’aggregato `Order` e l’entità `OrderLine` con invarianti esplicite.
+- [x] Definire l’aggregato `Order` e l’entità `OrderLine` con invarianti esplicite.
 - [x] Rinominare gli stati semanticamente ambigui `complete` e `completed` prima della presenza di dati reali.
-- [ ] Definire la macchina a stati deterministica.
-- [ ] Definire transizioni ammesse, prerequisiti, errori di dominio ed eventi prodotti.
-- [ ] Modellare quantità ordinate, disponibili, spedibili e annullabili.
-- [ ] Introdurre storico delle transizioni ordine.
-- [ ] Introdurre optimistic locking basato sul campo `version`.
-- [ ] Usare Clock per ogni decisione temporale del dominio.
-- [ ] Aggiungere test unitari esaustivi delle transizioni, invarianti e condizioni temporali.
+- [x] Definire la macchina a stati deterministica.
+- [x] Definire transizioni ammesse, prerequisiti, errori di dominio ed eventi prodotti.
+- [x] Modellare quantità ordinate, disponibili, spedibili e annullabili.
+- [x] Introdurre storico versionato delle transizioni ordine.
+- [x] Introdurre versione incrementale e verifica esplicita della versione attesa nel dominio.
+- [ ] Produrre tramite Clock applicativo ogni istante passato alle decisioni di dominio.
+- [x] Aggiungere test unitari esaustivi delle transizioni, invarianti e condizioni temporali.
 
 **Gate:** ogni modifica di stato attraversa un metodo di dominio testato; transizioni arbitrarie risultano impossibili.
 
