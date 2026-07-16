@@ -5,10 +5,12 @@
   "type": "project",
   "require": {
     "php": "^8.4",
+    "ext-mbstring": "*",
     "ext-pdo": "*",
     "ext-pdo_pgsql": "*",
     "ext-redis": "*",
     "monolog/monolog": "^3.7",
+    "php-amqplib/php-amqplib": "^3.7",
     "robmorgan/phinx": "^0.16.6",
     "symfony/console": "^7.2",
     "symfony/dependency-injection": "^7.4",
