@@ -12,7 +12,6 @@ final readonly class ConfigurationSet
         public RedisConfig $redis,
         public ProxyConfig $proxy,
         public IntegrationConfig $integration,
-        public AutomationConfig $automation,
     ) {
     }
 }
