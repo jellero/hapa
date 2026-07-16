@@ -52,6 +52,23 @@ final class ConfigurationLoader
             self::decimal('RABBITMQ_READ_WRITE_TIMEOUT', '30.0'),
             self::integer('RABBITMQ_HEARTBEAT', '30'),
         );
+        $rabbitMqConsumer = new RabbitMqConsumerConfig(
+            self::boolean('RABBITMQ_CONSUMER_ENABLED', 'false'),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_HOST', $rabbitMq->host),
+            self::integer('RABBITMQ_CONSUMER_PORT', (string) $rabbitMq->port),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_VHOST', $rabbitMq->vhost),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_USERNAME', $rabbitMq->username),
+            EnvironmentReader::secret('RABBITMQ_CONSUMER_PASSWORD', $rabbitMq->password),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_EXCHANGE', 'hapa.events'),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_DEAD_EXCHANGE', 'hapa.dead'),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_QUEUE', 'hapa.inbound.events'),
+            EnvironmentReader::value('RABBITMQ_CONSUMER_DEAD_QUEUE', 'hapa.inbound.dead'),
+            self::list('RABBITMQ_CONSUMER_BINDINGS', 'integration.transport.#'),
+            self::decimal('RABBITMQ_CONSUMER_CONNECT_TIMEOUT', '5.0'),
+            self::decimal('RABBITMQ_CONSUMER_READ_WRITE_TIMEOUT', '30.0'),
+            self::integer('RABBITMQ_CONSUMER_HEARTBEAT', '30'),
+            self::integer('RABBITMQ_CONSUMER_MAX_ATTEMPTS', '5'),
+        );
         $outboxRelay = new OutboxRelayConfig(
             EnvironmentReader::value('OUTBOX_RELAY_WORKER_ID', 'hapa-relay-' . (gethostname() ?: 'worker')),
             self::integer('OUTBOX_RELAY_BATCH_SIZE', '50'),
@@ -70,6 +87,12 @@ final class ConfigurationLoader
             if ($rabbitMq->enabled) {
                 self::assertProductionSecret('RABBITMQ_PASSWORD', $rabbitMq->password);
             }
+            if ($rabbitMqConsumer->enabled) {
+                self::assertProductionSecret(
+                    'RABBITMQ_CONSUMER_PASSWORD',
+                    $rabbitMqConsumer->password,
+                );
+            }
         }
 
         return new ConfigurationSet(
@@ -79,6 +102,7 @@ final class ConfigurationLoader
             $proxy,
             $integration,
             $rabbitMq,
+            $rabbitMqConsumer,
             $outboxRelay,
         );
     }
@@ -117,6 +141,15 @@ final class ConfigurationLoader
         }
 
         return $number;
+    }
+
+    /** @return list<string> */
+    private static function list(string $name, string $default): array
+    {
+        return array_values(array_filter(array_map(
+            'trim',
+            explode(',', EnvironmentReader::value($name, $default)),
+        ), static fn (string $value): bool => $value !== ''));
     }
 
     private static function assertProductionSecret(string $name, string $value): void
