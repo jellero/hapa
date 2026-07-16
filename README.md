@@ -61,7 +61,13 @@ RabbitMQ trasporta eventi e comandi; non replica direttamente i database.
 - I messaggi hanno `message_id`, `event_type`, `schema_version`, `occurred_at`, `correlation_id` e payload tipizzato.
 - Nessun servizio accede direttamente al database dell’altro.
 
-Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). L’architettura e la documentazione operativa delle automazioni sono mantenute nel repository [`hapa-automation`](https://github.com/jellero/hapa-automation/tree/agent/bootstrap-rabbitmq-runtime/docs).
+Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). L’architettura e la documentazione operativa delle automazioni sono mantenute nella [`main` di hapa-automation](https://github.com/jellero/hapa-automation/tree/main/docs).
+
+## Stato di hapa-automation
+
+La foundation autonoma è disponibile sulla branch `main` del repository dedicato e comprende stack Docker separato, PostgreSQL proprio, topologia RabbitMQ, inbox idempotente, outbox con retry e dead letter, scheduler persistente, proiezioni locali e worker long-running.
+
+I job provider sono creati disabilitati. Restano da implementare gli adapter reali Space, marketplace, GLS e BRT, il relay/consumer RabbitMQ lato HAPA, i test di contratto congiunti e l’osservabilità operativa completa.
 
 ## Stack
 
