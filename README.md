@@ -18,7 +18,8 @@ HAPA possiede:
 - prezzi finali e stato delle offerte marketplace;
 - picking, colli, spedizioni e tracking;
 - autenticazione, autorizzazione, audit e configurazione;
-- outbox transazionale degli eventi prodotti dai casi d’uso.
+- outbox transazionale degli eventi prodotti dai casi d’uso;
+- relay di delivery della propria outbox verso RabbitMQ.
 
 HAPA non possiede:
 
@@ -47,9 +48,10 @@ Queste responsabilità appartengono esclusivamente al repository `hapa-automatio
 1. `hapa-automation` importa l’ordine dal marketplace.
 2. HAPA persiste cliente, ordine, righe e snapshot degli indirizzi.
 3. HAPA produce nella transactional outbox eventi canonici `order.changed`.
-4. `hapa-automation` proietta le modifiche e successivamente esegue invio a Space, riconciliazioni e chiamate provider.
-5. HAPA governa picking, decisioni manuali e dati di spedizione.
-6. `hapa-automation` crea label e fulfilment tramite GLS, BRT e marketplace.
+4. Il relay HAPA costruisce un envelope stabile e pubblica su RabbitMQ con publisher confirm.
+5. `hapa-automation` proietta le modifiche e successivamente esegue invio a Space, riconciliazioni e chiamate provider.
+6. HAPA governa picking, decisioni manuali e dati di spedizione.
+7. `hapa-automation` crea label e fulfilment tramite GLS, BRT e marketplace.
 
 ## Confine RabbitMQ
 
@@ -60,6 +62,7 @@ RabbitMQ trasporta eventi e comandi; non replica direttamente i database.
 - Ogni consumer è idempotente.
 - `event_type` coincide con la routing key canonica.
 - I messaggi hanno `message_id`, `event_type`, `schema_version`, `occurred_at`, `correlation_id`, `causation_id` e payload tipizzato.
+- Il `message_id` HAPA è un UUIDv5 stabile derivato dalla chiave di idempotenza della riga outbox.
 - Nessun servizio accede direttamente al database dell’altro.
 
 Il producer ordine HAPA usa:
@@ -71,13 +74,15 @@ Il producer ordine HAPA usa:
 
 Il consumer `hapa-automation` mantiene temporaneamente compatibilità con i vecchi event type ordine e con i campi `order_version`, `to_status` e `resulting_status`. Il formato canonico e la procedura di deploy sono documentati in [`hapa-automation/docs/MESSAGE_CONTRACTS.md`](https://github.com/jellero/hapa-automation/blob/main/docs/MESSAGE_CONTRACTS.md).
 
+Il relay HAPA usa claim concorrente, recupero lock scaduti, retry esponenziale e stato dead della transactional outbox. È disabilitato per default tramite `RABBITMQ_ENABLED=false`.
+
 Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). L’architettura e la documentazione operativa delle automazioni sono mantenute nella [`main` di hapa-automation](https://github.com/jellero/hapa-automation/tree/main/docs).
 
 ## Stato di hapa-automation
 
 La foundation autonoma è disponibile sulla branch `main` del repository dedicato e comprende stack Docker separato, PostgreSQL proprio, topologia RabbitMQ, inbox idempotente, outbox con retry e dead letter, scheduler persistente, proiezioni locali e worker long-running.
 
-Il contratto ordine è allineato nel producer HAPA e nel consumer `hapa-automation`, con test nei due repository e gestione degli arrivi fuori ordine. Restano da implementare relay e consumer RabbitMQ lato HAPA, contratti producer completi per catalogo e ricarichi, adapter reali Space/marketplace/GLS/BRT e osservabilità operativa completa.
+Il contratto ordine è allineato nel producer HAPA e nel consumer `hapa-automation`, con test nei due repository e gestione degli arrivi fuori ordine. Il relay producer HAPA è implementato. Restano da implementare consumer e inbox RabbitMQ lato HAPA, contratti producer completi per catalogo e ricarichi, adapter reali Space/marketplace/GLS/BRT e osservabilità operativa completa.
 
 I job provider sono creati disabilitati e non devono essere abilitati prima dei test end-to-end con RabbitMQ reale.
 
@@ -87,6 +92,7 @@ I job provider sono creati disabilitati e non devono essere abilitati prima dei 
 - componenti Symfony selezionati;
 - PostgreSQL;
 - Redis per capacità applicative temporanee;
+- `php-amqplib` per la pubblicazione AMQP;
 - Phinx per le migrazioni;
 - PHPUnit e PHPStan;
 - Docker e Docker Compose.
@@ -96,7 +102,7 @@ I job provider sono creati disabilitati e non devono essere abilitati prima dei 
 ```text
 app/
   Composition/             composition root HAPA
-  Core/                    runtime HTTP/CLI e servizi trasversali
+  Core/                    runtime HTTP/CLI, outbox e relay RabbitMQ
   Modules/                 dominio, casi d’uso, contratti e adapter sincroni
 bin/
   console                  comandi applicativi HAPA
@@ -125,10 +131,17 @@ Principi:
 
 ```bash
 cp .env.example .env
+docker network create hapa-messaging 2>/dev/null || true
 docker compose up --build -d
 docker compose exec php composer install
 docker compose exec php vendor/bin/phinx migrate -e development
 docker compose exec php php bin/console system:check
+```
+
+Per provare il relay dopo aver avviato RabbitMQ dal repository `hapa-automation`:
+
+```bash
+RABBITMQ_ENABLED=true docker compose --profile messaging run --rm outbox-relay
 ```
 
 Endpoint principali:
@@ -143,7 +156,7 @@ GET http://localhost:8080/ui/catalog
 GET http://localhost:8080/ui/integrations
 ```
 
-Il runtime asincrono viene avviato esclusivamente dal repository `hapa-automation`, non dal Compose HAPA.
+Il runtime asincrono viene avviato esclusivamente dal repository `hapa-automation`. Il Compose HAPA contiene soltanto un relay one-shot della propria transactional outbox nel profilo opzionale `messaging`.
 
 ## Qualità
 
