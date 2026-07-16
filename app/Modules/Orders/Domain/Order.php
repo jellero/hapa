@@ -37,7 +37,7 @@ final class Order
     private array $events = [];
 
     /**
-     * @param non-empty-list<OrderLine> $lines
+     * @param list<OrderLine> $lines
      * @param list<OrderTransition> $transitions
      */
     private function __construct(
@@ -182,7 +182,7 @@ final class Order
             $currency,
             OrderStatus::Imported,
             1,
-            $lines,
+            array_values($lines),
             null,
             null,
             $occurredAt,
@@ -213,7 +213,7 @@ final class Order
             $currency,
             OrderStatus::New,
             1,
-            $lines,
+            array_values($lines),
             null,
             null,
             $occurredAt,
