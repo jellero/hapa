@@ -32,7 +32,7 @@ final class CatalogSynchronizationSchemaTest extends TestCase
         }
     }
 
-    public function testSellableQuantitySubtractsSafetyStockAndNeverBecomesNegative(): void
+    public function testProductRegistryStoresSpacePriceAndStock(): void
     {
         $suffix = bin2hex(random_bytes(6));
         $statement = $this->pdo->prepare(<<<'SQL'
@@ -40,19 +40,16 @@ INSERT INTO catalog_items (
     sku, currency, space_price_minor, space_available_quantity, safety_stock
 ) VALUES (
     :sku, 'EUR', 1999, 5, 3
-) RETURNING id, sellable_quantity
+) RETURNING space_price_minor, space_available_quantity, sellable_quantity
 SQL);
         $statement->execute(['sku' => 'SKU-' . $suffix]);
-        /** @var array{id: int|string, sellable_quantity: int|string}|false $item */
+        /** @var array{space_price_minor: int|string, space_available_quantity: int|string, sellable_quantity: int|string}|false $item */
         $item = $statement->fetch();
-        self::assertIsArray($item);
-        self::assertSame(2, (int) $item['sellable_quantity']);
 
-        $update = $this->pdo->prepare(
-            'UPDATE catalog_items SET space_available_quantity = 1 WHERE id = :id RETURNING sellable_quantity',
-        );
-        $update->execute(['id' => $item['id']]);
-        self::assertSame(0, (int) $update->fetchColumn());
+        self::assertIsArray($item);
+        self::assertSame(1999, (int) $item['space_price_minor']);
+        self::assertSame(5, (int) $item['space_available_quantity']);
+        self::assertSame(2, (int) $item['sellable_quantity']);
     }
 
     public function testPricingRuleScopeMustMatchItsTargets(): void
@@ -74,22 +71,16 @@ SQL);
         ]);
     }
 
-    public function testCatalogAutomationJobsRemainDisabledUntilAdaptersAreVerified(): void
+    public function testAutomationSchedulerIsNotStoredInHapaDatabase(): void
     {
         $statement = $this->pdo->query(<<<'SQL'
-SELECT code, enabled
-FROM automation_jobs
-WHERE code IN ('sync_space_catalog', 'publish_marketplace_offers')
-ORDER BY code
+SELECT COUNT(*)
+FROM information_schema.tables
+WHERE table_schema = 'public' AND table_name = 'automation_jobs'
 SQL);
-        self::assertNotFalse($statement);
-        /** @var list<array{code: string, enabled: bool|string}> $jobs */
-        $jobs = $statement->fetchAll();
 
-        self::assertSame(['publish_marketplace_offers', 'sync_space_catalog'], array_column($jobs, 'code'));
-        foreach ($jobs as $job) {
-            self::assertContains($job['enabled'], [false, '0', 'f']);
-        }
+        self::assertNotFalse($statement);
+        self::assertSame(0, (int) $statement->fetchColumn());
     }
 
     private function marketplace(string $suffix): int
