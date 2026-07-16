@@ -17,6 +17,21 @@ x-app-environment: &app-environment
   REDIS_PORT: 6379
   REDIS_PASSWORD_FILE: /run/secrets/redis_password
   REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-2.0}
+  RABBITMQ_ENABLED: ${RABBITMQ_ENABLED:-false}
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+  RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-hapa-publisher}
+  RABBITMQ_PASSWORD_FILE: /run/secrets/rabbitmq_password
+  RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-hapa.events}
+  RABBITMQ_CONNECT_TIMEOUT: ${RABBITMQ_CONNECT_TIMEOUT:-5.0}
+  RABBITMQ_READ_WRITE_TIMEOUT: ${RABBITMQ_READ_WRITE_TIMEOUT:-30.0}
+  RABBITMQ_HEARTBEAT: ${RABBITMQ_HEARTBEAT:-30}
+  OUTBOX_RELAY_WORKER_ID: ${OUTBOX_RELAY_WORKER_ID:-hapa-relay-production-1}
+  OUTBOX_RELAY_BATCH_SIZE: ${OUTBOX_RELAY_BATCH_SIZE:-50}
+  OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS: ${OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS:-300}
+  OUTBOX_RELAY_RETRY_BASE_SECONDS: ${OUTBOX_RELAY_RETRY_BASE_SECONDS:-30}
+  OUTBOX_RELAY_RETRY_MAX_SECONDS: ${OUTBOX_RELAY_RETRY_MAX_SECONDS:-3600}
   INTEGRATION_CONNECT_TIMEOUT: ${INTEGRATION_CONNECT_TIMEOUT:-5.0}
   INTEGRATION_REQUEST_TIMEOUT: ${INTEGRATION_REQUEST_TIMEOUT:-30.0}
   INTEGRATION_MAX_RESPONSE_BYTES: ${INTEGRATION_MAX_RESPONSE_BYTES:-2097152}
@@ -30,7 +45,7 @@ services:
       dockerfile: docker/php/Dockerfile.prod
       target: runtime
     environment: *app-environment
-    secrets: [db_password, redis_password]
+    secrets: [db_password, redis_password, rabbitmq_password]
     user: www-data
     read_only: true
     tmpfs:
@@ -53,6 +68,27 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  outbox-relay:
+    image: hapa-php:${IMAGE_TAG:?Set IMAGE_TAG}
+    environment: *app-environment
+    command: ["php", "bin/console", "outbox:relay"]
+    secrets: [db_password, redis_password, rabbitmq_password]
+    user: www-data
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=32m
+    volumes:
+      - app_storage:/var/www/html/storage
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [backend, messaging]
+    profiles: [messaging]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
 
   migration:
     image: hapa-migration:${IMAGE_TAG:?Set IMAGE_TAG}
@@ -148,6 +184,9 @@ networks:
   frontend: {}
   backend:
     internal: true
+  messaging:
+    name: ${HAPA_MESSAGING_NETWORK:-hapa-messaging}
+    external: true
 
 volumes:
   postgres_data:
@@ -159,3 +198,5 @@ secrets:
     file: ${DB_PASSWORD_FILE:?Set DB_PASSWORD_FILE}
   redis_password:
     file: ${REDIS_PASSWORD_FILE:?Set REDIS_PASSWORD_FILE}
+  rabbitmq_password:
+    file: ${RABBITMQ_PASSWORD_FILE:-./secrets/rabbitmq_password.txt}
