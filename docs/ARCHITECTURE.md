@@ -20,9 +20,10 @@ HAPA governa:
 - prezzo finale desiderato e stato delle offerte;
 - picking, colli, spedizioni e tracking;
 - utenti, autorizzazioni e audit;
-- transactional outbox degli eventi applicativi.
+- transactional outbox degli eventi applicativi;
+- relay di delivery della propria outbox verso RabbitMQ.
 
-HAPA non contiene scheduler, worker provider, cursori di polling, retry provider, dead letter o adapter asincroni.
+HAPA non contiene scheduler, worker provider, cursori di polling, retry provider, dead letter provider o adapter asincroni.
 
 ## 3. Dipendenza esterna hapa-automation
 
@@ -49,7 +50,7 @@ La foundation disponibile sulla `main` di `hapa-automation` comprende:
 - proiezioni prodotto, ricarico e ordine;
 - worker long-running con graceful shutdown.
 
-Il contratto ordine è allineato tra producer HAPA e consumer `hapa-automation`. Questa disponibilità non rende operativi i flussi provider: adapter reali, relay/consumer RabbitMQ lato HAPA, contratti completi di catalogo/ricarichi e osservabilità restano da implementare. I job provider sono disabilitati per impostazione predefinita.
+Il contratto ordine è allineato tra producer HAPA e consumer `hapa-automation`. Il relay producer HAPA è implementato, ma resta disabilitato per default. Questa disponibilità non rende operativi i flussi provider: consumer e inbox lato HAPA, contratti completi di catalogo/ricarichi, test end-to-end, adapter reali e osservabilità restano da implementare.
 
 ## 4. Proprietà dei dati
 
@@ -80,7 +81,7 @@ Ogni messaggio contiene almeno:
   "schema_version": 1,
   "occurred_at": "2026-07-16T13:34:00+00:00",
   "correlation_id": "uuid",
-  "causation_id": "uuid-or-null",
+  "causation_id": null,
   "payload": {
     "order_number": "ORD-2026-0001",
     "version": 4,
@@ -93,6 +94,7 @@ Ogni messaggio contiene almeno:
 Regole HAPA:
 
 - `message_id` è globale e stabile;
+- il relay produce un UUIDv5 deterministico dalla chiave di idempotenza della riga outbox;
 - `event_type` coincide con la routing key canonica;
 - i consumer deduplicano nel proprio database;
 - l’applicazione di un messaggio e l’aggiornamento della inbox avvengono nello stesso transaction boundary;
@@ -106,7 +108,7 @@ Il contratto ordine canonico usa `order.changed`. Il payload contiene sempre `or
 
 Durante il deploy coordinato `hapa-automation` accetta temporaneamente i vecchi event type ordine e gli alias `order_version`, `to_status` e `resulting_status`. HAPA produce soltanto il formato canonico.
 
-## 6. Transactional outbox HAPA
+## 6. Transactional outbox e relay HAPA
 
 HAPA mantiene la propria transactional outbox perché la modifica di dominio e la produzione dell’evento devono essere confermate o annullate insieme.
 
@@ -118,7 +120,20 @@ L’outbox HAPA:
 - non esegue chiamate provider;
 - non contiene logica di retry provider.
 
-Il relay RabbitMQ HAPA dovrà reclamare messaggi, costruire l’envelope condiviso, pubblicare con publisher confirm e registrare l’esito della sola consegna al broker.
+Il relay RabbitMQ HAPA:
+
+- viene eseguito tramite il comando one-shot `outbox:relay`;
+- recupera lock scaduti e reclama record con `FOR UPDATE SKIP LOCKED`;
+- costruisce l’envelope canonico con `message_id` deterministico;
+- pubblica sull’exchange topic `hapa.events` usando la routing key dell’evento;
+- usa messaggi persistenti e publisher confirm;
+- marca il record `completed` solo dopo la conferma del broker;
+- applica retry esponenziale alla sola consegna AMQP;
+- marca `dead` il record che esaurisce i tentativi;
+- apre PostgreSQL e RabbitMQ soltanto durante l’esecuzione del comando;
+- resta disabilitato per default tramite `RABBITMQ_ENABLED=false`.
+
+Il relay non esegue scheduler o logica provider e non sostituisce il runtime `hapa-automation`.
 
 ## 7. Flusso catalogo
 
@@ -128,8 +143,9 @@ Il relay RabbitMQ HAPA dovrà reclamare messaggi, costruire l’envelope condivi
 4. L’operatore gestisce i ricarichi dalla UI HAPA.
 5. HAPA calcola e versiona il prezzo finale desiderato.
 6. HAPA produce un comando o evento di pubblicazione offerta.
-7. `hapa-automation` esegue la chiamata marketplace.
-8. HAPA applica l’esito ricevuto.
+7. Il relay HAPA pubblica il messaggio dalla transactional outbox.
+8. `hapa-automation` esegue la chiamata marketplace.
+9. HAPA applica l’esito ricevuto.
 
 Lo stock Space rimane un dato del prodotto. Eventuali politiche di quantità pubblicabile sono regole commerciali separate.
 
@@ -138,13 +154,14 @@ Lo stock Space rimane un dato del prodotto. Eventuali politiche di quantità pub
 1. `hapa-automation` importa l’ordine dal canale.
 2. HAPA deduplica e persiste cliente, ordine, righe e snapshot degli indirizzi.
 3. HAPA produce eventi canonici `order.changed` nella propria outbox.
-4. Il servizio esterno valida il contratto e aggiorna la proiezione ordine senza regressioni in caso di messaggi fuori ordine.
-5. Il servizio esterno esegue accettazione, invio a Space o altre operazioni provider.
-6. Gli esiti ritornano a HAPA tramite RabbitMQ.
-7. Picking e decisioni manuali avvengono in HAPA.
-8. HAPA produce la richiesta di spedizione.
-9. Il servizio esterno crea label, tracking e fulfilment.
-10. HAPA applica e mostra gli esiti.
+4. Il relay HAPA pubblica l’envelope su RabbitMQ con publisher confirm.
+5. Il servizio esterno valida il contratto e aggiorna la proiezione ordine senza regressioni in caso di messaggi fuori ordine.
+6. Il servizio esterno esegue accettazione, invio a Space o altre operazioni provider.
+7. Gli esiti ritornano a HAPA tramite RabbitMQ.
+8. Picking e decisioni manuali avvengono in HAPA.
+9. HAPA produce la richiesta di spedizione.
+10. Il servizio esterno crea label, tracking e fulfilment.
+11. HAPA applica e mostra gli esiti.
 
 ## 9. Moduli HAPA
 
@@ -158,6 +175,7 @@ app/
     Health/
     Http/
     Logging/
+    Messaging/
     Outbox/
     Ui/
     View/
@@ -172,7 +190,7 @@ app/
     Brt/
 ```
 
-`Core/Outbox` contiene esclusivamente la persistenza transazionale degli eventi HAPA. Non contiene scheduler o worker delle automazioni.
+`Core/Outbox` contiene persistenza transazionale e relay di delivery degli eventi HAPA. Non contiene scheduler o worker delle automazioni. `Core/Messaging` contiene esclusivamente envelope e pubblicazione AMQP del confine applicativo HAPA.
 
 I contratti provider presenti nei moduli HAPA descrivono DTO e capacità applicative; l’esecuzione asincrona degli adapter appartiene al repository esterno.
 
@@ -218,30 +236,38 @@ nginx
 php
 postgres-hapa
 redis
+outbox-relay   # one-shot, profilo messaging
 ```
 
-`hapa-automation` viene costruito e distribuito dal proprio repository. I due progetti hanno pipeline, immagini, migrazioni, database e cicli di rilascio separati. La sua foundation è già presente su `main`, ma i job provider restano disabilitati finché non sono disponibili adapter e contratti end-to-end verificati.
+Il Compose HAPA non avvia RabbitMQ. Il broker appartiene allo stack `hapa-automation` ed è raggiungibile tramite la rete Docker esterna `hapa-messaging`. Solo il relay HAPA usa tale rete; PostgreSQL e Redis HAPA restano sulla rete privata del progetto.
 
-Per modifiche coordinate del contratto:
+`hapa-automation` viene costruito e distribuito dal proprio repository. I due progetti hanno pipeline, immagini, migrazioni, database e cicli di rilascio separati. I job provider restano disabilitati finché non sono disponibili adapter e contratti end-to-end verificati.
 
-1. distribuire prima il consumer `hapa-automation` compatibile sia con il formato corrente sia con quello precedente;
-2. distribuire HAPA con il producer canonico;
-3. verificare code, inbox, deduplica, messaggi fuori ordine e dead letter;
-4. rimuovere gli alias legacy soltanto in una release successiva;
-5. mantenere i job provider disabilitati finché entrambi i lati non sono verificati end-to-end.
+Per il deploy coordinato:
+
+1. distribuire `hapa-automation` con RabbitMQ collegato alla rete condivisa e job disabilitati;
+2. distribuire HAPA con il relay ancora disabilitato;
+3. configurare account, ACL, vhost, TLS e secret RabbitMQ del publisher HAPA;
+4. eseguire il test end-to-end su un evento controllato;
+5. attivare il relay HAPA;
+6. verificare code, inbox, deduplica, messaggi fuori ordine e dead letter;
+7. rimuovere gli alias legacy soltanto in una release successiva;
+8. mantenere i job provider disabilitati fino alla verifica delle vertical slice.
 
 ## 13. Sicurezza
 
 - nessun database condiviso;
 - account database separati;
 - credenziali RabbitMQ separate per publisher e consumer;
+- relay disabilitato per default;
+- secret RabbitMQ tramite file o secret manager;
 - TLS per connessioni non locali;
 - allowlist delle routing key;
 - limiti alla dimensione dei messaggi;
 - payload minimizzati;
 - audit delle modifiche commerciali in HAPA;
 - rotazione dei segreti indipendente;
-- nessuna credenziale del servizio esterno nel repository HAPA.
+- nessuna credenziale provider nel repository o nei container HAPA.
 
 ## 14. Stato HAPA
 
@@ -254,15 +280,21 @@ Implementato:
 - rimozione del runtime automazioni da codice, CLI, route, schema e Compose HAPA;
 - decisione architetturale per repository e database separati;
 - producer ordine canonico `order.changed`;
-- test unitari e integration del payload ordine condiviso con `hapa-automation`.
+- test unitari e integration del payload ordine condiviso con `hapa-automation`;
+- envelope RabbitMQ canonico;
+- `message_id` UUIDv5 deterministico;
+- publisher AMQP con messaggi persistenti e publisher confirm;
+- relay outbox one-shot con lock recovery, retry e stato dead;
+- profilo Docker opzionale sulla rete RabbitMQ condivisa;
+- test unitari di envelope, successo, retry, dead letter e wiring del container.
 
 Da completare in HAPA:
 
 - repository prodotto e read model;
 - CRUD autorizzato dei ricarichi;
-- relay e consumer RabbitMQ;
-- inbox idempotente;
+- consumer RabbitMQ e inbox idempotente;
 - contratti producer e test coordinati per catalogo e ricarichi;
 - autenticazione, autorizzazione e CSRF;
 - vertical slice applicative reali;
-- test end-to-end con RabbitMQ reale.
+- test end-to-end con RabbitMQ reale;
+- metriche su backlog outbox, latenza di pubblicazione e messaggi dead.
