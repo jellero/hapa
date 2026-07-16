@@ -22,10 +22,13 @@ Questa roadmap contiene soltanto lavoro di proprietà HAPA. Scheduler, worker, r
 - [x] Foundation autonoma `hapa-automation` disponibile sulla propria branch `main`.
 - [x] Contratto ordine `order.changed` allineato tra producer HAPA e consumer `hapa-automation`.
 - [x] Test producer e consumer del payload ordine canonico.
+- [x] Envelope RabbitMQ canonico e routing key versionate nel relay HAPA.
+- [x] `message_id` UUIDv5 stabile derivato dalla chiave di idempotenza.
+- [x] Relay outbox HAPA con publisher confirm, retry e stato dead.
 
 ## Stato dell’integrazione con hapa-automation
 
-La foundation tecnica esterna e il contratto ordine sono allineati, ma HAPA non è ancora collegato al broker.
+La foundation tecnica esterna, il contratto ordine e il relay producer HAPA sono implementati. Il relay resta disabilitato per default e l’integrazione non è ancora stata verificata end-to-end con un broker reale.
 
 Risolto:
 
@@ -34,26 +37,31 @@ Risolto:
 - `order.address_changed` e gli altri eventi non determinanti non inventano uno stato;
 - `hapa-automation` accetta il formato canonico e, durante la transizione, gli alias legacy;
 - la proiezione ordine esterna gestisce messaggi fuori ordine senza regressione della versione;
-- entrambi i repository hanno test sul contratto ordine.
+- entrambi i repository hanno test sul contratto ordine;
+- il relay trasforma la riga outbox nell’envelope condiviso;
+- `message_id`, `correlation_id`, `occurred_at` e `schema_version` sono pubblicati stabilmente;
+- il publisher usa messaggi persistenti e publisher confirm;
+- lock recovery, retry di delivery e stato dead riutilizzano la transactional outbox HAPA;
+- la connessione RabbitMQ è disponibile tramite una rete Docker esterna condivisa, senza accesso cross-database.
 
 Da completare prima di qualsiasi attivazione provider:
 
-- il relay HAPA deve trasformare la riga outbox nell’envelope RabbitMQ con `message_id`, `correlation_id`, `causation_id`, `occurred_at` e `schema_version`;
 - HAPA deve implementare consumer e inbox idempotente per gli eventi di esito;
 - catalogo e ricarichi devono avere producer HAPA e test di contratto speculari;
-- publish, consume, deduplica e dead letter devono essere verificati con RabbitMQ reale tra i due repository.
+- publish, consume, deduplica e dead letter devono essere verificati con RabbitMQ reale tra i due repository;
+- devono essere disponibili metriche e alert sul backlog outbox e sui messaggi dead.
 
-Nessun job provider deve essere abilitato finché questi punti non sono risolti.
+Nessun job provider deve essere abilitato finché questi punti non sono risolti. Il relay HAPA deve rimanere disabilitato finché il test end-to-end non è completato.
 
 ## Priorità immediata HAPA
 
-1. aggregato e repository `Customer`;
-2. repository e read model dell’anagrafica prodotti;
-3. autenticazione, autorizzazione, sessioni e CSRF;
-4. CRUD autorizzato e auditato delle regole di ricarico;
-5. relay della transactional outbox verso RabbitMQ;
-6. consumer RabbitMQ idempotente per eventi provenienti da `hapa-automation`;
-7. contratti e test producer di catalogo e ricarichi;
+1. consumer RabbitMQ idempotente e inbox HAPA;
+2. test end-to-end HAPA → RabbitMQ → `hapa-automation`;
+3. contratti e test producer di catalogo e ricarichi;
+4. aggregato e repository `Customer`;
+5. repository e read model dell’anagrafica prodotti;
+6. autenticazione, autorizzazione, sessioni e CSRF;
+7. CRUD autorizzato e auditato delle regole di ricarico;
 8. vertical slice prodotto Space → HAPA;
 9. vertical slice ricarico HAPA → pubblicazione marketplace;
 10. vertical slice ordine marketplace → HAPA → Space;
@@ -100,11 +108,15 @@ Nessun job provider deve essere abilitato finché questi punti non sono risolti.
 - [x] Gestire nel consumer esterno gli eventi ordine fuori ordine e gli alias legacy.
 - [x] Introdurre test producer/consumer del contratto ordine nei due repository.
 - [x] Documentare il deploy consumer-first e la rimozione successiva degli alias legacy.
+- [x] Definire envelope e routing key versionate nel relay HAPA.
+- [x] Definire la generazione stabile di `message_id` dal record outbox.
+- [x] Esporre `causation_id` come campo nullable dell’envelope condiviso.
+- [x] Implementare relay outbox con publisher confirm.
+- [x] Implementare lock recovery, retry esponenziale e stato dead per la consegna al broker.
+- [x] Aggiungere configurazione e secret RabbitMQ opt-in.
+- [x] Aggiungere la rete Docker condivisa esclusivamente per RabbitMQ.
 - [ ] Congelare i contratti canonici di catalogo e ricarichi.
 - [ ] Implementare i producer HAPA per `catalog.product.changed` e `pricing.rule.changed`.
-- [ ] Definire envelope e routing key versionate nel relay HAPA.
-- [ ] Definire la generazione stabile di `message_id` e `causation_id` dal record outbox.
-- [ ] Implementare relay outbox con publisher confirm.
 - [ ] Implementare consumer RabbitMQ con inbox idempotente HAPA.
 - [ ] Esporre metriche su outbox, consumer lag e messaggi rifiutati.
 - [ ] Eseguire un test end-to-end con RabbitMQ reale tra i due servizi.
