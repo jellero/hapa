@@ -6,7 +6,7 @@ Ultimo riesame: 16 luglio 2026.
 
 HAPA gestisce anagrafiche clienti, ordini, prodotti, regole commerciali, dati di magazzino e stato applicativo delle integrazioni.
 
-Il runtime asincrono, gli adapter provider, i cursori, i retry e le dead letter appartengono al repository autonomo `jellero/hapa-automation`. I due servizi hanno database, credenziali, immagini e cicli di deploy separati e comunicano soltanto tramite RabbitMQ.
+Il runtime asincrono, gli adapter provider, i cursori, i retry e le dead letter provider appartengono al repository autonomo `jellero/hapa-automation`. I due servizi hanno database, credenziali, immagini e cicli di deploy separati e comunicano soltanto tramite RabbitMQ. HAPA contiene esclusivamente il relay di delivery della propria transactional outbox.
 
 ## Principi
 
@@ -31,7 +31,7 @@ HAPA conserva soltanto i propri secret:
 
 - credenziali PostgreSQL HAPA;
 - credenziali Redis HAPA;
-- credenziali RabbitMQ limitate alle exchange e routing key necessarie;
+- credenziali RabbitMQ del publisher HAPA, limitate alle exchange e routing key necessarie;
 - secret di sessione e autenticazione quando implementati.
 
 Le credenziali Space, marketplace, GLS e BRT appartengono a `hapa-automation` e non devono essere montate nel container HAPA.
@@ -41,10 +41,12 @@ Requisiti:
 - secret file o secret manager;
 - permessi restrittivi;
 - rotazione indipendente dei due servizi;
-- account RabbitMQ separati per publisher e consumer;
-- virtual host o ACL per ambiente;
+- account RabbitMQ separati per publisher HAPA e consumer/worker automation;
+- permessi del publisher limitati all’exchange `hapa.events` e alle routing key HAPA ammesse;
+- virtual host o ACL distinti per ambiente;
 - TLS fuori dall’ambiente locale;
-- nessun secret in `.env.example`, command line o artifact CI.
+- nessun secret in `.env.example`, command line o artifact CI;
+- `RABBITMQ_ENABLED=false` fino al completamento del test end-to-end.
 
 ## Repository e supply chain
 
@@ -132,6 +134,17 @@ Ogni messaggio deve includere:
 - `causation_id` quando disponibile;
 - payload JSON object minimizzato.
 
+Il relay HAPA:
+
+- genera `message_id` come UUIDv5 deterministico dalla chiave di idempotenza;
+- pubblica con routing key uguale all’event type;
+- usa delivery mode persistente e publisher confirm;
+- marca la riga completata soltanto dopo conferma del broker;
+- ritenta esclusivamente la consegna AMQP;
+- non esegue chiamate provider;
+- apre le connessioni soltanto durante il comando `outbox:relay`;
+- rimane disabilitato per default.
+
 Controlli richiesti:
 
 - allowlist delle routing key;
@@ -142,7 +155,7 @@ Controlli richiesti:
 - rifiuto in dead letter dei messaggi non decodificabili;
 - nessun ordinamento globale presunto;
 - versione entità per eventi fuori ordine;
-- metriche su lag, rifiuti e duplicati.
+- metriche su backlog, lag, rifiuti e duplicati.
 
 La transactional outbox HAPA conserva l’intenzione applicativa. Il relay RabbitMQ può ritentare esclusivamente la consegna al broker; non esegue logica provider.
 
@@ -181,17 +194,18 @@ La configurazione production impone:
 - `APP_DEBUG=false`;
 - `APP_URL` HTTPS;
 - trusted proxy espliciti;
-- secret PostgreSQL e Redis robusti;
+- secret PostgreSQL, Redis e RabbitMQ robusti;
 - filesystem applicativo read-only;
 - processi non privilegiati;
 - capability Linux ridotte;
 - reti interne per database e cache;
+- rete esterna condivisa esclusivamente per AMQP;
 - liveness e readiness separate;
 - backup e restore verificati;
 - log strutturati con redazione;
 - nessuna credenziale provider nei container HAPA.
 
-Il Compose HAPA non avvia RabbitMQ, scheduler o worker provider. Il broker può essere infrastruttura esterna condivisa, governata con ACL e credenziali distinte.
+Il Compose HAPA non avvia RabbitMQ, scheduler o worker provider. Il broker appartiene allo stack `hapa-automation`; soltanto il servizio one-shot `outbox-relay` entra nella rete esterna `hapa-messaging`. PostgreSQL e Redis non sono collegati a tale rete.
 
 ## Logging, audit e osservabilità
 
@@ -211,7 +225,7 @@ Audit HAPA:
 - correlation ID;
 - timestamp.
 
-L’osservabilità end-to-end deve correlare HAPA, RabbitMQ e `hapa-automation` senza centralizzare payload sensibili.
+L’osservabilità end-to-end deve correlare HAPA, RabbitMQ e `hapa-automation` senza centralizzare payload sensibili. Prima dell’attivazione servono metriche almeno su record pending/retry/dead, età del record più vecchio e latenza di conferma AMQP.
 
 ## Incident response
 
@@ -225,6 +239,6 @@ Prima dell’esercizio servono runbook per:
 - provider compromesso o indisponibile;
 - duplicati e divergenze di stato;
 - restore PostgreSQL;
-- disabilitazione rapida di un account-canale o adapter.
+- disabilitazione rapida del relay, di un account-canale o di un adapter.
 
 La risposta distingue incidente applicativo HAPA da incidente tecnico `hapa-automation`, mantenendo escalation e ownership esplicite.
