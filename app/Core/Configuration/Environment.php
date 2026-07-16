@@ -25,6 +25,7 @@ final readonly class Environment
         $debugValue = trim(self::value('APP_DEBUG', 'false'));
         $debug = filter_var($debugValue, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
         $appUrl = rtrim(self::value('APP_URL', 'http://localhost:8080'), '/');
+        $appUrlParts = parse_url($appUrl);
         $timezone = self::value('APP_TIMEZONE', 'Europe/Rome');
         $trustedProxies = array_values(array_filter(array_map(
             'trim',
@@ -41,8 +42,13 @@ final readonly class Environment
 
         if (
             filter_var($appUrl, FILTER_VALIDATE_URL) === false
-            || !in_array(parse_url($appUrl, PHP_URL_SCHEME), ['http', 'https'], true)
-            || !is_string(parse_url($appUrl, PHP_URL_HOST))
+            || !is_array($appUrlParts)
+            || !in_array($appUrlParts['scheme'] ?? null, ['http', 'https'], true)
+            || !isset($appUrlParts['host'])
+            || isset($appUrlParts['user'])
+            || isset($appUrlParts['pass'])
+            || isset($appUrlParts['query'])
+            || isset($appUrlParts['fragment'])
         ) {
             throw new RuntimeException(sprintf('APP_URL non valido: %s', $appUrl));
         }

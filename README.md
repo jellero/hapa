@@ -29,6 +29,7 @@ Il flusso completo previsto comprende:
 - trusted proxy espliciti;
 - Kernel HTTP con correlation ID, error handling e header di sicurezza;
 - logging JSON con redazione dei dati sensibili;
+- policy HTTP condivisa anche per gli errori di bootstrap e richieste malformate gestite come `400`;
 - health check liveness/readiness con PostgreSQL, Redis e verifica schema;
 - PostgreSQL con migrazioni, `JSONB`, `TIMESTAMPTZ` e vincoli principali;
 - Docker development e production;
@@ -36,10 +37,12 @@ Il flusso completo previsto comprende:
 - CI con audit Composer, PostgreSQL, Redis, PHPUnit, PHPStan e smoke test production;
 - contratti iniziali tipizzati per Marketplace, Space e GLS;
 - distinzione tipizzata tra canale marketplace e connettore tecnico;
+- invarianti runtime sui contratti Marketplace, Space e GLS;
 - canali futuri registrati per Amazon, eMAG, Temu e IBS, con SellRapido come connettore aggregatore;
 - interfaccia operativa server-rendered, responsive e accessibile per tutte le aree previste;
 - schermate di accesso, dashboard, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
 - schema iniziale della transactional outbox;
+- manifest versionato per la readiness dello schema PostgreSQL;
 - documentazione architetturale, sicurezza e roadmap.
 
 ### Prossima sequenza
@@ -162,7 +165,7 @@ La pipeline GitHub esegue inoltre:
 - build delle immagini production;
 - avvio dello stack production;
 - applicazione delle migrazioni tramite immagine dedicata;
-- smoke test HTTP della liveness.
+- smoke test HTTP di liveness, route UI, asset e header di sicurezza.
 
 ## Produzione
 

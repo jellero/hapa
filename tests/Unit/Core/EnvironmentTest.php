@@ -76,6 +76,36 @@ final class EnvironmentTest extends TestCase
         Environment::load();
     }
 
+    public function testItRejectsApplicationUrlCredentials(): void
+    {
+        $this->setEnvironment([
+            'APP_ENV' => 'testing',
+            'APP_DEBUG' => 'false',
+            'APP_URL' => 'https://operator:secret@hapa.example.com',
+            'APP_TIMEZONE' => 'UTC',
+            'TRUSTED_PROXIES' => '',
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('APP_URL');
+        Environment::load();
+    }
+
+    public function testItRejectsApplicationUrlQueryAndFragment(): void
+    {
+        $this->setEnvironment([
+            'APP_ENV' => 'testing',
+            'APP_DEBUG' => 'false',
+            'APP_URL' => 'https://hapa.example.com?debug=true#fragment',
+            'APP_TIMEZONE' => 'UTC',
+            'TRUSTED_PROXIES' => '',
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('APP_URL');
+        Environment::load();
+    }
+
     public function testProductionRejectsMissingTrustedProxies(): void
     {
         $this->setEnvironment($this->productionEnvironment(['TRUSTED_PROXIES' => '']));

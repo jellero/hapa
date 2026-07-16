@@ -518,20 +518,20 @@ waiting_address
 imported
 sent_to_space
 waiting_goods
-complete
+goods_available
 partial_available
 picking
 partial_confirmed
 ready_for_gls
 label_available
 tracking_sent
-completed
+fulfilment_completed
 completed_partial
 cancelled
 manual_review
 ```
 
-Gli stati `complete` e `completed` richiedono una rinomina semantica prima dell’introduzione di dati operativi. La direzione proposta distingue disponibilità completa e fulfilment concluso, per esempio:
+Gli stati distinguono esplicitamente disponibilità completa e fulfilment concluso:
 
 ```text
 goods_available
@@ -633,7 +633,7 @@ Le migrazioni sono versionate tramite timestamp Phinx. Prima dell’operatività
 - **forward-only** per produzione, con restore da backup come strategia di ritorno;
 - oppure rollback completo e verificato per ogni migrazione reversibile.
 
-La readiness usa attualmente una versione minima dichiarata nel codice. La roadmap prevede un manifest di schema generato o versionato per eliminare aggiornamenti manuali.
+La readiness legge la versione minima da `config/schema.php`. Ogni nuova migrazione necessaria all’avvio aggiorna lo stesso manifest nello stesso changeset.
 
 ---
 
@@ -1140,7 +1140,7 @@ In production il payload espone soltanto `ready` o `unavailable`. Nginx limita l
 
 ### 21.3 Evoluzione
 
-La versione minima dello schema verrà letta da un manifest. Gli errori di readiness verranno registrati con rate limiting per mantenere diagnostica utile e controllare il volume dei log.
+La versione minima dello schema viene letta dal manifest versionato. Gli errori di readiness verranno registrati con rate limiting per mantenere diagnostica utile e controllare il volume dei log.
 
 ---
 
@@ -1268,7 +1268,7 @@ Servizi attuali del Compose production:
 | Servizio | Ruolo |
 |---|---|
 | `php` | runtime PHP-FPM |
-| `migration` | esecuzione Phinx controllata |
+| `migration` | esecuzione Phinx read-only con il solo secret PostgreSQL |
 | `nginx` | web server applicativo |
 | `postgres` | database autorevole |
 | `redis` | cache e coordinamento |
@@ -1618,15 +1618,11 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 Elementi già identificati:
 
 1. accessi statici all’ambiente ancora presenti in alcuni servizi;
-2. `DB_CONNECTION` ridondante con PostgreSQL come unico database;
-3. container migration con ambiente più ampio del necessario;
-4. versione minima schema dichiarata nel readiness;
-5. scelta definitiva sulla reversibilità delle migrazioni;
-6. array strutturati ancora presenti in alcuni DTO;
-7. stati `complete` e `completed` semanticamente vicini;
-8. immagini base production da fissare tramite digest;
-9. repository proprietario da mantenere con visibilità privata;
-10. pull request e branch sostituiti da chiudere o rimuovere.
+2. scelta definitiva sulla reversibilità delle migrazioni;
+3. array strutturati ancora presenti in alcuni DTO;
+4. immagini base production da fissare tramite digest;
+5. repository proprietario da mantenere con visibilità privata;
+6. pull request e branch sostituiti da chiudere o rimuovere.
 
 Questi interventi sono riportati in `TODO.md` e verranno affrontati insieme alle vertical slice che ne beneficiano.
 

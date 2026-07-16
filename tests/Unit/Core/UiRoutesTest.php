@@ -44,6 +44,17 @@ final class UiRoutesTest extends TestCase
         self::assertStringContainsString('Centro operativo', (string) $response->getContent());
     }
 
+    public function testTheKernelServesTheBrandedNotFoundPageForNestedUiPaths(): void
+    {
+        $basePath = dirname(__DIR__, 3);
+        $kernel = (new KernelFactory())->create($basePath, Bootstrap::initialize($basePath));
+        $response = $kernel->handle(Request::create('/ui/not/a/real/page'));
+
+        self::assertSame(404, $response->getStatusCode());
+        self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
+        self::assertStringContainsString('Pagina non trovata', (string) $response->getContent());
+    }
+
     private function routes(): RouteCollection
     {
         $basePath = dirname(__DIR__, 3);

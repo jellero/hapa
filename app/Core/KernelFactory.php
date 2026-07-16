@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core;
 
+use Hapa\Core\Http\HttpResponsePolicy;
 use Hapa\Core\Logging\LoggerFactory;
 use Closure;
 use RuntimeException;
@@ -32,6 +33,7 @@ final class KernelFactory
             $routes,
             (new LoggerFactory())->create(),
             $bootstrap->environment->debug,
+            new HttpResponsePolicy(),
         );
     }
 }

@@ -11,10 +11,10 @@ use Throwable;
 
 final readonly class ReadinessCheck
 {
-    private const MINIMUM_SCHEMA_VERSION = 20260715201000;
-
-    public function __construct(private ConnectionFactory $connections)
-    {
+    public function __construct(
+        private ConnectionFactory $connections,
+        private int $minimumSchemaVersion,
+    ) {
     }
 
     /** @return array{ready: bool, components: array{database: bool, redis: bool}} */
@@ -39,7 +39,7 @@ final readonly class ReadinessCheck
             $statement = $pdo->query("SELECT COALESCE(MAX(version), 0) FROM phinxlog");
 
             return $statement !== false
-                && (int) $statement->fetchColumn() >= self::MINIMUM_SCHEMA_VERSION;
+                && (int) $statement->fetchColumn() >= $this->minimumSchemaVersion;
         } catch (Throwable) {
             return false;
         }

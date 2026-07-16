@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#132238">
     <meta name="description" content="<?= $e($description ?? 'Accesso HAPA') ?>">
     <title><?= $e($title ?? 'Accesso') ?> · HAPA</title>
-    <link rel="stylesheet" href="/assets/ui.css?v=1">
-    <script defer src="/assets/ui.js?v=1"></script>
+    <link rel="stylesheet" href="/assets/ui.css?v=2">
+    <script defer src="/assets/ui.js?v=2"></script>
 </head>
 <body class="auth-body">
     <a class="skip-link" href="#auth-content">Vai al contenuto</a>

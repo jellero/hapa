@@ -12,14 +12,14 @@ enum OrderStatus: string
     case Imported = 'imported';
     case SentToSpace = 'sent_to_space';
     case WaitingGoods = 'waiting_goods';
-    case Complete = 'complete';
+    case GoodsAvailable = 'goods_available';
     case PartialAvailable = 'partial_available';
     case Picking = 'picking';
     case PartialConfirmed = 'partial_confirmed';
     case ReadyForGls = 'ready_for_gls';
     case LabelAvailable = 'label_available';
     case TrackingSent = 'tracking_sent';
-    case Completed = 'completed';
+    case FulfilmentCompleted = 'fulfilment_completed';
     case CompletedPartial = 'completed_partial';
     case Cancelled = 'cancelled';
     case ManualReview = 'manual_review';

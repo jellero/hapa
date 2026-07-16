@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Hapa\Core;
 
+use Hapa\Core\Http\HttpResponsePolicy;
 use LogicException;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException as RequestUnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,6 +24,7 @@ final readonly class Kernel
         private RouteCollection $routes,
         private LoggerInterface $logger,
         private bool $debug,
+        private HttpResponsePolicy $responsePolicy,
     ) {
     }
 
@@ -50,6 +53,8 @@ final readonly class Kernel
         } catch (MethodNotAllowedException $exception) {
             $response = $this->problem('Metodo non consentito', Response::HTTP_METHOD_NOT_ALLOWED);
             $response->headers->set('Allow', implode(', ', $exception->getAllowedMethods()));
+        } catch (RequestUnexpectedValueException) {
+            $response = $this->problem('Richiesta non valida', Response::HTTP_BAD_REQUEST);
         } catch (Throwable $exception) {
             $logContext = [
                 'correlation_id' => $correlationId,
@@ -83,24 +88,7 @@ final readonly class Kernel
 
     private function finalize(Response $response, string $correlationId): Response
     {
-        $response->headers->set('X-Correlation-ID', $correlationId);
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
-        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
-        $response->headers->set('Cross-Origin-Resource-Policy', 'same-origin');
-        $response->headers->set(
-            'Content-Security-Policy',
-            "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
-            . "frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-        );
-
-        if ($response instanceof JsonResponse) {
-            $response->headers->set('Cache-Control', 'no-store, private');
-        }
-
-        return $response;
+        return $this->responsePolicy->apply($response, $correlationId);
     }
 
     private function correlationId(Request $request): string

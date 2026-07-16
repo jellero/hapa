@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
+use Hapa\Core\Http\HttpResponsePolicy;
 use Hapa\Core\Kernel;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
@@ -32,8 +33,13 @@ final class KernelTest extends TestCase
         self::assertMatchesRegularExpression('/^[a-f0-9]{32}$/', (string) $response->headers->get('X-Correlation-ID'));
         self::assertSame('DENY', $response->headers->get('X-Frame-Options'));
         self::assertSame('same-origin', $response->headers->get('Cross-Origin-Opener-Policy'));
+        self::assertSame('no-store, private', $response->headers->get('Cache-Control'));
         self::assertStringContainsString(
             "default-src 'self'",
+            (string) $response->headers->get('Content-Security-Policy'),
+        );
+        self::assertStringContainsString(
+            "object-src 'none'",
             (string) $response->headers->get('Content-Security-Policy'),
         );
     }
@@ -56,6 +62,21 @@ final class KernelTest extends TestCase
 
         self::assertSame(405, $response->getStatusCode());
         self::assertSame('GET', $response->headers->get('Allow'));
+    }
+
+    public function testItReturnsBadRequestForANonScalarQueryParameter(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('search', new Route('/search', [
+            '_controller' => static fn (Request $request): array => [
+                'query' => $request->query->getString('q'),
+            ],
+        ], methods: ['GET']));
+
+        $response = $this->kernel($routes)->handle(Request::create('/search?q[]=invalid'));
+
+        self::assertSame(400, $response->getStatusCode());
+        self::assertSame('{"error":"Richiesta non valida"}', $response->getContent());
     }
 
     public function testItDoesNotExposeExceptionDetailsWhenDebugIsDisabled(): void
@@ -107,6 +128,6 @@ final class KernelTest extends TestCase
 
     private function kernel(RouteCollection $routes, ?LoggerInterface $logger = null): Kernel
     {
-        return new Kernel($routes, $logger ?? new NullLogger(), false);
+        return new Kernel($routes, $logger ?? new NullLogger(), false, new HttpResponsePolicy());
     }
 }

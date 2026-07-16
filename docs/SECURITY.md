@@ -141,7 +141,7 @@ Ogni provider usa un client dedicato con:
 - limite alla dimensione della risposta;
 - content type atteso e decoding controllato;
 - correlation ID e user agent identificabile;
-- redazione di `Authorization`, cookie, token e parametri sensibili.
+- redazione di `Authorization`, cookie, token, email, contatti, indirizzi, IP e parametri sensibili.
 
 URL derivati da payload esterni vengono validati contro schema e host autorizzati. Reti private, loopback, link-local e metadata endpoint vengono bloccati, salvo allowlist infrastrutturale esplicita.
 
@@ -220,6 +220,7 @@ La configurazione production impone:
 - trusted proxy espliciti;
 - secret file PostgreSQL e Redis sufficientemente robusti;
 - filesystem applicativo read-only;
+- job migration read-only con il solo secret PostgreSQL e ambiente minimo;
 - processi non privilegiati;
 - capability Linux ridotte;
 - reti interne per database e cache;

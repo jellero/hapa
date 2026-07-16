@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Hapa\Core\Bootstrap;
+use Hapa\Core\Http\HttpResponsePolicy;
 use Hapa\Core\KernelFactory;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,6 +28,7 @@ try {
         ['error' => 'Servizio non disponibile', 'failure_id' => $failureId],
         Response::HTTP_SERVICE_UNAVAILABLE,
     );
+    $response = (new HttpResponsePolicy())->apply($response, $failureId);
 }
 
 $response->send();

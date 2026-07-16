@@ -58,6 +58,16 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $content);
     }
 
+    public function testItIgnoresUnknownCollectionFilters(): void
+    {
+        $request = $this->request('/ui/orders?status=not-a-real-status');
+        $response = $this->controller()->orders($request);
+        $content = (string) $response->getContent();
+
+        self::assertStringNotContainsString('value="not-a-real-status" selected', $content);
+        self::assertStringContainsString('<option value="Tutti gli stati">Tutti gli stati</option>', $content);
+    }
+
     public function testItEscapesTheOrderIdentifier(): void
     {
         $request = $this->request('/ui/orders/example');

@@ -100,7 +100,42 @@ jobs:
       - name: Verify liveness
         run: curl --fail --silent http://127.0.0.1:18080/health/live
       - name: Verify operational interface
-        run: curl --fail --silent http://127.0.0.1:18080/ui | grep --quiet 'Centro operativo'
+        run: |
+          set -euo pipefail
+          base_url=http://127.0.0.1:18080
+          routes=(
+            /login
+            /password/recovery
+            /ui
+            /ui/orders
+            /ui/orders/SMOKE-ORDER
+            /ui/picking
+            /ui/shipments
+            /ui/automation
+            /ui/integrations
+            /ui/users
+            /ui/audit
+            /ui/settings
+            /ui/profile
+          )
+
+          for route in "${routes[@]}"; do
+            body="$(curl --fail --silent --show-error "$base_url$route")"
+            grep --quiet '<!doctype html>' <<< "$body"
+          done
+
+          headers="$(curl --fail --silent --show-error --dump-header - --output /dev/null "$base_url/ui")"
+          grep --ignore-case --quiet '^cache-control:.*no-store' <<< "$headers"
+          grep --ignore-case --quiet "^content-security-policy:.*object-src 'none'" <<< "$headers"
+          grep --ignore-case --quiet '^x-frame-options:.*DENY' <<< "$headers"
+
+          css="$(curl --fail --silent --show-error "$base_url/assets/ui.css?v=2")"
+          javascript="$(curl --fail --silent --show-error "$base_url/assets/ui.js?v=2")"
+          grep --quiet ':root' <<< "$css"
+          grep --quiet 'synchronizeNavigation' <<< "$javascript"
+
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/ui/not/a/real/page")"
+          test "$status" = 404
       - name: Show container diagnostics
         if: failure()
         run: |

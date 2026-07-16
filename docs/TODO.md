@@ -68,7 +68,7 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 ## Fase 1 — Dominio ordine
 
 - [ ] Definire l’aggregato `Order` e l’entità `OrderLine` con invarianti esplicite.
-- [ ] Rinominare gli stati semanticamente ambigui `complete` e `completed` prima della presenza di dati reali.
+- [x] Rinominare gli stati semanticamente ambigui `complete` e `completed` prima della presenza di dati reali.
 - [ ] Definire la macchina a stati deterministica.
 - [ ] Definire transizioni ammesse, prerequisiti, errori di dominio ed eventi prodotti.
 - [ ] Modellare quantità ordinate, disponibili, spedibili e annullabili.
@@ -252,9 +252,9 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 Questi interventi accompagnano le prime fasi e vengono chiusi prima dell’attivazione degli adapter reali:
 
-- [ ] Rimuovere `DB_CONNECTION` finché PostgreSQL resta l’unico database supportato.
-- [ ] Limitare l’ambiente del container migration alle sole variabili PostgreSQL.
-- [ ] Sostituire la costante della migrazione minima con un manifest di schema versionato.
+- [x] Rimuovere `DB_CONNECTION` finché PostgreSQL resta l’unico database supportato.
+- [x] Limitare l’ambiente del container migration alle sole variabili PostgreSQL.
+- [x] Sostituire la costante della migrazione minima con un manifest di schema versionato.
 - [ ] Dichiarare una politica univoca per le migrazioni: rollback completo oppure forward-only.
 - [ ] Definire namespace, TTL, invalidazione e failure policy delle cache Redis.
 - [ ] Valutare l’unificazione dei job CI `quality` e `static-analysis` in base ai tempi effettivi.

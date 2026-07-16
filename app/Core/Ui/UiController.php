@@ -258,7 +258,10 @@ final readonly class UiController
     private function collection(Request $request, string $active, array $page): Response
     {
         $page['query'] = trim($request->query->getString('q'));
-        $page['selectedFilter'] = $request->query->getString('status');
+        $selectedFilter = $request->query->getString('status');
+        /** @var list<string> $filters */
+        $filters = $page['filters'];
+        $page['selectedFilter'] = in_array($selectedFilter, $filters, true) ? $selectedFilter : '';
         $page['clearUrl'] = $request->getPathInfo();
 
         return $this->operational($request, 'ui/collection', $active, $page);

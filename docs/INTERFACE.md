@@ -128,6 +128,7 @@ La baseline mira a WCAG 2.2 livello AA e comprende:
 - focus visibile;
 - contrasto testuale e stati non affidati solo al colore;
 - chiusura della navigazione mobile tramite `Escape`;
+- navigazione mobile esclusa dal focus quando chiusa e focus confinato mentre è aperta;
 - rispetto di `prefers-reduced-motion`;
 - dimensioni touch adeguate;
 - nessuna dipendenza funzionale da JavaScript per leggere i contenuti.
@@ -141,6 +142,7 @@ Le risposte HTML applicano:
 - `Cache-Control: no-store, private`;
 - `X-Robots-Tag: noindex, nofollow`;
 - Content Security Policy senza script o stili inline;
+- blocco esplicito di object, frame e origini non autorizzate nella CSP;
 - `X-Frame-Options: DENY`;
 - `Cross-Origin-Opener-Policy: same-origin`;
 - `Cross-Origin-Resource-Policy: same-origin`;

@@ -6,6 +6,7 @@ namespace Hapa\Core;
 
 use Hapa\Core\Configuration\Environment;
 use Hapa\Core\Database\ConnectionFactory;
+use Hapa\Core\Database\SchemaManifest;
 use Hapa\Core\Health\ReadinessCheck;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
@@ -40,7 +41,10 @@ final readonly class Bootstrap
 
         return new self(
             $environment,
-            new ReadinessCheck(new ConnectionFactory()),
+            new ReadinessCheck(
+                new ConnectionFactory(),
+                SchemaManifest::load($basePath . '/config/schema.php')->minimumVersion,
+            ),
         );
     }
 }
