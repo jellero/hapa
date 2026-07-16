@@ -4,7 +4,7 @@ HAPA è l’applicazione proprietaria che governa le anagrafiche clienti, ordini
 
 L’anagrafica prodotti conserva per ogni SKU il prezzo base e lo stock ricevuti da Space. Gli operatori gestiscono dall’interfaccia HAPA le regole di ricarico e controllano il prezzo finale destinato ai marketplace. Space resta la sorgente del dato di prezzo e disponibilità; HAPA resta la sorgente delle regole commerciali e dello stato applicativo.
 
-Le automazioni non vengono eseguite dentro questo repository. Scheduler, retry provider, riconciliazioni, consumer RabbitMQ e proiezioni operative risiedono nel servizio separato [`jellero/hapa-automation`](https://github.com/jellero/hapa-automation), con un proprio container applicativo e un proprio database PostgreSQL.
+Le automazioni non vengono sviluppate o eseguite in questo repository. Il servizio autonomo è [`jellero/hapa-automation`](https://github.com/jellero/hapa-automation), che contiene codice, configurazione, documentazione operativa, Compose, database e pipeline propri.
 
 ## Responsabilità di HAPA
 
@@ -29,7 +29,7 @@ HAPA non possiede:
 - database operativo delle automazioni;
 - adapter eseguiti in background.
 
-Queste responsabilità appartengono a `hapa-automation`.
+Queste responsabilità appartengono esclusivamente al repository `hapa-automation`.
 
 ## Flussi principali
 
@@ -61,7 +61,7 @@ RabbitMQ trasporta eventi e comandi; non replica direttamente i database.
 - I messaggi hanno `message_id`, `event_type`, `schema_version`, `occurred_at`, `correlation_id` e payload tipizzato.
 - Nessun servizio accede direttamente al database dell’altro.
 
-La decisione è descritta in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md).
+Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). L’architettura e la documentazione operativa delle automazioni sono mantenute nel repository [`hapa-automation`](https://github.com/jellero/hapa-automation/tree/agent/bootstrap-rabbitmq-runtime/docs).
 
 ## Stack
 
@@ -85,11 +85,10 @@ bin/
 config/
   module-dependencies.php  dipendenze ammesse tra moduli
   routes.php               routing HTTP
- database/
+database/
   migrations/              schema PostgreSQL HAPA
- docs/
-  ARCHITECTURE.md           confini e flussi applicativi
-  AUTOMATIONS.md            collegamento al servizio separato
+docs/
+  ARCHITECTURE.md           confini e flussi applicativi HAPA
   CATALOG_PRICING.md        anagrafica prodotti, prezzo, stock e ricarichi
 ```
 
@@ -126,7 +125,7 @@ GET http://localhost:8080/ui/catalog
 GET http://localhost:8080/ui/integrations
 ```
 
-Il runtime asincrono viene avviato dal repository `hapa-automation`, non dal Compose HAPA.
+Il runtime asincrono viene avviato esclusivamente dal repository `hapa-automation`, non dal Compose HAPA.
 
 ## Qualità
 
@@ -142,7 +141,6 @@ composer ci:full
 | Documento | Contenuto |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini HAPA, messaggistica e proprietà dei dati |
-| [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md) | responsabilità trasferite a `hapa-automation` |
 | [`docs/CATALOG_PRICING.md`](docs/CATALOG_PRICING.md) | anagrafica prodotti, prezzo e stock Space, ricarichi UI |
 | [`docs/CARRIERS.md`](docs/CARRIERS.md) | contratto Shipping, GLS e BRT |
 | [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | clienti, identità, indirizzi e ordini |
@@ -150,7 +148,9 @@ composer ci:full
 | [`docs/INTERFACE.md`](docs/INTERFACE.md) | interfaccia operativa HAPA |
 | [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) | canali, connettori e account |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | requisiti di sicurezza |
-| [`docs/TODO.md`](docs/TODO.md) | roadmap e gate |
+| [`docs/TODO.md`](docs/TODO.md) | roadmap e gate HAPA |
+
+La documentazione del runtime asincrono è mantenuta esclusivamente nel repository `hapa-automation`.
 
 ## Licenza e proprietà
 
