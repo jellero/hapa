@@ -1,8 +1,8 @@
 FROM php:8.4-fpm-alpine AS php-base
 
-RUN apk add --no-cache icu-libs libzip libpq \
-    && apk add --no-cache --virtual .build-deps icu-dev libzip-dev postgresql-dev $PHPIZE_DEPS \
-    && docker-php-ext-install intl pdo pdo_pgsql zip \
+RUN apk add --no-cache icu-libs libzip libpq oniguruma \
+    && apk add --no-cache --virtual .build-deps icu-dev libzip-dev oniguruma-dev postgresql-dev $PHPIZE_DEPS \
+    && docker-php-ext-install intl mbstring pdo pdo_pgsql sockets zip \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apk del .build-deps
@@ -38,8 +38,10 @@ RUN mkdir -p storage/cache storage/logs storage/labels storage/uploads \
     && find app config public templates -type f -exec chmod 0644 {} + \
     && test -f vendor/autoload.php \
     && php -r "require 'vendor/autoload.php'; class_exists('Hapa\\Core\\Configuration\\EnvironmentReader') || exit(1);" \
+    && php -m | grep -qx mbstring \
     && php -m | grep -qx pdo_pgsql \
-    && php -m | grep -qx redis
+    && php -m | grep -qx redis \
+    && php -m | grep -qx sockets
 USER www-data
 CMD ["php-fpm"]
 
