@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Hapa\Modules\Orders\Application;
 
-use LogicException;
 use Hapa\Core\Outbox\OutboxMessage;
 use Hapa\Modules\Orders\Domain\Event\OrderAddressChanged;
 use Hapa\Modules\Orders\Domain\Event\OrderAvailabilityChanged;
 use Hapa\Modules\Orders\Domain\Event\OrderCreated;
 use Hapa\Modules\Orders\Domain\Event\OrderEvent;
 use Hapa\Modules\Orders\Domain\Event\OrderStatusChanged;
+use LogicException;
 
 final class OrderEventOutboxMapper
 {
@@ -18,7 +18,8 @@ final class OrderEventOutboxMapper
     {
         $payload = [
             'order_number' => $event->orderNumber,
-            'order_version' => $event->version,
+            'version' => $event->version,
+            'change_type' => $event->eventName(),
             'occurred_at' => $event->occurredAt->format(DATE_ATOM),
             ...$this->eventPayload($event),
         ];
@@ -26,7 +27,7 @@ final class OrderEventOutboxMapper
         return new OutboxMessage(
             'order',
             $event->orderNumber,
-            $event->eventName(),
+            'order.changed',
             $payload,
             sprintf('order:%s:v%d:%s', $event->orderNumber, $event->version, $event->eventName()),
             sprintf('order-%s-v%d', $event->orderNumber, $event->version),
@@ -43,17 +44,17 @@ final class OrderEventOutboxMapper
                 'status' => $event->status->value,
             ],
             $event instanceof OrderStatusChanged => [
+                'status' => $event->to->value,
                 'from_status' => $event->from->value,
-                'to_status' => $event->to->value,
                 'reason' => $event->reason,
             ],
             $event instanceof OrderAddressChanged => [
                 'address_type' => $event->addressType->value,
             ],
             $event instanceof OrderAvailabilityChanged => [
+                'status' => $event->resultingStatus->value,
                 'quantity_ordered' => $event->quantityOrdered,
                 'quantity_available' => $event->quantityAvailable,
-                'resulting_status' => $event->resultingStatus->value,
             ],
             default => throw new LogicException(sprintf(
                 'Evento ordine non supportato: %s.',
