@@ -24,6 +24,7 @@ final readonly class RabbitMqConsumerConfig
         public float $connectTimeout,
         public float $readWriteTimeout,
         public int $heartbeat,
+        public int $maximumAttempts,
     ) {
         if ($port < 1 || $port > 65535) {
             throw new InvalidArgumentException('La porta RabbitMQ consumer non è valida.');
@@ -31,6 +32,10 @@ final readonly class RabbitMqConsumerConfig
 
         if ($connectTimeout <= 0 || $readWriteTimeout <= 0 || $heartbeat < 0) {
             throw new InvalidArgumentException('Timeout e heartbeat RabbitMQ consumer non sono validi.');
+        }
+
+        if ($maximumAttempts < 1 || $maximumAttempts > 100) {
+            throw new InvalidArgumentException('Il limite tentativi del consumer deve essere compreso tra 1 e 100.');
         }
 
         foreach ([
