@@ -15,6 +15,7 @@ use Hapa\Modules\Space\Contract\SpaceOrderRequest;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 final class IntegrationContractTest extends TestCase
 {
@@ -34,8 +35,14 @@ final class IntegrationContractTest extends TestCase
     public function testItRegistersGlsAndBrtBehindTheSharedCarrierContract(): void
     {
         self::assertSame(['GLS', 'BRT'], array_column(CarrierCode::cases(), 'value'));
-        self::assertTrue(is_subclass_of(GlsAdapter::class, CarrierAdapter::class));
-        self::assertTrue(is_subclass_of(BrtAdapter::class, CarrierAdapter::class));
+        self::assertContains(
+            CarrierAdapter::class,
+            (new ReflectionClass(GlsAdapter::class))->getInterfaceNames(),
+        );
+        self::assertContains(
+            CarrierAdapter::class,
+            (new ReflectionClass(BrtAdapter::class))->getInterfaceNames(),
+        );
     }
 
     /** @param non-empty-list<array{sku: string, quantity: int}> $lines */
