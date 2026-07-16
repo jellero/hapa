@@ -51,13 +51,14 @@ jobs:
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
+      RABBITMQ_ENABLED: "false"
       LOG_LEVEL: warning
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, redis, intl, zip
+          extensions: pdo_pgsql, redis, intl, mbstring, sockets, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist
       - run: composer validate --strict
@@ -103,12 +104,15 @@ jobs:
       HAPA_HTTP_PORT: 18080
       DB_PASSWORD_FILE: /tmp/hapa-db-secret
       REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
+      RABBITMQ_PASSWORD_FILE: /tmp/hapa-rabbitmq-secret
+      RABBITMQ_ENABLED: "false"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Prepare production secrets
         run: |
           printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
           printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
+          printf '%s' 'ci-production-rabbitmq-secret' > "$RABBITMQ_PASSWORD_FILE"
       - name: Validate production Compose
         run: docker compose -f docker-compose.prod.yml config --quiet
       - name: Build production images
@@ -183,7 +187,7 @@ jobs:
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, redis, intl, zip
+          extensions: pdo_pgsql, redis, intl, mbstring, sockets, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist --quiet
       - run: composer analyse
