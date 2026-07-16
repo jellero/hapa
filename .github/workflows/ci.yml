@@ -135,7 +135,20 @@ jobs:
       - name: Start Redis
         run: docker compose -f docker-compose.prod.yml up -d --wait redis
       - name: Apply production migrations
-        run: docker compose -f docker-compose.prod.yml --profile tools run --rm migration
+        id: production-migration
+        continue-on-error: true
+        run: docker compose -f docker-compose.prod.yml --profile tools run --rm migration 2>&1 | tee production-migration.log
+      - name: Upload production migration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-migration-report
+          path: production-migration.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Fail on production migration errors
+        if: steps.production-migration.outcome == 'failure'
+        run: exit 1
       - name: Start PHP
         run: docker compose -f docker-compose.prod.yml up -d --wait php
       - name: Start Nginx
