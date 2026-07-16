@@ -14,6 +14,7 @@ interface InboxRepository
 
     public function recordFailure(
         MessageEnvelope $message,
+        int $attempt,
         DateTimeImmutable $failedAt,
         string $error,
     ): void;
