@@ -28,7 +28,7 @@ use Hapa\Core\Logging\LoggerFactory;
 use Hapa\Core\Messaging\MessagePublisher;
 use Hapa\Core\Messaging\RabbitMqPublisher;
 use Hapa\Core\Outbox\OutboxEnvelopeFactory;
-use Hapa\Core\Outbox\OutboxRelay;
+use Hapa\Core\Outbox\OutboxRelayFactory;
 use Hapa\Core\Outbox\OutboxRepository;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
 use Hapa\Core\Ui\UiController;
@@ -127,9 +127,9 @@ final readonly class ContainerFactory
             ->setArguments([new Reference(RabbitMqConfig::class)]);
         $container->setAlias(MessagePublisher::class, RabbitMqPublisher::class)->setPublic(false);
         $container->register(OutboxEnvelopeFactory::class);
-        $container->register(OutboxRelay::class)
+        $container->register(OutboxRelayFactory::class)
             ->setArguments([
-                new Reference(OutboxRepository::class),
+                new Reference(ConnectionFactory::class),
                 new Reference(MessagePublisher::class),
                 new Reference(OutboxEnvelopeFactory::class),
                 new Reference(Clock::class),
@@ -182,7 +182,7 @@ final readonly class ContainerFactory
             ->setPublic(true);
         $container->register(OutboxRelayCommand::class)
             ->setArguments([
-                new Reference(OutboxRelay::class),
+                new Reference(OutboxRelayFactory::class),
                 new Reference(RabbitMqConfig::class),
             ])
             ->setPublic(true);
