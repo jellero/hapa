@@ -46,8 +46,8 @@ Queste responsabilità appartengono esclusivamente al repository `hapa-automatio
 
 1. `hapa-automation` importa l’ordine dal marketplace.
 2. HAPA persiste cliente, ordine, righe e snapshot degli indirizzi.
-3. HAPA produce gli eventi applicativi nella transactional outbox.
-4. `hapa-automation` esegue invio a Space, riconciliazioni e chiamate provider.
+3. HAPA produce nella transactional outbox eventi canonici `order.changed`.
+4. `hapa-automation` proietta le modifiche e successivamente esegue invio a Space, riconciliazioni e chiamate provider.
 5. HAPA governa picking, decisioni manuali e dati di spedizione.
 6. `hapa-automation` crea label e fulfilment tramite GLS, BRT e marketplace.
 
@@ -58,8 +58,18 @@ RabbitMQ trasporta eventi e comandi; non replica direttamente i database.
 - PostgreSQL HAPA è autorevole per clienti, ordini, prodotti, ricarichi e stato commerciale.
 - PostgreSQL `hapa-automation` è autorevole per scheduler, inbox, outbox, retry, dead letter, cursori e proiezioni operative.
 - Ogni consumer è idempotente.
-- I messaggi hanno `message_id`, `event_type`, `schema_version`, `occurred_at`, `correlation_id` e payload tipizzato.
+- `event_type` coincide con la routing key canonica.
+- I messaggi hanno `message_id`, `event_type`, `schema_version`, `occurred_at`, `correlation_id`, `causation_id` e payload tipizzato.
 - Nessun servizio accede direttamente al database dell’altro.
+
+Il producer ordine HAPA usa:
+
+- event type e routing key `order.changed`;
+- `version` come versione canonica;
+- `change_type` per conservare l’evento di dominio originario;
+- `status` soltanto quando l’evento inizializza o modifica lo stato.
+
+Il consumer `hapa-automation` mantiene temporaneamente compatibilità con i vecchi event type ordine e con i campi `order_version`, `to_status` e `resulting_status`. Il formato canonico e la procedura di deploy sono documentati in [`hapa-automation/docs/MESSAGE_CONTRACTS.md`](https://github.com/jellero/hapa-automation/blob/main/docs/MESSAGE_CONTRACTS.md).
 
 Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). L’architettura e la documentazione operativa delle automazioni sono mantenute nella [`main` di hapa-automation](https://github.com/jellero/hapa-automation/tree/main/docs).
 
@@ -67,7 +77,9 @@ Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHIT
 
 La foundation autonoma è disponibile sulla branch `main` del repository dedicato e comprende stack Docker separato, PostgreSQL proprio, topologia RabbitMQ, inbox idempotente, outbox con retry e dead letter, scheduler persistente, proiezioni locali e worker long-running.
 
-I job provider sono creati disabilitati. Restano da implementare gli adapter reali Space, marketplace, GLS e BRT, il relay/consumer RabbitMQ lato HAPA, i test di contratto congiunti e l’osservabilità operativa completa.
+Il contratto ordine è allineato nel producer HAPA e nel consumer `hapa-automation`, con test nei due repository e gestione degli arrivi fuori ordine. Restano da implementare relay e consumer RabbitMQ lato HAPA, contratti producer completi per catalogo e ricarichi, adapter reali Space/marketplace/GLS/BRT e osservabilità operativa completa.
+
+I job provider sono creati disabilitati e non devono essere abilitati prima dei test end-to-end con RabbitMQ reale.
 
 ## Stack
 
