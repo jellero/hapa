@@ -132,8 +132,14 @@ SQL);
         $statement = $this->pdo->prepare(<<<'SQL'
 UPDATE outbox_messages
 SET status = CASE WHEN attempts >= max_attempts THEN 'dead' ELSE 'retry' END,
-    available_at = CASE WHEN attempts >= max_attempts THEN available_at ELSE :retry_at END,
-    failed_at = CASE WHEN attempts >= max_attempts THEN :failed_at ELSE NULL END,
+    available_at = CASE
+        WHEN attempts >= max_attempts THEN available_at
+        ELSE CAST(:retry_at AS TIMESTAMPTZ)
+    END,
+    failed_at = CASE
+        WHEN attempts >= max_attempts THEN CAST(:failed_at AS TIMESTAMPTZ)
+        ELSE NULL
+    END,
     last_error = 'Lock worker scaduto: messaggio recuperato automaticamente.',
     locked_at = NULL,
     locked_by = NULL,
