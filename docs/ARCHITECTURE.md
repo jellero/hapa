@@ -1,1811 +1,247 @@
 # Architettura tecnica HAPA
 
-## 1. Scopo del documento
+Ultimo riesame: 16 luglio 2026.
 
-Questo documento descrive l’architettura applicativa, infrastrutturale e operativa di HAPA. Costituisce il riferimento tecnico per sviluppo, revisione del codice, integrazioni, deploy e gestione evolutiva.
+## 1. Scopo
 
-La documentazione distingue sempre tre livelli di maturità:
+Questo documento definisce il confine applicativo di HAPA dopo l’estrazione del runtime asincrono nel repository `jellero/hapa-automation`.
 
-- **implementato**: presente nel repository e verificato dalla pipeline;
-- **parziale**: struttura o contratto presente, comportamento operativo ancora incompleto;
-- **pianificato**: definito come direzione architetturale e riportato nella roadmap.
+HAPA è il sistema autorevole per anagrafiche, regole commerciali e stato operativo. `hapa-automation` è il sistema autorevole per scheduling, delivery asincrona e stato tecnico dei provider.
 
-La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md). Catalogo e pricing, marketplace e corrieri sono descritti in [`CATALOG_PRICING.md`](CATALOG_PRICING.md), [`MARKETPLACES.md`](MARKETPLACES.md) e [`CARRIERS.md`](CARRIERS.md). Il percorso di sviluppo è in [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md) e il layer di presentazione in [`INTERFACE.md`](INTERFACE.md).
+## 2. Responsabilità di HAPA
 
----
+HAPA governa:
 
-## 2. Obiettivo del sistema
+- clienti, identità esterne e indirizzi;
+- ordini, righe e transizioni di stato;
+- anagrafica prodotti;
+- prezzo e stock sincronizzati da Space;
+- regole di ricarico configurate tramite interfaccia;
+- prezzo finale desiderato e stato delle offerte;
+- picking, colli, spedizioni e tracking;
+- utenti, autorizzazioni e audit;
+- transactional outbox degli eventi applicativi.
 
-HAPA governa anagrafiche clienti e ordini e il ciclo operativo tra marketplace, Space API, magazzino e corrieri GLS/BRT. Il modello accetta inoltre come origine il futuro e-commerce B2C, che resta una capacità pianificata e non un canale operativo.
+HAPA non esegue scheduler o adapter in background.
 
-Il sistema deve:
+## 3. Responsabilità di hapa-automation
 
-1. mantenere un cliente canonico con identità e indirizzi provenienti da sorgenti eterogenee;
-2. importare ordini da marketplace eterogenei;
-3. accettare l’ordine sul canale sorgente;
-4. acquisire e normalizzare gli indirizzi;
-5. memorizzare cliente, ordine e righe in modo idempotente;
-6. inviare l’ordine a Space tramite API;
-7. sincronizzare via API prezzo e disponibilità catalogo da Space;
-8. calcolare in HAPA scorta di sicurezza, ricarico e offerta vendibile;
-9. pubblicare via API prezzi e disponibilità sui marketplace;
-10. aggiornare disponibilità e quantità gestibili delle righe ordine;
-11. supportare picking completo o parziale tramite barcode;
-12. produrre colli, spedizione ed etichetta tramite il corriere selezionato;
-13. restituire tracking e fulfilment al marketplace;
-14. offrire controllo operativo, audit, retry e riconciliazione.
+Il servizio separato governa:
 
-HAPA mantiene lo **stato autorevole del processo interno**. Marketplace, Space, GLS e BRT restano sistemi esterni con stato proprio; la coerenza tra i sistemi viene raggiunta mediante idempotenza, delivery persistite e riconciliazione.
+- scheduler dei job;
+- consumer e publisher RabbitMQ;
+- inbox idempotente;
+- outbox di delivery;
+- retry, backoff, lock e dead letter;
+- cursori e watermark dei provider;
+- proiezioni locali dei dati HAPA necessari ai worker;
+- adapter Space, marketplace, GLS e BRT;
+- riconciliazioni e metriche tecniche.
 
----
+Il servizio usa un proprio PostgreSQL. Non accede al database HAPA.
 
-## 3. Principi architetturali
+## 4. Proprietà dei dati
 
-### 3.1 Framework custom proprietario
+| Area | Sistema autorevole |
+|---|---|
+| clienti e indirizzi | HAPA |
+| ordini e transizioni | HAPA |
+| anagrafica prodotti | HAPA |
+| prezzo base e stock applicati al prodotto | HAPA, da eventi Space |
+| regole di ricarico | HAPA |
+| prezzo finale desiderato | HAPA |
+| scheduler e job | `hapa-automation` |
+| cursori provider | `hapa-automation` |
+| tentativi e dead letter | `hapa-automation` |
+| proiezioni tecniche per adapter | `hapa-automation` |
+| versione remota restituita dal provider | provider, registrata da HAPA dopo l’esito |
 
-HAPA utilizza una foundation applicativa proprietaria in PHP 8.4. Componenti Symfony selezionati forniscono primitive consolidate per HTTP, routing, console e caricamento dell’ambiente. Il dominio, i casi d’uso, la persistenza e le integrazioni restano sotto controllo diretto del progetto.
+Ogni dato ha un solo writer autorevole.
 
-### 3.2 Moduli con confini espliciti
+## 5. Messaggistica
 
-Il codice viene organizzato per capacità di business. Ogni modulo espone contratti e tipi propri. Le dipendenze tra moduli attraversano contratti espliciti e sono verificate da controlli architetturali automatici.
+RabbitMQ collega i due sistemi tramite eventi e comandi versionati.
 
-### 3.3 Stato deterministico
+Un messaggio contiene almeno:
 
-Le modifiche allo stato ordine devono attraversare casi d’uso e regole di transizione dichiarate. Scritture dirette e transizioni implicite riducono la tracciabilità e verranno escluse dalla parte funzionale.
-
-### 3.4 PostgreSQL come sorgente autorevole
-
-PostgreSQL conserva dominio, outbox, tentativi di integrazione e audit. Redis fornisce capacità di supporto, mai la sola copia di un dato necessario alla ricostruzione del processo.
-
-### 3.5 Consistenza transazionale interna
-
-Le modifiche di dominio e la produzione dei messaggi outbox appartengono alla stessa transazione PostgreSQL. I confini verso provider esterni adottano consistenza eventuale, retry e riconciliazione.
-
-### 3.6 Idempotenza end-to-end
-
-Import, invio a Space, creazione spedizione, tracking e retry devono utilizzare chiavi idempotenti stabili. Le protezioni vengono applicate sia nel codice sia tramite vincoli univoci PostgreSQL.
-
-### 3.7 Osservabilità incorporata
-
-Correlation ID, log strutturati, delivery esterne e audit accompagnano ogni operazione rilevante. Metriche e tracing verranno aggiunti insieme ai primi workload operativi.
-
-### 3.8 Sicurezza a più livelli
-
-Validazione applicativa, vincoli database, runtime container, Nginx, reverse proxy e gestione dei segreti formano livelli complementari. Ogni livello conserva responsabilità specifiche.
-
-### 3.9 Evoluzione per vertical slice
-
-Le funzionalità vengono realizzate come flussi completi, con dominio, persistenza, integrazione, test e osservabilità. La prima vertical slice attraverserà Marketplace → HAPA → Space.
-
----
-
-## 4. Contesto del sistema
-
-```mermaid
-flowchart TB
-    Operator[Operatore HAPA]
-    Marketplace[Marketplace]
-    Space[Space API]
-    Carriers[Corrieri GLS e BRT]
-    Hapa[HAPA]
-    Database[(PostgreSQL)]
-    Cache[(Redis)]
-
-    Marketplace <--> Hapa
-    Hapa <--> Space
-    Hapa <--> Carriers
-    Operator <--> Hapa
-    Hapa <--> Database
-    Hapa <--> Cache
+```json
+{
+  "message_id": "uuid",
+  "event_type": "catalog.product.updated",
+  "schema_version": 1,
+  "occurred_at": "2026-07-16T13:34:00Z",
+  "correlation_id": "uuid",
+  "causation_id": "uuid-or-null",
+  "payload": {}
+}
 ```
 
-### 4.1 Sistemi esterni
+Regole:
 
-| Sistema | Responsabilità | Modalità prevista |
-|---|---|---|
-| Canali marketplace | origine ordine, identità cliente, accettazione, indirizzo, fulfilment, tracking | Amazon, eMAG, Temu e IBS tramite adapter |
-| Connettori marketplace | percorso tecnico verso uno o più canali | SellRapido aggregatore oppure adapter diretto |
-| Futuro e-commerce B2C | account cliente, checkout e origine ordine diretta | pianificato, nessuna route pubblica attiva |
-| Space | ricezione ordine, approvvigionamento, prezzo base e disponibilità fisica | API |
-| GLS | spedizione, label e tracking | adapter dedicato, pianificato |
-| BRT (Bartolini) | spedizione, label e tracking | adapter dedicato, pianificato |
-| Reverse proxy | TLS, HSTS, routing di frontiera, eventuale rate limiting | infrastruttura esterna al Compose applicativo |
+- `message_id` è globale e stabile;
+- il consumer registra il messaggio prima di applicarlo;
+- la deduplica avviene nel database locale del consumer;
+- gli handler sono idempotenti;
+- l’ordine globale non è presunto;
+- gli aggiornamenti di entità usano una versione sorgente;
+- almeno due versioni consecutive di schema devono essere gestibili durante il deploy;
+- credenziali e segreti non transitano nei payload.
 
-### 4.2 Canali e connettori marketplace
+## 6. Transactional outbox HAPA
 
-HAPA distingue il canale sul quale nasce l’ordine dal connettore usato per trasportarlo. SellRapido è un connettore aggregatore; Amazon, eMAG, Temu e IBS sono canali di vendita. Gli adapter diretti mantengono invece lo stesso codice logico per canale e connettore.
+HAPA mantiene l’outbox perché ordine, prodotto o regola commerciale e relativo evento devono essere confermati o annullati insieme.
 
-Un ordine conserva sempre il canale sorgente, anche quando arriva tramite SellRapido. Questa separazione impedisce che un cambio di percorso tecnico alteri l’identità di business e permette di bloccare import concorrenti dello stesso account-canale.
+L’outbox HAPA non è uno scheduler e non esegue chiamate provider. È soltanto il buffer transazionale degli eventi destinati al confine di messaggistica.
 
-Il portafoglio, i gate di discovery e la procedura di migrazione tra connettori sono definiti in [`MARKETPLACES.md`](MARKETPLACES.md).
+Il relay RabbitMQ HAPA dovrà:
 
-### 4.3 Confini di fiducia
+1. reclamare un batch con lock limitato;
+2. pubblicare con publisher confirm;
+3. segnare il messaggio come pubblicato;
+4. riprovare soltanto errori temporanei;
+5. esporre metriche tecniche senza incorporare logica provider.
 
-- il traffico pubblico termina sul reverse proxy;
-- Nginx applicativo ascolta su loopback per impostazione production;
-- PHP-FPM, PostgreSQL e Redis operano sulla rete Docker interna;
-- i provider esterni vengono trattati come sistemi fallibili e potenzialmente lenti;
-- payload e risposte esterne richiedono validazione prima di entrare nel dominio;
-- dati personali e credenziali seguono policy di minimizzazione e redazione.
+## 7. Flusso catalogo
 
----
+1. `hapa-automation` acquisisce da Space prodotto, prezzo e stock.
+2. Pubblica un evento Space versionato.
+3. HAPA aggiorna la propria anagrafica prodotto.
+4. L’operatore gestisce i ricarichi dalla UI HAPA.
+5. HAPA calcola e versiona il prezzo finale desiderato.
+6. HAPA pubblica una richiesta di aggiornamento offerta.
+7. `hapa-automation` chiama il marketplace.
+8. HAPA applica l’esito ricevuto.
 
-## 5. Stack tecnico
+Lo stock Space rimane un dato del prodotto. Eventuali riserve o politiche di quantità pubblicabile sono regole commerciali separate.
 
-| Area | Tecnologia |
-|---|---|
-| Linguaggio | PHP 8.4 |
-| Runtime HTTP | PHP-FPM + Nginx |
-| Routing e HTTP | Symfony Routing + HttpFoundation |
-| Console | Symfony Console |
-| Configurazione locale | Symfony Dotenv |
-| Database | PostgreSQL 17 |
-| Cache e coordinamento | Redis 7.4 |
-| Migrazioni | Phinx |
-| Logging | Monolog con output JSON |
-| Test | PHPUnit 11 |
-| Analisi statica | PHPStan 2 |
-| Container | Docker e Docker Compose |
-| CI | GitHub Actions |
+## 8. Flusso ordini
 
-Il namespace applicativo è `Hapa\`.
+1. `hapa-automation` importa l’ordine dal canale.
+2. HAPA deduplica e persiste cliente, ordine e righe.
+3. HAPA produce eventi di dominio nella propria outbox.
+4. `hapa-automation` invia l’ordine a Space o esegue altre operazioni provider.
+5. Gli esiti ritornano a HAPA tramite RabbitMQ.
+6. Picking e decisioni manuali avvengono in HAPA.
+7. Le richieste di spedizione vengono eseguite dal servizio asincrono.
 
----
-
-## 6. Struttura del repository
+## 9. Moduli HAPA
 
 ```text
 app/
-  Core/                   runtime e servizi trasversali
-  Modules/                moduli applicativi e contratti
-bin/
-  console                 entry point CLI
-config/
-  module-dependencies.php dipendenze ammesse tra moduli
-  routes.php              composizione delle route HTTP
-database/
-  migrations/             schema PostgreSQL versionato
-docker/
-  php/                     immagini e configurazioni PHP
-  nginx.conf               configurazione Nginx
-  redis-entrypoint.sh      generazione configurazione Redis da secret
-docs/
-  ARCHITECTURE.md          questo documento
-public/
-  assets/                  CSS, JavaScript e sprite SVG dell’interfaccia
-  index.php                front controller HTTP
-scripts/
-  check-architecture.php   controllo dei confini di dipendenza
-templates/
-  auth/                    schermate di accesso
-  layouts/                 shell applicative
-  ui/                      viste operative
-tests/
-  Unit/
-  Integration/
-  Architecture/
+  Composition/
+  Core/
+    Clock/
+    Configuration/
+    Database/
+    Health/
+    Http/
+    Logging/
+    Outbox/
+    Ui/
+    View/
+  Modules/
+    Catalog/
+    Customers/
+    Orders/
+    Marketplace/
+    Space/
+    Shipping/
+    Gls/
+    Brt/
 ```
 
-### 6.1 Regole di dipendenza
+`Core/Outbox` resta in HAPA come infrastruttura di persistenza degli eventi. Non contiene più scheduler o catalogo dei job.
 
-1. `app/Core` resta indipendente da `app/Modules`.
-2. Ogni file sotto `app/Modules/<Modulo>` dichiara namespace coerente.
-3. Una dipendenza diretta tra moduli è ammessa attraverso namespace `Contract`.
-4. Ogni dipendenza cross-module è dichiarata in `config/module-dependencies.php`.
-5. Il grafo non contiene cicli, auto-dipendenze o moduli non registrati.
-6. Infrastruttura e adapter dipendono dai contratti applicativi, mentre il dominio conserva indipendenza dai dettagli dei provider.
-7. Entry point e composizione possono conoscere più moduli perché rappresentano il composition root.
+## 10. Persistenza
 
-Lo script `scripts/check-architecture.php` verifica automaticamente namespace, manifesto, direzione degli import, contratti pubblici e cicli. Il grafo dichiara `Gls -> Shipping`, `Brt -> Shipping`, `Space -> Catalog` e `Marketplace -> Catalog`; i moduli proprietari dei contratti non dipendono dai loro consumer.
+PostgreSQL HAPA conserva lo stato autorevole del dominio. Sono richiesti:
 
----
+- vincoli applicativi anche a livello database;
+- `TIMESTAMPTZ` per gli istanti;
+- importi monetari in unità minori;
+- optimistic locking per gli aggregati modificabili;
+- transazioni esplicite;
+- idempotency key uniche;
+- migrazioni versionate;
+- backup e restore testati.
 
-## 7. Layer applicativi
+PostgreSQL `hapa-automation` conserva esclusivamente stato tecnico e proiezioni ricostruibili.
 
-La foundation evolve verso quattro layer logici. La struttura fisica rimane organizzata per modulo, così che ogni capacità conservi vicinanza tra dominio, casi d’uso e adapter.
+## 11. Redis
 
-### 7.1 Domain
+Redis resta una dipendenza HAPA per capacità temporanee esplicitamente definite. Non viene usato per condividere stato autorevole tra HAPA e `hapa-automation`.
 
-Contiene:
+## 12. Interfaccia
 
-- entità e value object;
-- invarianti;
-- macchina a stati;
-- errori di dominio;
-- eventi di dominio;
-- regole su quantità, parziali, colli e fulfilment.
+La UI HAPA espone:
 
-Dipendenze ammesse: PHP standard e tipi del medesimo dominio.
-
-**Stato:** value object clienti e ordini, aggregato `Order`, righe immutabili, macchina a stati ed eventi di dominio presenti. Aggregato cliente, casi d’uso e servizi di dominio ulteriori restano pianificati.
-
-### 7.2 Application
-
-Contiene:
-
-- casi d’uso;
-- command e query;
-- orchestrazione delle transazioni;
-- porte verso repository e provider;
-- produzione degli eventi outbox;
-- autorizzazione applicativa delle azioni.
-
-**Stato:** parziale. Il salvataggio ordine usa transaction manager, repository e outbox atomica; autorizzazione e casi d’uso delle vertical slice provider restano pianificati.
-
-### 7.3 Infrastructure
-
-Contiene:
-
-- repository PostgreSQL;
-- adapter Marketplace, Space, GLS e BRT;
-- client HTTP;
-- serializzazione e mapping dei payload;
-- implementazione outbox e worker;
-- integrazione Redis.
-
-**Stato:** connection factory, migrazioni, repository `Order`, outbox, worker e scheduler presenti; repository restanti e adapter provider reali pianificati.
-
-### 7.4 Delivery
-
-Contiene:
-
-- front controller HTTP;
-- route e controller;
-- comandi console;
-- pannello operativo server-rendered;
-- endpoint tecnici di health.
-
-**Stato:** bootstrap, route tecniche, Kernel, comando diagnostico e layer di presentazione del pannello implementati. Autenticazione, query e comandi applicativi restano da collegare.
-
-### 7.5 Responsabilità operative dei componenti
-
-Il controller traduce request e risultato in HTTP, senza SQL, transazioni o chiamate provider. L’application service possiede il caso d’uso, coordina validazione, policy, transazione, audit e outbox. Il repository esegue operazioni parametrizzate e atomiche senza conoscere sessione o risposta HTTP. Validator puri non interrogano il database; le policy aggiungono vincoli di dominio e non sostituiscono i permessi della route.
-
-Questa è la struttura obbligatoria per il codice nuovo. Dove application service, repository, autenticazione o guardie non sono ancora presenti, la capacità resta marcata parziale o pianificata.
-
----
-
-## 8. Composition root e bootstrap
-
-`Hapa\Core\Bootstrap` rappresenta il punto comune di inizializzazione per HTTP e CLI.
-
-Il bootstrap attuale:
-
-1. carica `.env` quando presente;
-2. valida `APP_ENV`, `APP_DEBUG`, `APP_URL`, timezone e trusted proxy;
-3. configura la timezone;
-4. configura i trusted proxy di HttpFoundation;
-5. carica configurazioni tipizzate tramite l’unico reader autorizzato;
-6. compila il container e risolve l’entry point richiesto.
-
-### 8.1 Configurazioni tipizzate
-
-Il composition root registra configurazioni immutabili:
-
-```text
-ApplicationConfig
-DatabaseConfig
-RedisConfig
-ProxyConfig
-IntegrationConfig
-AutomationConfig
-```
-
-I servizi le ricevono tramite costruttore. `ConfigurationLoader` ed `EnvironmentReader` confinano la lettura di ambiente e secret all’avvio; il resto dell’applicazione non legge direttamente `$_ENV` o `getenv()`.
-
----
-
-## 9. Ciclo di una richiesta HTTP
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Proxy as Reverse proxy
-    participant Nginx
-    participant Kernel
-    participant Route
-    participant Service as Caso d'uso
-    participant DB as PostgreSQL
-
-    Client->>Proxy: HTTPS request
-    Proxy->>Nginx: HTTP interno + X-Forwarded-*
-    Nginx->>Kernel: public/index.php
-    Kernel->>Kernel: correlation ID
-    Kernel->>Route: route matching
-    Route->>Service: input validato
-    Service->>DB: transazione
-    DB-->>Service: risultato
-    Service-->>Route: output applicativo
-    Route-->>Kernel: Response
-    Kernel-->>Nginx: header sicurezza + correlation ID
-    Nginx-->>Proxy: risposta
-    Proxy-->>Client: HTTPS response
-```
-
-### 9.1 Kernel implementato
-
-Il Kernel:
-
-- assegna o valida `X-Correlation-ID`;
-- esegue il matching della route;
-- distingue 404, 405 e 500;
-- registra errori applicativi con contesto strutturato;
-- limita i dettagli tecnici all’ambiente debug;
-- applica header di sicurezza e `Cache-Control` alle risposte JSON.
-
-### 9.2 Pipeline futura
-
-Prima del pannello operativo verranno aggiunti:
-
-1. sessione;
-2. autenticazione;
-3. cambio password obbligatorio, quando applicabile;
-4. autorizzazione per ruolo e permesso;
-5. protezione CSRF sulle operazioni mutative;
-6. validazione input;
-7. rate limiting sugli endpoint sensibili;
-8. audit dell’azione operativa.
-
----
-
-## 10. Moduli applicativi
-
-### 10.1 Orders
-
-Responsabilità:
-
-- aggregato ordine;
-- righe ordine;
-- quantità ordinate, disponibili, spedibili e annullabili;
-- stato e versione;
-- transizioni;
-- eventi di dominio;
-- storico delle transizioni;
-- numero interno, cliente e origine dell’ordine;
-- snapshot storici di spedizione e fatturazione.
-
-**Implementato:** `Order`, `OrderLine`, indirizzi snapshot tipizzati, stati e origine, macchina a stati, eventi, controllo versione attesa e storico delle transizioni.
-
-**Implementato inoltre:** repository PostgreSQL, mapping, optimistic locking atomico e persistenza transazionale degli eventi outbox.
-
-**Pianificato:** casi d’uso applicativi completi e query autorizzate.
-
-### 10.2 Customers
-
-Responsabilità:
-
-- profilo cliente canonico;
-- stato e tipo cliente;
-- contatti e dati fiscali opzionali;
-- identità esterne distinte per sorgente e account;
-- indirizzi attivi e predefiniti;
-- policy future di riconciliazione, merge, archiviazione e anonimizzazione.
-
-**Implementato:** schema PostgreSQL, vincoli, `CustomerCode`, `EmailAddress`, profilo, indirizzo, identità e relativi enum.
-
-**Pianificato:** aggregato, repository, casi d’uso, deduplicazione assistita, retention e audit. L’email non è una chiave univoca e non causa merge automatici.
-
-### 10.3 Marketplace
-
-Responsabilità:
-
-- import incrementale;
-- accettazione ordine;
-- acquisizione indirizzo;
-- normalizzazione righe;
-- aggiornamento fulfilment;
-- invio tracking;
-- pubblicazione e riconciliazione di prezzo e disponibilità vendibile;
-- riconciliazione stato remoto.
-
-Contratto attuale:
-
-```php
-connector(): MarketplaceConnector
-supportedChannels(): array
-importOpenOrders(): array
-acceptOrder(ExternalOrderReference $order): void
-fetchShippingAddress(ExternalOrderReference $order): ?ShippingAddress
-sendTracking(TrackingNotification $notification): void
-publishOffer(MarketplaceOfferUpdate $offer, string $idempotencyKey): MarketplaceOfferPublication
-```
-
-**Implementato:** contratto iniziale, distinzione tra canale e connettore, riferimento ordine esterno, righe ordine tipizzate e contratto provider-neutral per pubblicare offerte versionate.
-
-**Pianificato:** SellRapido, Amazon, eMAG, Temu e IBS secondo [`MARKETPLACES.md`](MARKETPLACES.md); paginazione, cursori, account configurati, recupero singolo ordine, capacità dichiarate, gestione parziali, annullamenti, errori tipizzati e adapter reali.
-
-### 10.4 Space
-
-Responsabilità:
-
-- invio ordine;
-- associazione identificativo Space;
-- aggiornamento disponibilità delle righe ordine;
-- acquisizione incrementale di prezzo e disponibilità catalogo;
-- riconciliazione;
-- eventuale annullamento o aggiornamento compatibile con le API disponibili.
-
-Contratto attuale:
-
-```php
-submitOrder(SpaceOrderRequest $order, string $idempotencyKey): string
-fetchAvailability(string $spaceOrderId): array
-fetchCatalogChanges(SpaceCatalogCursor $cursor, int $limit): SpaceCatalogBatch
-```
-
-**Implementato:** contratto ordine e DTO iniziali; contratto catalogo con cursore, batch, versione sorgente, prezzo in unità minori e quantità non negativa.
-
-**Pianificato:** client reale, stato remoto, errori tipizzati, timeout, rate limit e riconciliazione.
-
-### 10.5 Catalog
-
-Responsabilità:
-
-- SKU canonico e mapping verso Space;
-- prezzo base e disponibilità fisica ricevuti da Space;
-- scorta di sicurezza e quantità vendibile;
-- regole di ricarico, precedenza e limiti prezzo;
-- proiezioni per account-canale marketplace;
-- versioni, idempotenza e stato di pubblicazione.
-
-**Implementato:** tipo `Money`, calcolo dello stock vendibile, motore prezzi deterministico, schema `catalog_items`, `pricing_rules` e `marketplace_offers`, contratti cross-module e test delle invarianti.
-
-**Pianificato:** repository, casi d’uso, handler outbox, adapter reali, riconciliazione, audit delle regole e read model UI. Vedere [`CATALOG_PRICING.md`](CATALOG_PRICING.md).
-
-### 10.6 Warehouse e Picking
-
-Responsabilità:
-
-- sessione di picking;
-- task per ordine e riga;
-- scansione barcode;
-- gestione anomalie;
-- associazione operatore e postazione;
-- conferma quantità;
-- completamento o parziale.
-
-**Stato:** pianificato.
-
-Entità previste:
-
-```text
-pick_sessions
-pick_tasks
-barcode_scans
-partial_order_decisions
-```
-
-### 10.7 Partial Orders
-
-Responsabilità:
-
-- calcolo delle quantità finali;
-- motivazione del parziale;
-- approvazione esplicita;
-- quantità da spedire;
-- quantità da annullare;
-- aggiornamento dei provider coinvolti.
-
-**Stato:** vincoli quantitativi presenti; casi d’uso pianificati.
-
-### 10.8 Shipping, GLS e BRT
-
-Il modulo `Shipping` possiede:
-
-- modellazione colli;
-- peso reale, volumetrico e tariffabile;
-- codici corriere normalizzati;
-- contratto comune per creazione spedizione e recupero label;
-- risultato normalizzato con identificativo, tracking e riferimento label.
-
-I moduli `Gls` e `Brt` possiedono:
-
-- mapping verso il provider;
-- configurazione e credenziali specifiche;
-- creazione spedizione;
-- generazione e recupero label;
-- ristampa;
-- annullamento;
-- stato spedizione;
-- tracking.
-
-Contratto attuale:
-
-```php
-carrier(): CarrierCode
-createShipment(ShipmentRequest $shipment, string $idempotencyKey): ShipmentResult
-fetchLabel(string $labelReference): string
-```
-
-**Implementato:** `CarrierCode` con `GLS`/`BRT`, contratto `CarrierAdapter`, DTO iniziali provider-neutral, contratti `GlsAdapter`/`BrtAdapter`, manifesto delle dipendenze e vincolo PostgreSQL sui provider.
-
-**Pianificato:** `ShipmentPackage`, dimensioni, contatti, adapter HTTP, servizi e opzioni provider-specifiche, annullamento, suite di conformità e riconciliazione. Le specifiche BRT e GLS non vengono dedotte: richiedono la discovery di [`CARRIERS.md`](CARRIERS.md).
-
-### 10.9 Automation
-
-Responsabilità:
-
-- transactional outbox;
-- worker;
-- retry;
-- scheduler;
-- dead letter;
-- riconciliazione;
-- metriche asincrone.
-
-**Implementato:** outbox transazionale, schema versione, claim concorrente, worker one-shot, retry/dead letter, lock recovery, registry taggato, scheduler persistente e handler audit ordine idempotente. Gli otto job dei flussi ordini, catalogo e spedizioni sono censiti a dieci minuti e disabilitati per impostazione predefinita.
-
-**Pianificato:** handler provider reali, heartbeat/timeout dei job lunghi, metriche e gestione autorizzata delle dead letter. Vedere [`AUTOMATIONS.md`](AUTOMATIONS.md).
-
-### 10.10 Operational Dashboard
-
-Responsabilità:
-
-- ricerca e filtro clienti e ordini;
-- scheda cliente con identità, indirizzi e storico ordini;
-- dettaglio completo del flusso;
-- stato provider;
-- retry controllato;
-- gestione dead letter;
-- approvazione parziali;
-- ristampa label;
-- audit delle azioni.
-
-**Stato:** parziale. Il layer di presentazione è implementato con dashboard, clienti, ordini, catalogo e prezzi, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni. Dati, autenticazione e azioni applicative restano pianificati e non vengono simulati.
-
----
-
-## 11. Modello di dominio dell’ordine
-
-### 11.1 Aggregato implementato
-
-`Order` è l’aggregate root. `OrderLine` è immutabile e viene sostituita esclusivamente attraverso operazioni controllate dell’aggregato.
-
-Invarianti principali:
-
-- quantità ordinata maggiore di zero;
-- quantità disponibili e finali sempre maggiori o uguali a zero;
-- quantità da spedire minore o uguale alla quantità disponibile;
-- somma di spedito e annullato minore o uguale all’ordinato e, per un piano confermato, uguale all’ordinato;
-- aggiornamento disponibilità completo e atomico per tutte le righe;
-- indirizzo obbligatorio prima dell’invio a Space;
-- parziale confermabile soltanto con quantità sia da spedire sia da annullare;
-- tracking successivo alla disponibilità della label;
-- transizioni consentite dalla macchina a stati;
-- versione incrementale e controllo esplicito della versione attesa.
-
-Colli, identificativo spedizione, peso e tracking tipizzato verranno aggiunti nel modulo Shipping. Il confronto atomico della versione sarà responsabilità del repository PostgreSQL.
-
-### 11.2 Stati attuali
-
-```text
-new
-accepted
-waiting_address
-imported
-sent_to_space
-waiting_goods
-goods_available
-partial_available
-picking
-partial_confirmed
-ready_for_carrier
-label_available
-tracking_sent
-fulfilment_completed
-completed_partial
-cancelled
-manual_review
-```
-
-Gli stati distinguono esplicitamente disponibilità completa e fulfilment concluso:
-
-```text
-goods_available
-fulfilment_completed
-```
-
-### 11.3 Macchina a stati implementata
-
-Ogni transizione contiene:
-
-- stato sorgente;
-- stato destinazione;
-- versione risultante;
-- istante esplicito;
-- motivazione opzionale;
-- evento prodotto;
-
-I casi d’uso aggiungeranno audit, messaggio outbox e gestione del conflitto atomico di versione.
-
-Esempio concettuale:
-
-```text
-Imported
-  -> Accepted
-  -> SentToSpace
-  -> WaitingGoods
-  -> GoodsAvailable -> Picking
-     | PartialAvailable -> PartialConfirmed -> Picking
-  -> ReadyForCarrier
-  -> LabelAvailable
-  -> TrackingSent
-  -> FulfilmentCompleted | CompletedPartial
-```
-
-`Accepted -> WaitingAddress -> Accepted` protegge l’acquisizione dell’indirizzo. `ManualReview` conserva e ripristina esclusivamente lo stato precedente. `FulfilmentCompleted`, `CompletedPartial` e `Cancelled` sono terminali; le transizioni arbitrarie sono rifiutate da un errore di dominio.
-
-### 11.4 Relazione tra cliente e ordine
-
-Il cliente canonico è separato dalle identità esterne. La tripla sorgente, account e ID cliente identifica univocamente la relazione con Amazon, eMAG, Temu, IBS o il futuro B2C. SellRapido resta un connettore e non diventa una sorgente cliente.
-
-L’ordine conserva un numero interno univoco e un’origine vincolata:
-
-- `marketplace` richiede `marketplace_id` e vieta `origin_reference`;
-- `b2c_ecommerce` vieta `marketplace_id` e richiede il riferimento storefront.
-
-Il collegamento ordine-cliente è opzionale e usa `ON DELETE SET NULL`, così l’ordine storico non viene eliminato con il profilo. Gli indirizzi dell’ordine sono snapshot e non cambiano insieme alla rubrica cliente. Il modello dettagliato è in [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md).
-
----
-
-## 12. Persistenza PostgreSQL
-
-### 12.1 Tabelle implementate
-
-| Tabella | Responsabilità |
-|---|---|
-| `marketplaces` | configurazione logica dei canali |
-| `customers` | profilo cliente canonico |
-| `customer_external_identities` | identità cliente per sorgente e account |
-| `customer_addresses` | rubrica e indirizzi predefiniti |
-| `orders` | testata, cliente, origine, snapshot e stato autorevole |
-| `order_lines` | righe e quantità |
-| `order_transitions` | storico versionato dei cambi di stato ordine |
-| `shipments` | spedizione, tracking e label |
-| `outbox_messages` | intenzioni asincrone persistite |
-| `automation_jobs` | pianificazione persistente, watermark e lock dei job periodici |
-| `external_deliveries` | singoli tentativi verso provider |
-| `audit_logs` | variazioni e azioni tracciate |
-| `phinxlog` | versione dello schema |
-
-### 12.2 Vincoli implementati
-
-- unicità marketplace + ID ordine esterno;
-- unicità numero ordine interno;
-- coerenza esclusiva tra origine marketplace e origine B2C;
-- unicità storefront + ID ordine esterno B2C;
-- codice, stato e tipo cliente validi;
-- identità esterna univoca per sorgente, account e ID;
-- un solo indirizzo predefinito di spedizione e fatturazione per cliente;
-- collegamento cliente eliminabile senza cancellare l’ordine storico;
-- unicità ordine + ID riga esterno;
-- numero riga positivo e univoco per ordine;
-- stati ordine ammessi;
-- stati validi, cambio effettivo e versione univoca nello storico transizioni;
-- codice valuta a tre lettere maiuscole;
-- versione ordine positiva;
-- quantità coerenti e non negative;
-- quantità spedita entro la disponibilità;
-- colli e peso positivi;
-- tracking unico per provider;
-- spedizione esterna unica per provider;
-- stati e tentativi outbox validi;
-- tentativi delivery positivi;
-- stato HTTP tra 100 e 599.
-
-### 12.3 Tipi dati
-
-Le migrazioni consolidano:
-
-- `JSONB` per indirizzi, payload, risposte e audit;
-- `TIMESTAMPTZ` per timestamp operativi;
-- indici parziali per tracking, spedizioni esterne e claim outbox.
-
-Tutti i timestamp applicativi vengono trattati in UTC. La timezone configurata serve alla presentazione e alle regole locali.
-
-### 12.4 Strategia transazionale prevista
-
-Un caso d’uso mutativo seguirà questo schema:
-
-```text
-BEGIN
-  SELECT aggregate FOR UPDATE / controllo versione
-  applicazione invarianti
-  UPDATE/INSERT dominio
-  INSERT audit
-  INSERT outbox
-COMMIT
-```
-
-La chiamata al provider avverrà dopo il commit tramite worker. Questo elimina transazioni database aperte durante I/O remoto.
-
-### 12.5 Evoluzione dello schema
-
-Le migrazioni sono versionate tramite timestamp Phinx. Prima dell’operatività verrà formalizzata una politica unica:
-
-- **forward-only** per produzione, con restore da backup come strategia di ritorno;
-- oppure rollback completo e verificato per ogni migrazione reversibile.
-
-La readiness legge la versione minima da `config/schema.php`. Ogni nuova migrazione necessaria all’avvio aggiorna lo stesso manifest nello stesso changeset.
-
----
-
-## 13. Repository e accesso ai dati
-
-I repository espongono operazioni orientate al dominio, evitando query distribuite nei controller o negli adapter. `OrderRepository` e la sua implementazione PostgreSQL sono presenti; le altre porte restano da completare.
-
-Contratti iniziali previsti:
-
-```text
-OrderRepository
-CustomerRepository
-MarketplaceRepository
-ShipmentRepository
-OutboxRepository
-ExternalDeliveryRepository
-AuditRepository
-```
-
-Responsabilità dei repository:
-
-- mapping tra righe SQL e oggetti di dominio;
-- controllo della versione ottimistica;
-- query di ricerca operative;
-- lock espliciti quando richiesti;
-- transazioni gestite dal layer applicativo;
-- nessuna chiamata a provider esterni.
-
-Il transaction manager espone un confine esplicito. `PostgresOrderRepository` lo usa per confermare insieme aggregato, righe, transizioni e outbox, per esempio:
-
-```php
-$transactions->transactional(function () use ($command): Result {
-    // dominio + persistenza + outbox
-});
-```
-
----
-
-## 14. Contratti e DTO delle integrazioni
-
-### 14.1 Regole
-
-Ogni contratto di provider deve:
-
-- utilizzare DTO immutabili;
-- validare dati obbligatori;
-- distinguere identificativi interni ed esterni;
-- ricevere idempotency key quando l’operazione produce effetti;
-- restituire risultati tipizzati;
-- classificare gli errori;
-- evitare array generici nella superficie pubblica;
-- escludere credenziali e dettagli HTTP dal dominio.
-
-### 14.2 Tipi presenti
-
-Marketplace:
-
-```text
-ExternalOrder
-ExternalOrderLine
-ExternalOrderReference
-MarketplaceChannel
-MarketplaceConnector
-MarketplaceOfferUpdate
-MarketplaceOfferPublication
-MarketplaceOfferAdapter
-ShippingAddress
-TrackingNotification
-```
-
-Space:
-
-```text
-SpaceOrderRequest
-AvailabilityLine
-SpaceCatalogCursor
-SpaceCatalogItem
-SpaceCatalogBatch
-SpaceCatalogAdapter
-```
-
-Catalog:
-
-```text
-Money
-ProductAvailability
-PricingRule
-PricingRuleScope
-PriceAdjustmentType
-PriceCalculator
-CalculatedPrice
-```
-
-Shipping:
-
-```text
-CarrierCode
-CarrierAdapter
-ShipmentRequest
-ShipmentResult
-GlsAdapter
-BrtAdapter
-```
-
-### 14.3 Tipi da aggiungere
-
-```text
-SpaceOrderLine
-ShipmentPackage
-PackageDimensions
-BillableWeight
-MarketplaceOperationResult
-SpaceOperationResult
-CarrierOperationResult
-AdapterFailure
-TemporaryFailure
-PermanentFailure
-AuthenticationFailure
-ValidationFailure
-RateLimitFailure
-```
-
-### 14.4 Mapping anti-corruption
-
-Ogni adapter applicherà un mapping esplicito:
-
-```text
-payload provider
-  -> DTO provider validato
-  -> DTO applicativo
-  -> comando/caso d'uso
-  -> dominio HAPA
-```
-
-Il mapping inverso produrrà il payload del provider a partire da DTO applicativi. Campi specifici del provider restano confinati nell’adapter.
-
----
-
-## 15. Classificazione degli errori esterni
-
-| Classe | Esempi | Strategia |
-|---|---|---|
-| temporaneo | timeout, 5xx, indisponibilità rete | retry con backoff e jitter |
-| rate limit | 429 o quota provider | retry rispettando `Retry-After` |
-| autenticazione | token scaduto o credenziale rifiutata | blocco provider, alert e intervento operativo |
-| validazione | payload rifiutato | stato definitivo o revisione manuale |
-| conflitto idempotente | risorsa già creata | recupero risultato e riconciliazione |
-| definitivo | ordine inesistente, operazione vietata | dead letter e gestione operativa |
-| dato incoerente | quantità o stato remoto incompatibile | `manual_review` e riconciliazione |
-
-Ogni errore persistito conterrà codice interno, provider, operazione, correlation ID, tentativo e riferimento all’ordine. I payload sensibili verranno minimizzati o redatti.
-
----
-
-## 16. Transactional outbox
-
-### 16.1 Scopo
-
-La transactional outbox collega una modifica di dominio a un effetto esterno garantendo che l’intenzione venga persistita nello stesso commit dell’ordine.
-
-Esempi di eventi:
-
-```text
-MarketplaceOrderImported
-MarketplaceOrderAccepted
-ShippingAddressAcquired
-OrderSubmittedToSpace
-AvailabilityRefreshRequested
-PickingCompleted
-PartialOrderApproved
-CarrierShipmentRequested
-TrackingNotificationRequested
-ReconciliationRequested
-```
-
-### 16.2 Schema implementato
-
-`outbox_messages` contiene:
-
-- aggregate type e ID;
-- event type;
-- payload JSONB;
-- stato;
-- idempotency key;
-- correlation ID e versione schema;
-- tentativi e massimo tentativi;
-- disponibilità temporale;
-- lock token;
-- worker identity;
-- timestamp di lock, completamento e fallimento;
-- ultimo errore.
-
-### 16.3 Worker implementato
-
-Il repository esegue il claim con una CTE atomica equivalente a:
-
-```sql
-BEGIN;
-
-SELECT id
-FROM outbox_messages
-WHERE status IN ('pending', 'retry')
-  AND available_at <= NOW()
-ORDER BY available_at, id
-FOR UPDATE SKIP LOCKED
-LIMIT :batch_size;
-
-UPDATE outbox_messages
-SET status = 'processing',
-    locked_at = NOW(),
-    locked_by = :worker_id,
-    lock_token = :lock_token
-WHERE id = ANY(:ids);
-
-COMMIT;
-```
-
-Elaborazione attuale:
-
-1. carica il messaggio claimed;
-2. risolve l’handler tramite event type;
-3. invoca l’handler idempotente;
-4. classifica errore temporaneo, definitivo o inatteso;
-5. completa, ripianifica o sposta in dead letter verificando worker e lock token.
-
-Gli handler provider aggiungeranno la registrazione `external_deliveries`, timeout, invocazione adapter e riconciliazione prima di poter essere attivati.
-
-### 16.4 Retry
-
-Il ritardo segue backoff esponenziale limitato con jitter:
-
-```text
-next_delay = min(max_delay, base * 2^attempt) + random_jitter
-```
-
-La classificazione dell’errore decide retry, dead letter o revisione manuale.
-
-### 16.5 Lock scaduti
-
-All’inizio del batch il recovery riporta in retry i messaggi `processing` con lock oltre la soglia, oppure in dead letter quando i tentativi sono esauriti. Completamento, retry e dead letter verificano lock token e worker identity per evitare aggiornamenti tardivi incoerenti.
-
-### 16.6 Dead letter
-
-I messaggi terminali conserveranno:
-
-- causa;
-- ultimo tentativo;
-- riferimenti al dominio;
-- correlation ID;
-- azione operativa richiesta.
-
-Il pannello espone oggi piano e stato di maturità; retry controllato, chiusura manuale e riconciliazione restano azioni autorizzate da implementare.
-
----
-
-## 17. Idempotenza e concorrenza
-
-### 17.1 Import marketplace
-
-Ogni configurazione `marketplaces` rappresenta un solo account-canale, anche quando più canali condividono il connettore SellRapido. La chiave naturale corrente resta:
-
-```text
-marketplace_id + external_order_id
-```
-
-Il payload tipizzato conserva anche il canale e deve coincidere con la configurazione risolta. L’import aggiorna un ordine già presente soltanto attraverso regole esplicite e confronti di versione remota. Un vincolo operativo impedisce di attivare contemporaneamente SellRapido e un adapter diretto per lo stesso account-canale.
-
-### 17.2 Invio a Space
-
-Chiave proposta:
-
-```text
-space:submit-order:<internal-order-id>:<domain-version>
-```
-
-La delivery conserva l’identificativo Space restituito. In caso di timeout dopo l’invio, il worker tenta il recupero tramite idempotency key o riconciliazione.
-
-### 17.3 Corrieri
-
-Chiave proposta:
-
-```text
-carrier:<carrier-code>:create-shipment:<shipment-id>:<shipment-version>
-```
-
-La tabella `shipments` protegge unicità per provider e identificativo esterno.
-
-### 17.4 Tracking marketplace
-
-Chiave proposta:
-
-```text
-marketplace:tracking:<marketplace-id>:<shipment-id>:<tracking-version>
-```
-
-### 17.5 Optimistic locking
-
-`orders.version` verrà incrementato a ogni modifica significativa:
-
-```sql
-UPDATE orders
-SET status = :status,
-    version = version + 1,
-    updated_at = NOW()
-WHERE id = :id
-  AND version = :expected_version;
-```
-
-Zero righe aggiornate indicano conflitto concorrente e richiedono ricaricamento o retry del caso d’uso.
-
----
-
-## 18. Flussi end-to-end
-
-### 18.1 Import e invio a Space
-
-```mermaid
-sequenceDiagram
-    participant Scheduler
-    participant Worker
-    participant Marketplace
-    participant App as HAPA Application
-    participant DB as PostgreSQL
-    participant Space
-
-    Scheduler->>DB: enqueue import request
-    Worker->>Marketplace: import orders
-    Marketplace-->>Worker: external orders
-    Worker->>App: ImportMarketplaceOrder
-    App->>DB: order + lines + audit + outbox
-    Worker->>Marketplace: accept order
-    Worker->>Marketplace: fetch shipping address
-    Worker->>App: AttachShippingAddress
-    App->>DB: address + transition + outbox
-    Worker->>Space: submit order with idempotency key
-    Space-->>Worker: Space order ID
-    Worker->>DB: delivery success + transition
-```
-
-Passaggi previsti:
-
-1. scheduler genera il lavoro di import;
-2. adapter marketplace legge una finestra incrementale;
-3. HAPA persiste ordine e righe;
-4. HAPA produce l’evento di accettazione;
-5. adapter acquisisce indirizzo;
-6. HAPA valida e persiste l’indirizzo;
-7. HAPA produce la richiesta Space;
-8. worker invia a Space;
-9. identificativo Space e delivery vengono persistiti;
-10. riconciliazione periodica verifica lo stato.
-
-### 18.2 Catalogo, prezzi e disponibilità pubblicabile
-
-1. scheduler richiede una pagina incrementale del catalogo Space;
-2. Space restituisce SKU, identificativo, prezzo, disponibilità e versione sorgente;
-3. HAPA valida e persiste il batch senza avanzare il cursore prima del commit;
-4. la quantità vendibile viene calcolata sottraendo la scorta di sicurezza;
-5. il motore seleziona una sola regola di ricarico deterministica per account-canale e SKU;
-6. ogni offerta variata diventa una pubblicazione idempotente;
-7. l’adapter attivo invia prezzo finale e quantità al marketplace;
-8. HAPA salva versione remota ed esito e riconcilia le divergenze.
-
-### 18.3 Disponibilità ordine e picking
-
-1. scheduler richiede aggiornamento disponibilità;
-2. Space restituisce disponibilità per SKU;
-3. HAPA aggiorna quantità disponibili in transazione;
-4. la macchina a stati sceglie disponibilità completa o parziale;
-5. il magazzino apre una sessione di picking;
-6. ogni scansione barcode aggiorna un task e produce audit;
-7. anomalie vengono registrate e sottoposte a revisione;
-8. il picking produce quantità finali;
-9. un parziale richiede decisione e approvazione;
-10. HAPA produce la richiesta di spedizione.
-
-### 18.4 Corriere e tracking
-
-1. l’operatore o il sistema definisce uno o più colli;
-2. ogni collo contiene peso e dimensioni;
-3. HAPA calcola peso volumetrico e tariffabile;
-4. il caso d’uso valida indirizzo, quantità e colli;
-5. dominio e richiesta al corriere selezionato vengono persistiti con outbox;
-6. worker crea la spedizione;
-7. HAPA salva identificativo, tracking e riferimento label;
-8. label viene acquisita e archiviata secondo retention;
-9. tracking viene inviato al marketplace;
-10. HAPA conclude il fulfilment o mantiene il ramo parziale.
-
-### 18.5 Riconciliazione
-
-La riconciliazione confronta periodicamente:
-
-- stato interno;
-- stato marketplace;
-- stato Space;
-- stato del corriere selezionato;
-- delivery pendenti o ambigue.
-
-Divergenze risolvibili producono eventi correttivi. Divergenze con rischio operativo entrano in `manual_review`.
-
----
-
-## 19. Modello logistico e peso volumetrico
-
-### 19.1 Collo
-
-Il modello previsto `ShipmentPackage` conterrà:
-
-```text
-package_reference
-weight_kg
-length_cm
-width_cm
-height_cm
-volumetric_weight_kg
-billable_weight_kg
-barcode opzionale
-```
-
-### 19.2 Calcolo
-
-La formula dipende dal coefficiente contrattuale del vettore:
-
-```text
-volumetric_weight_kg = length_cm × width_cm × height_cm / divisor
-billable_weight_kg   = max(actual_weight_kg, volumetric_weight_kg)
-```
-
-Il divisore sarà configurato per servizio o contratto del corriere. Formula, divisore e risultato verranno salvati per audit tariffario.
-
-### 19.3 Spedizioni parziali
-
-Una spedizione parziale deve associare:
-
-- righe e quantità incluse;
-- quantità residue o annullate;
-- decisione operativa;
-- tracking specifico;
-- eventuali aggiornamenti separati verso il marketplace.
-
----
-
-## 20. Logging, audit e delivery tecniche
-
-### 20.1 Logging applicativo
-
-Implementato:
-
-- formato JSON;
-- output su stderr;
-- correlation ID;
-- redazione ricorsiva dei campi sensibili;
-- messaggi tecnici esclusi in production;
-- contesto con metodo, path, classe eccezione e codice.
-
-I log descrivono esecuzione e diagnostica. Restano separati dall’audit di business.
-
-### 20.2 Audit
-
-`audit_logs` conserva:
-
-- attore;
-- azione;
-- tipo e ID entità;
-- stato precedente e successivo;
-- correlation ID;
-- timestamp.
-
-Il futuro pannello registrerà ogni azione mutativa, inclusi retry, approvazioni, annullamenti e ristampe.
-
-### 20.3 External deliveries
-
-`external_deliveries` rappresenta ogni tentativo verso un provider:
-
-- provider e operazione;
-- idempotency key;
-- request e response minimizzate;
-- stato HTTP;
-- esito classificato;
-- numero tentativo;
-- correlation ID;
-- codice e messaggio errore.
-
-Questa tabella supporta diagnosi, riconciliazione e misurazione dell’affidabilità dei provider.
-
-### 20.4 Metriche pianificate
-
-- ordini importati per marketplace;
-- latenza import → Space;
-- coda outbox per stato;
-- età del messaggio più vecchio;
-- retry per provider e operazione;
-- error rate temporaneo e definitivo;
-- disponibilità Space;
-- durata picking;
-- tasso ordini parziali;
-- tempo creazione label;
-- tracking pendenti;
-- riconciliazioni aperte.
-
-### 20.5 Tracing pianificato
-
-Il correlation ID verrà propagato come metadata verso client HTTP e, dove supportato, come header del provider. Le future span copriranno:
-
-```text
-HTTP request
-use case
-transaction
-outbox publish
-worker claim
-provider request
-reconciliation
-```
-
----
-
-## 21. Health check
-
-### 21.1 Liveness
-
-`GET /health/live`
-
-Verifica che il processo HTTP risponda. Non interroga dipendenze esterne.
-
-### 21.2 Readiness
-
-`GET /health/ready`
-
-Verifica:
-
-- connessione PostgreSQL;
-- presenza della tabella migrazioni;
-- versione minima dello schema;
-- connessione e autenticazione Redis;
-- risposta `PING` Redis.
-
-In production il payload espone soltanto `ready` o `unavailable`. Nginx limita l’endpoint alle reti private.
-
-### 21.3 Evoluzione
-
-La versione minima dello schema viene letta dal manifest versionato. Gli errori di readiness verranno registrati con rate limiting per mantenere diagnostica utile e controllare il volume dei log.
-
----
-
-## 22. Sicurezza
-
-### 22.1 Configurazione production
-
-L’avvio production richiede:
-
-- `APP_ENV=production`;
-- `APP_DEBUG=false`;
-- `APP_URL` HTTPS;
-- trusted proxy espliciti;
-- secret PostgreSQL e Redis robusti;
-- immagini applicative associate al commit.
-
-### 22.2 Segreti
-
-- segreti montati tramite file sotto `/run/secrets` o secret manager equivalente;
-- credenziali escluse da repository, command line e log;
-- rotazione indipendente dal codice;
-- permessi restrittivi sui file locali;
-- futura integrazione con il secret manager dell’ambiente di esercizio.
-
-### 22.3 Runtime container
-
-Il Compose production applica:
-
-- utente con privilegi ridotti;
-- filesystem read-only per PHP e Nginx;
-- `no-new-privileges`;
-- capability ridotte;
-- limiti CPU, memoria e processi;
-- tmpfs con `noexec` e `nosuid`;
-- rete backend interna;
-- storage persistente dedicato.
-
-### 22.4 Nginx e frontiera
-
-- il reverse proxy termina TLS e applica HSTS;
-- Nginx inoltra esclusivamente al front controller;
-- readiness accessibile dalle reti private;
-- header di sicurezza applicati a livello web server e Kernel;
-- il binding predefinito production usa `127.0.0.1`.
-
-### 22.5 Autenticazione e autorizzazione
-
-Pianificato:
-
-- utenti interni;
-- password hashate con algoritmo PHP corrente;
-- sessioni sicure;
-- ruoli e permessi;
-- CSRF;
-- scadenza e revoca sessioni;
-- audit login e operazioni sensibili;
-- rate limiting;
-- eventuale MFA per ruoli privilegiati.
-
-### 22.6 Dati personali
-
-Prima degli adapter reali verranno definite:
-
-- minimizzazione dell’indirizzo e dei contatti;
-- cifratura selettiva, quando richiesta;
-- redazione nei log e nelle delivery;
-- retention per ordini, indirizzi, label e payload;
-- cancellazione o anonimizzazione;
-- permessi per consultazione e ristampa;
-- gestione degli accessi amministrativi.
-
-### 22.7 Supply chain
-
-Implementato:
-
-- `composer.lock` versionato;
-- `composer audit --locked`;
-- GitHub Actions referenziate tramite SHA;
-- Dependabot per Composer, Actions e Docker;
-- immagini applicative taggate con commit;
-- build production verificata dalla CI.
-
-Pianificato:
-
-- digest per tutte le immagini base;
-- scansione container;
-- secret scanning;
-- SBOM e firma degli artifact, quando l’infrastruttura lo supporterà.
-
----
-
-## 23. Topologia runtime
-
-### 23.1 Sviluppo
-
-```mermaid
-flowchart LR
-    Browser --> Nginx
-    Nginx --> PHP[PHP-FPM]
-    PHP --> Postgres[(PostgreSQL)]
-    PHP --> Redis[(Redis)]
-    Worker[Worker futuro] --> Postgres
-    Worker --> Redis
-```
-
-Il Compose development privilegia iterazione rapida, bind mount del repository e strumenti di sviluppo.
-
-### 23.2 Produzione
-
-```mermaid
-flowchart LR
-    Internet --> Proxy[Reverse proxy / LB]
-    Proxy --> Nginx
-    Nginx --> PHP[PHP-FPM runtime]
-    PHP --> Postgres[(PostgreSQL)]
-    PHP --> Redis[(Redis)]
-    Migration[Migration job] --> Postgres
-    Worker[Worker automation:run] --> Postgres
-    Worker --> Redis
-    Worker --> Providers[Marketplace / Space / GLS / BRT]
-```
-
-Servizi attuali del Compose production:
-
-| Servizio | Ruolo |
-|---|---|
-| `php` | runtime PHP-FPM |
-| `migration` | esecuzione Phinx read-only con il solo secret PostgreSQL |
-| `nginx` | web server applicativo |
-| `postgres` | database autorevole |
-| `redis` | cache e coordinamento |
-
-Il comando one-shot `automation:run` usa la stessa immagine applicativa. Un servizio supervisionato o un CronJob dedicato verrà aggiunto quando saranno attivati i primi handler provider.
-
-### 23.3 Storage
-
-| Volume | Contenuto |
-|---|---|
-| `postgres_data` | dati PostgreSQL |
-| `redis_data` | persistenza Redis append-only |
-| `app_storage` | cache, log locali quando richiesti, label e upload controllati |
-
-La conservazione delle label richiederà una decisione tra volume locale, object storage e recupero on-demand dal provider.
-
----
-
-## 24. Build e immagini
-
-### 24.1 PHP production
-
-La build multistage produce:
-
-- stage base con estensioni necessarie;
-- stage dipendenze Composer;
-- stage runtime privo degli strumenti di migrazione;
-- stage migration con Phinx e migrazioni.
-
-L’autoload autorevole viene generato dopo la copia delle classi applicative e verificato durante la build.
-
-### 24.2 Redis
-
-L’immagine Redis genera un file di configurazione temporaneo leggendo il secret. La password resta fuori dagli argomenti del processo. Redis utilizza AOF per persistenza.
-
-### 24.3 Nginx
-
-L’immagine Nginx include configurazione e document root. Il servizio opera con filesystem read-only e tmpfs per directory runtime.
-
----
-
-## 25. Deploy
-
-Sequenza production prevista:
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml config
-docker compose --env-file .env.production -f docker-compose.prod.yml build
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d postgres redis
-docker compose --env-file .env.production -f docker-compose.prod.yml \
-  --profile tools run --rm migration
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d php nginx
-```
-
-Con worker operativi, la sequenza diventerà:
-
-1. build e pubblicazione artifact;
-2. backup o snapshot pre-deploy secondo policy;
-3. avvio infrastruttura;
-4. migrazioni compatibili con la versione corrente;
-5. deploy runtime HTTP;
-6. verifica liveness e readiness;
-7. deploy worker e scheduler;
-8. smoke test funzionale;
-9. monitoraggio rafforzato post-deploy.
-
-### 25.1 Compatibilità delle migrazioni
-
-Le migrazioni che accompagnano deploy progressivi devono supportare una finestra di compatibilità tra vecchia e nuova versione. Operazioni distruttive verranno separate in deploy successivi dopo la migrazione dei dati.
-
-### 25.2 Rollback
-
-Il rollback applicativo utilizzerà l’immagine del commit precedente. Il rollback dati seguirà la politica ufficiale delle migrazioni e il runbook di restore.
-
----
-
-## 26. CI e controllo qualità
-
-### 26.1 Job quality
-
-Verifica:
-
-- installazione dipendenze;
-- `composer validate --strict`;
-- `composer audit --locked`;
-- migrazioni PostgreSQL reali;
-- controllo architetturale;
-- test unitari;
-- test integration PostgreSQL e Redis.
-
-### 26.2 Job static analysis
-
-Esegue PHPStan in parallelo.
-
-### 26.3 Job production smoke
-
-Verifica:
-
-1. configurazione del Compose;
-2. build immagini PHP, migration, Nginx e Redis;
-3. avvio PostgreSQL;
-4. avvio Redis autenticato;
-5. migrazioni tramite immagine dedicata;
-6. avvio PHP-FPM;
-7. avvio Nginx;
-8. richiesta HTTP a `/health/live`;
-9. diagnostica container in caso di errore;
-10. cleanup dello stack.
-
-### 26.4 Comandi locali
-
-```bash
-composer ci:fast
-composer ci:full
-```
-
-`ci:fast` esegue architettura, test e PHPStan. `ci:full` aggiunge validazione Composer e audit.
-
----
-
-## 27. Strategia di test
-
-### 27.1 Unit test
-
-Coprono:
-
-- value object;
-- invarianti;
-- macchina a stati;
-- calcolo quantità;
-- peso volumetrico;
-- mapping puro;
-- classificazione errori;
-- redazione dei dati sensibili.
-
-### 27.2 Integration test
-
-Coprono:
-
-- repository PostgreSQL;
-- migrazioni;
-- vincoli;
-- transaction boundary;
-- optimistic locking;
-- outbox;
-- concorrenza con `SKIP LOCKED`;
-- Redis;
-- readiness;
-- adapter contro server fake o sandbox.
-
-### 27.3 Contract test
-
-Ogni adapter dovrà avere fixture versionate per:
-
-- richieste valide;
-- risposte valide;
-- errori temporanei;
-- errori definitivi;
-- payload incompleti;
-- paginazione;
-- idempotenza.
-
-### 27.4 End-to-end
-
-Il primo test end-to-end completo dovrà attraversare:
-
-```text
-Marketplace fake
-  -> import
-  -> accettazione
-  -> indirizzo
-  -> persistenza
-  -> Space fake
-  -> disponibilità
-  -> picking
-  -> corriere fake GLS o BRT
-  -> label
-  -> tracking marketplace
-```
-
-### 27.5 Test non funzionali
-
-Pianificati:
-
-- carico import ordini;
-- throughput worker;
-- contesa sul claim outbox;
-- resilienza a provider lenti;
-- retry storm;
-- crescita delle tabelle tecniche;
-- restore da backup;
-- test dei permessi operativi.
-
----
-
-## 28. Scalabilità
-
-### 28.1 HTTP
-
-PHP-FPM è stateless rispetto al dominio. Le istanze HTTP possono essere replicate dietro il reverse proxy, condividendo PostgreSQL, Redis e storage esterno.
-
-### 28.2 Worker
-
-I worker si scalano orizzontalmente. `FOR UPDATE SKIP LOCKED`, lock token e idempotency key coordinano l’elaborazione concorrente.
-
-### 28.3 Database
-
-Evoluzione prevista:
-
-- indici basati sui profili di query reali;
-- pool di connessioni esterno quando necessario;
-- replica read-only per dashboard e report, dopo misurazione;
-- partizionamento futuro di audit e delivery per volume;
-- retention e archiviazione dei payload tecnici.
-
-### 28.4 Redis
-
-Redis supporta cache, rate limiting, lock di breve durata e segnali operativi. Lo stato indispensabile alla ricostruzione del processo resta in PostgreSQL.
-
-### 28.5 Estrazione di servizi
-
-Un adapter o workload potrà essere estratto in un servizio dedicato quando latenza, dipendenze o profilo di scala lo giustificheranno. I contratti applicativi rimarranno stabili, riducendo il costo dell’estrazione.
-
----
-
-## 29. Backup, restore e continuità operativa
-
-Pianificato prima dell’esercizio:
-
-- backup automatici PostgreSQL;
-- cifratura dei backup;
-- retention differenziata;
-- restore periodico verificato;
-- RPO e RTO dichiarati;
-- esportazione o replica delle label, quando richiesto;
-- rotazione e recupero dei secret;
-- runbook per provider indisponibile;
-- procedura di riconciliazione massiva;
-- verifica integrità dopo incidente.
-
-La persistenza Redis viene trattata come supporto. La perdita di Redis deve consentire ricostruzione o ripresa a partire da PostgreSQL.
-
----
-
-## 30. Operatività e pannello
-
-Il pannello operativo dovrà offrire viste orientate alle eccezioni, oltre alla normale consultazione.
-
-### 30.1 Lista ordini
-
-Filtri previsti:
-
-- cliente;
-- origine ordine;
-- marketplace;
-- stato;
-- data;
-- ordine esterno;
-- identificativo Space;
-- tracking;
-- presenza di errori;
-- parziale;
-- revisione manuale;
-- età nello stato.
-
-### 30.2 Dettaglio ordine
-
-Sezioni previste:
-
-- testata, cliente, origine e snapshot degli indirizzi;
-- righe e quantità;
-- storico stati;
-- disponibilità Space;
-- picking e scansioni;
-- parziale e decisioni;
-- colli, corriere e label;
-- tracking marketplace;
-- outbox;
-- delivery esterne;
+- dashboard;
+- clienti;
+- ordini;
+- catalogo prodotti, prezzo e stock;
+- gestione ricarichi;
+- picking;
+- spedizioni;
+- integrazioni;
 - audit;
-- correlation ID.
+- utenti e impostazioni.
 
-### 30.3 Azioni controllate
+Non espone scheduler, worker, retry provider o dead letter. Tali funzioni appartengono al pannello operativo futuro di `hapa-automation`.
 
-- retry di una delivery;
-- sblocco o dead-letter management;
-- nuova riconciliazione;
-- approvazione parziale;
-- annullamento quantità;
-- ristampa label;
-- correzione dati consentiti;
-- chiusura manuale con motivazione.
+## 13. Deploy
 
-Ogni azione richiede permesso, validazione, audit e idempotenza.
+I due repository producono immagini e Compose separati.
 
-### 30.4 Anagrafica clienti
+```text
+HAPA stack
+  nginx
+  php
+  postgres-hapa
+  redis
 
-La UI presenta elenco e dettaglio cliente con profilo, contatti, identità esterne, indirizzi e storico ordini. Query e mutazioni restano disabilitate finché non sono presenti repository, view model minimizzati, autenticazione, permessi per risorsa, CSRF e audit delle consultazioni sensibili.
+hapa-automation stack
+  worker
+  postgres-automation
+  rabbitmq
+```
 
----
+In ambienti reali RabbitMQ può essere gestito come servizio condiviso esterno. Le applicazioni usano credenziali e virtual host distinti.
 
-## 31. Decisioni architetturali correnti
+## 14. Sicurezza
 
-| Decisione | Motivazione |
-|---|---|
-| PHP 8.4 e framework custom proprietario | controllo tecnico, velocità evolutiva e riuso della foundation |
-| PostgreSQL autorevole | transazioni, vincoli, JSONB, lock concorrenti e maturità operativa |
-| Redis come supporto | bassa latenza per cache e coordinamento, con dominio persistito altrove |
-| adapter per provider | isolamento dalle API esterne e testabilità |
-| transactional outbox | affidabilità tra commit interno ed effetti esterni |
-| Docker Compose | ambiente riproducibile e deploy iniziale controllato |
-| immagini migration separate | riduzione della superficie runtime web |
-| Nginx + PHP-FPM | separazione frontiera HTTP e runtime PHP |
-| vertical slice | valore funzionale verificabile e minore accumulo di infrastruttura inutilizzata |
-| DTO immutabili | contratti chiari e riduzione degli array generici |
-| cliente canonico separato dalle identità esterne | riconciliazione controllata senza deduplicazione fragile basata sull’email |
-| snapshot indirizzi sull’ordine | integrità storica indipendente dalle modifiche della rubrica cliente |
-| origine B2C predisposta ma non operativa | evoluzione dello schema senza fingere checkout o pagamenti già disponibili |
-| contratto Shipping provider-neutral | dominio logistico stabile e adapter GLS/BRT isolati dietro una porta comune |
+- nessun database condiviso;
+- account database separati;
+- credenziali RabbitMQ separate per publisher e consumer;
+- TLS per connessioni non locali;
+- allowlist delle routing key;
+- limiti alla dimensione dei messaggi;
+- payload minimizzati;
+- audit delle modifiche commerciali in HAPA;
+- audit tecnico dei retry in `hapa-automation`;
+- rotazione dei segreti indipendente.
 
-Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`.
+## 15. Stato
 
----
+Implementato in HAPA:
 
-## 32. Stato implementativo
+- dominio ordine e persistenza transazionale;
+- outbox transazionale;
+- modello catalogo e motore ricarichi;
+- UI presentazionale del catalogo;
+- rimozione del runtime automazioni integrato.
 
-| Capacità | Stato | Note |
-|---|---|---|
-| bootstrap HTTP/CLI | implementato | condiviso tramite `Bootstrap` |
-| configurazione e secret | implementato | validazione production e secret file |
-| trusted proxy | implementato | configurazione esplicita |
-| Kernel HTTP | implementato | routing, error handling, correlation ID |
-| health live/ready | implementato | PostgreSQL, schema e Redis |
-| logging JSON e redazione | implementato | stderr e contesto strutturato |
-| Docker development | implementato | stack locale |
-| Docker production | implementato | hardening e smoke CI |
-| migrazioni PostgreSQL | implementato | schema foundation e vincoli |
-| catalogo e pricing | parziale | schema, invarianti, motore ricarichi, contratti e UI presenti; repository e adapter reali assenti |
-| contratti Marketplace | parziale | canali/connettori e righe tipizzati; adapter reali e funzioni avanzate assenti |
-| contratti Space | parziale | adapter reale e riconciliazione assenti |
-| contratto Shipping | parziale | codici GLS/BRT e DTO comuni presenti; colli tipizzati e casi d’uso assenti |
-| adapter GLS | parziale | contratto provider presente; discovery e adapter reale assenti |
-| adapter BRT | parziale | contratto provider presente; discovery e adapter reale assenti |
-| dominio Order | implementato | aggregato, righe, invarianti, macchina a stati, eventi e storico presenti |
-| anagrafica clienti | parziale | schema, vincoli, tipi dominio e UI presenti; repository e casi d’uso pianificati |
-| anagrafica ordini | parziale | dominio e repository PostgreSQL transazionale presenti; query UI e casi d’uso autorizzati pianificati |
-| e-commerce B2C | pianificato | sola compatibilità dell’origine ordine presente |
-| repository | parziale | repository Order implementato; Customer, Marketplace e query read model pianificati |
-| transaction manager | implementato | boundary PostgreSQL riutilizzabile e nesting controllato |
-| outbox worker | parziale | claim concorrente, retry, dead letter e handler audit implementati; operazioni manuali e metriche pianificate |
-| scheduler | parziale | runtime e otto job censiti; handler provider disattivati fino alla discovery |
-| picking | parziale | UI presentazionale presente; modello e casi d’uso assenti |
-| gestione parziali | pianificato | vincoli preparatori presenti |
-| autenticazione e ruoli | pianificato | prima del collegamento di dati e azioni UI |
-| pannello operativo | parziale | design system e schermate clienti/ordini/catalogo implementati; dati, auth e azioni non collegati |
-| metriche e tracing | pianificato | con workload reali |
-| backup e runbook | pianificato | requisito pre-esercizio |
+Da completare in HAPA:
 
----
+- repository prodotto e read model;
+- CRUD autorizzato dei ricarichi;
+- relay/consumer RabbitMQ;
+- autenticazione, autorizzazione e CSRF;
+- vertical slice reali.
 
-## 33. Debito tecnico controllato
+Da completare in `hapa-automation`:
 
-Elementi già identificati:
-
-1. accessi statici all’ambiente ancora presenti in alcuni servizi;
-2. scelta definitiva sulla reversibilità delle migrazioni;
-3. array strutturati ancora presenti in alcuni DTO;
-4. immagini base production da fissare tramite digest;
-5. repository proprietario da mantenere con visibilità privata;
-6. pull request e branch sostituiti da chiudere o rimuovere.
-
-Questi interventi sono riportati in `TODO.md` e verranno affrontati insieme alle vertical slice che ne beneficiano.
-
----
-
-## 34. Criterio di completamento del primo flusso operativo
-
-La prima milestone funzionale richiede un ordine che attraversi integralmente:
-
-1. import marketplace;
-2. accettazione;
-3. acquisizione indirizzo;
-4. persistenza idempotente;
-5. invio a Space;
-6. aggiornamento disponibilità;
-7. picking completo o parziale;
-8. definizione colli;
-9. creazione spedizione ed etichetta tramite GLS o BRT;
-10. invio tracking al marketplace;
-11. visibilità nel pannello;
-12. audit, log, delivery e riconciliazione consultabili;
-13. test end-to-end automatizzato;
-14. deploy e restore documentati.
-
----
-
-## 35. Governance del documento
-
-Questo documento deve essere aggiornato quando cambia uno dei seguenti elementi:
-
-- confine di un modulo;
-- modello di dominio;
-- schema dati rilevante;
-- protocollo di integrazione;
-- strategia di consistenza;
-- topologia runtime;
-- requisito di sicurezza;
-- processo di deploy;
-- strategia di test;
-- decisione architetturale duratura.
-
-Le modifiche significative richiedono una pull request dedicata e, quando opportuno, un ADR con contesto, decisione, alternative e conseguenze.
+- runtime RabbitMQ e PostgreSQL;
+- scheduler persistente;
+- proiezioni HAPA;
+- adapter provider;
+- metriche, dead letter e riconciliazioni.
