@@ -27,8 +27,10 @@ final readonly class PdoTransactionManager implements TransactionManager
 
             return $result;
         } catch (Throwable $exception) {
-            if ($this->pdo->inTransaction()) {
+            try {
                 $this->pdo->rollBack();
+            } catch (Throwable) {
+                // Conserva l’errore applicativo o di commit originale.
             }
 
             throw $exception;
