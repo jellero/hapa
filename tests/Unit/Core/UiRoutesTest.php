@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
-use Hapa\Core\Automation\AutomationCatalog;
 use Hapa\Core\Bootstrap;
 use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Database\ConnectionFactory;
@@ -32,7 +31,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/catalog', $routes->get('ui_catalog')?->getPath());
         self::assertSame('/ui/picking', $routes->get('ui_picking')?->getPath());
         self::assertSame('/ui/shipments', $routes->get('ui_shipments')?->getPath());
-        self::assertSame('/ui/automation', $routes->get('ui_automation')?->getPath());
+        self::assertNull($routes->get('ui_automation'));
         self::assertSame('/ui/integrations', $routes->get('ui_integrations')?->getPath());
         self::assertSame('/ui/users', $routes->get('ui_users')?->getPath());
         self::assertSame('/ui/audit', $routes->get('ui_audit')?->getPath());
@@ -41,21 +40,29 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/{path}', $routes->get('ui_not_found')?->getPath());
     }
 
-    public function testTheKernelServesTheCatalogPricingPage(): void
+    public function testTheKernelServesTheProductRegistryPage(): void
     {
-        $basePath = dirname(__DIR__, 3);
-        $kernel = Bootstrap::initialize($basePath)->kernel();
+        $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
         $response = $kernel->handle(Request::create('/ui/catalog'));
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('Da Space all’offerta marketplace', (string) $response->getContent());
         self::assertStringContainsString('Nuova regola di ricarico', (string) $response->getContent());
+        self::assertStringContainsString('Stock Space', (string) $response->getContent());
+    }
+
+    public function testTheRemovedAutomationPathReturnsNotFound(): void
+    {
+        $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
+        $response = $kernel->handle(Request::create('/ui/automation'));
+
+        self::assertSame(404, $response->getStatusCode());
+        self::assertStringContainsString('Pagina non trovata', (string) $response->getContent());
     }
 
     public function testTheKernelServesTheDashboardWithSecurityHeaders(): void
     {
-        $basePath = dirname(__DIR__, 3);
-        $kernel = Bootstrap::initialize($basePath)->kernel();
+        $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
         $response = $kernel->handle(Request::create('/ui'));
 
         self::assertSame(200, $response->getStatusCode());
@@ -66,8 +73,7 @@ final class UiRoutesTest extends TestCase
 
     public function testTheKernelServesCustomerMasterDataPages(): void
     {
-        $basePath = dirname(__DIR__, 3);
-        $kernel = Bootstrap::initialize($basePath)->kernel();
+        $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
 
         $collection = $kernel->handle(Request::create('/ui/customers'));
         self::assertSame(200, $collection->getStatusCode());
@@ -81,8 +87,7 @@ final class UiRoutesTest extends TestCase
 
     public function testTheKernelServesTheBrandedNotFoundPageForNestedUiPaths(): void
     {
-        $basePath = dirname(__DIR__, 3);
-        $kernel = Bootstrap::initialize($basePath)->kernel();
+        $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
         $response = $kernel->handle(Request::create('/ui/not/a/real/page'));
 
         self::assertSame(404, $response->getStatusCode());
@@ -96,12 +101,9 @@ final class UiRoutesTest extends TestCase
         $configuration = ConfigurationLoader::load();
         /** @var \Closure(UiController, ReadinessCheck, \Hapa\Core\Configuration\ApplicationConfig): RouteCollection $routeFactory */
         $routeFactory = require $basePath . '/config/routes.php';
-        $routes = $routeFactory(
-            new UiController(
-                new ViewRenderer($basePath . '/templates'),
-                $configuration->application->name,
-                new AutomationCatalog(),
-            ),
+
+        return $routeFactory(
+            new UiController(new ViewRenderer($basePath . '/templates'), $configuration->application->name),
             new ReadinessCheck(
                 new ConnectionFactory($configuration->database),
                 $configuration->redis,
@@ -109,7 +111,5 @@ final class UiRoutesTest extends TestCase
             ),
             $configuration->application,
         );
-
-        return $routes;
     }
 }

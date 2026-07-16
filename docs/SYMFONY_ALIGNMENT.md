@@ -4,389 +4,242 @@ Ultimo riesame: 16 luglio 2026.
 
 ## 1. Scopo
 
-Questo documento confronta la foundation HAPA con le pratiche e i componenti Symfony attuali. È un allegato normativo di [`ARCHITECTURE.md`](ARCHITECTURE.md): definisce quali principi vengono adottati, quali componenti Symfony risultano utili e quali responsabilità restano nel framework custom proprietario.
+HAPA usa componenti Symfony selezionati come primitive infrastrutturali del proprio framework custom. Questo documento riguarda esclusivamente il repository HAPA.
 
-HAPA usa Symfony come raccolta di primitive infrastrutturali, non come vincolo sul dominio o come sostituzione della propria architettura applicativa.
+Worker provider, scheduler, retry, dead letter, cursori e adapter asincroni appartengono a `jellero/hapa-automation` e seguono scelte tecniche autonome, purché rispettino i contratti RabbitMQ condivisi.
 
-## 2. Valutazione sintetica
+## 2. Stato sintetico HAPA
 
-La foundation corrente risulta già allineata sui punti principali:
+Già allineato:
 
 - front controller e ciclo HTTP esplicito;
-- dependency injection tramite costruttore come direzione architetturale;
-- configurazione infrastrutturale tramite ambiente e secret esterni;
-- servizi di dominio separati dal delivery HTTP;
+- dependency injection tramite costruttore;
+- container Symfony compilato;
+- configurazione tipizzata;
+- dominio separato dal delivery HTTP;
 - error handling centralizzato;
-- correlation ID, logging strutturato e health check;
-- PostgreSQL come sorgente autorevole;
-- messaggistica asincrona progettata per consegna almeno una volta;
-- test unitari, integration e smoke production;
-- componenti Symfony selezionati al posto dell’adozione indiscriminata del framework completo.
+- correlation ID e logging strutturato;
+- health check;
+- PostgreSQL autorevole;
+- transactional outbox;
+- test unitari, integrazione e smoke production.
 
-Le integrazioni necessarie riguardano soprattutto composition root, sicurezza del pannello, client HTTP, ciclo di vita dei worker e scheduler.
+Da completare:
 
-## 3. Decisione sul framework
+- autenticazione e autorizzazione;
+- CSRF e sessioni;
+- validazione strutturata dei form e dei messaggi RabbitMQ;
+- relay e consumer RabbitMQ;
+- inbox idempotente;
+- rate limiting applicativo;
+- test di contratto con `hapa-automation`.
 
-### 3.1 Componenti da adottare
+## 3. Componenti Symfony in HAPA
 
-La direzione consigliata comprende:
+### Adottati
 
-- `symfony/dependency-injection` per il container compilato;
-- `symfony/config` soltanto dove serve validazione strutturata di configurazioni complesse;
-- `symfony/http-client` per gli adapter Marketplace, Space, GLS e BRT;
-- `symfony/validator` per validazione ai confini HTTP e provider;
-- `symfony/serializer` quando riduce il mapping ripetitivo, mantenendo DTO espliciti e mapping controllato;
-- `symfony/clock` per tempo deterministico in dominio, retry, lock e scheduler;
-- `symfony/password-hasher`, `symfony/security-csrf` e componenti Security necessari al pannello operativo;
-- `symfony/rate-limiter` per login, azioni operative e quote applicative;
-- `symfony/lock` per sezioni critiche distribuite e prevenzione della sovrapposizione dei job.
+- `symfony/dependency-injection`;
+- `symfony/http-foundation`;
+- `symfony/routing`;
+- `symfony/console`;
+- `symfony/dotenv`.
 
-### 3.2 Componenti da valutare in seguito
+### Da adottare quando richiesti dalla vertical slice
 
-- Messenger può fornire primitive di worker, handler e lifecycle, ma la transactional outbox PostgreSQL resta la sorgente durevole delle intenzioni applicative.
-- Scheduler può fornire trigger e diagnostica, purché l’emissione dei job resti protetta da lock distribuito e cursori persistenti.
-- Cache può essere adottata per pool e stampede protection, mantenendo Redis come supporto e PostgreSQL come sorgente autorevole.
+- `symfony/validator` per request, form, comandi e messaggi RabbitMQ;
+- `symfony/serializer` per mapping controllato degli envelope;
+- `symfony/clock` quando sostituisce l’interfaccia Clock proprietaria senza perdere determinismo;
+- componenti Symfony Security necessari a password, sessione, autenticazione e autorizzazione;
+- `symfony/security-csrf`;
+- `symfony/rate-limiter` per login e azioni applicative;
+- `symfony/lock` soltanto per sezioni critiche del processo HAPA.
 
-### 3.3 Componenti esclusi come requisito architetturale
-
-HAPA non richiede:
+### Non richiesti come vincolo
 
 - FrameworkBundle;
 - Doctrine ORM;
-- bundle applicativi per organizzare il dominio;
-- un secondo sistema di coda che replichi la transactional outbox;
-- controller contenenti logica di business;
-- service locator o accesso globale al container.
+- bundle per organizzare il dominio;
+- service locator;
+- controller con logica di business;
+- Messenger come unica copia durevole degli eventi;
+- Scheduler Symfony nel repository HAPA.
 
-## 4. Dependency injection e composition root
+## 4. Composition root
 
-Symfony raccomanda autowiring, autoconfiguration, servizi privati e constructor injection. HAPA adotta lo stesso principio con una configurazione PHP coerente con il framework custom proprietario.
+Il composition root HAPA deve:
 
-### 4.1 Container compilato
+- registrare servizi privati per impostazione predefinita;
+- esporre soltanto entry point necessari;
+- usare constructor injection;
+- dichiarare alias tra porte e implementazioni;
+- compilare e validare il container;
+- confinare lettura di ambiente e secret;
+- non registrare worker o adapter provider;
+- non importare classi da `hapa-automation`.
 
-Il composition root deve costruire un `ContainerBuilder`, registrare servizi e alias, applicare compiler pass e compilare il grafo prima dell’avvio production.
+Entità, value object e regole di dominio restano normali oggetti PHP e non ricevono il container.
 
-Requisiti:
+## 5. Configurazione
 
-- servizi privati per impostazione predefinita;
-- entry point, controller factory e console come servizi pubblici strettamente necessari;
-- constructor injection per ogni dipendenza;
-- alias espliciti tra interfacce e implementazioni;
-- named alias per client o adapter multipli;
-- tagged iterator per handler outbox, adapter marketplace, policy e subscriber;
-- validazione del container in CI;
-- cache del container compilato associata al commit distribuito;
-- ricostruzione del container a ogni deploy.
+La distinzione è:
 
-### 4.2 Confini del container
+- ambiente e secret per valori infrastrutturali;
+- oggetti immutabili tipizzati per configurazione HAPA;
+- costanti per invarianti;
+- feature flag espliciti per capacità applicative.
 
-Il container appartiene alla composizione infrastrutturale. Entità, value object e regole di dominio restano normali oggetti PHP e non ricevono il container.
+Le credenziali RabbitMQ HAPA possono essere aggiunte quando viene implementato il relay/consumer. Le credenziali Space, marketplace, GLS e BRT non appartengono alla configurazione HAPA.
 
-Il codice applicativo non usa `$container->get()` e non dipende da un service locator.
+## 6. Validazione e mapping
 
-### 4.3 Configurazione
+Symfony Validator può essere usato per:
 
-La distinzione adottata è:
-
-- variabili ambiente e secret per valori infrastrutturali che cambiano per installazione;
-- oggetti di configurazione tipizzati per comportamento applicativo;
-- costanti PHP per invarianti e valori raramente modificabili;
-- feature flag espliciti e validati per variazioni operative controllate.
-
-Il composition root rimane l’unico punto autorizzato a leggere ambiente e secret.
-
-## 5. Validazione, serializzazione e mapping
-
-### 5.1 Validazione ai confini
-
-Symfony Validator viene usato per:
-
-- request HTTP;
+- request e form;
 - comandi applicativi;
-- payload ricevuti dai provider;
-- configurazioni operative;
-- form del pannello.
+- configurazioni;
+- envelope RabbitMQ;
+- payload di eventi e risultati ricevuti.
 
-Le invarianti del dominio restano implementate nel dominio. La validazione del boundary migliora il messaggio di errore, mentre il dominio conserva l’integrità finale.
+Le invarianti restano nel dominio e nei vincoli PostgreSQL.
 
-### 5.2 Mapping provider
+Il mapping RabbitMQ segue:
 
-Ogni adapter applica la sequenza:
+```text
+JSON envelope
+  -> verifica dimensione e schema
+  -> MessageEnvelope tipizzato
+  -> payload versione-specifico
+  -> comando applicativo HAPA
+  -> dominio e repository
+```
 
-1. ricezione del payload;
-2. verifica di status, content type e dimensione;
-3. decoding controllato;
-4. validazione schema e campi obbligatori;
-5. mapping verso DTO interni;
-6. costruzione del comando o risultato applicativo;
-7. redazione del payload tecnico prima di log o persistenza.
+Campi critici mancanti producono un rifiuto tipizzato. Il consumer registra il `message_id` e applica il caso d’uso nella stessa transazione.
 
-Campi sconosciuti vengono gestiti con una policy esplicita. Campi critici mancanti o incompatibili producono un errore definitivo di mapping, non un oggetto parziale.
+## 7. Sicurezza del pannello
 
-### 5.3 Versionamento
+Il pannello richiede:
 
-Messaggi outbox, payload persistiti e DTO destinati a sopravvivere a un deploy includono una versione di schema. I worker devono poter distinguere messaggi correnti, migrabili e incompatibili.
+- sessione autenticata;
+- password hashing aggiornabile;
+- reset password sicuro;
+- cookie `Secure`, `HttpOnly` e `SameSite`;
+- rotazione e revoca sessione;
+- MFA per ruoli sensibili;
+- CSRF su login e mutazioni;
+- throttling;
+- autorizzazione deny-by-default;
+- voter o policy per risorsa e azione;
+- audit delle operazioni.
 
-## 6. Client HTTP verso provider
+La UI HAPA non espone la gestione tecnica delle dead letter provider. Un’eventuale vista di stato usa un contratto in sola lettura, redatto e autorizzato.
 
-Symfony HttpClient offre scoped client, timeout complessivi, retry configurabile e client mockabili. HAPA adotta un client dedicato per provider.
+## 8. Transactional outbox
 
-Ogni client Marketplace, Space, GLS o BRT definisce:
+La tabella outbox PostgreSQL HAPA è la sorgente durevole delle intenzioni applicative.
 
-- base URI fissa e validata;
-- credenziali iniettate tramite secret;
-- TLS verification attiva;
-- timeout di connessione;
-- timeout di inattività;
-- durata massima dell’intera operazione;
-- limite di redirect impostato a zero o a un valore minimo motivato;
-- limite alla dimensione della risposta;
-- user agent applicativo e correlation ID;
-- metriche per latenza, status e tentativi;
-- redazione di header e parametri sensibili.
+Un evento di dominio e il record outbox vengono confermati nella stessa transazione. Il futuro relay:
 
-### 6.1 Protezione SSRF
+1. reclama un batch;
+2. costruisce l’envelope RabbitMQ;
+3. pubblica con publisher confirm;
+4. registra la consegna al broker;
+5. ritenta soltanto errori temporanei del broker.
 
-Gli URL completi provenienti da payload esterni non vengono inoltrati direttamente al client.
+Il relay non esegue adapter provider, non applica rate limit provider e non contiene riconciliazione esterna.
 
-Quando un’integrazione richiede URL dinamici:
+Messenger può essere valutato come transport o lifecycle del relay/consumer, ma non sostituisce outbox e inbox PostgreSQL.
 
-- schema e host appartengono a una allowlist;
-- reti private, loopback, link-local e metadata endpoint vengono bloccati;
-- redirect verso host differenti vengono rifiutati;
-- eventuali host privati autorizzati sono dichiarati esplicitamente;
-- risoluzione DNS e destinazione effettiva restano sottoposte alla policy di rete.
+## 9. Consumer RabbitMQ
 
-### 6.2 Retry HTTP
+Il consumer HAPA deve:
 
-Il retry automatico viene applicato soltanto a errori temporanei e operazioni idempotenti.
+- usare un account RabbitMQ con ACL minime;
+- validare routing key, envelope e schema;
+- deduplicare per `message_id`;
+- gestire due versioni consecutive;
+- applicare aggiornamenti fuori ordine tramite versione entità;
+- distinguere errore temporaneo, definitivo e messaggio incompatibile;
+- evitare log di payload personali;
+- esporre metriche di lag, duplicati e rifiuti;
+- chiudersi correttamente su `SIGTERM` se eseguito come processo separato.
 
-Regole:
+Il processo consumer può appartenere all’immagine HAPA ma deve essere un entry point separato dal runtime HTTP. Non diventa un worker provider: applica esclusivamente casi d’uso HAPA a messaggi già normalizzati.
 
-- GET e letture possono essere ritentate secondo policy;
-- POST mutative richiedono idempotency key provider o una riconciliazione sicura;
-- errori di validazione e autenticazione terminano il tentativo;
-- `Retry-After` viene rispettato;
-- backoff e jitter appartengono alla policy applicativa;
-- il numero totale di tentativi comprende retry del client e retry outbox, così da evitare moltiplicazioni incontrollate.
+## 10. Client HTTP
 
-## 7. Sicurezza del pannello operativo
+HAPA usa client HTTP soltanto per capacità realmente di propria competenza. Gli adapter Space, marketplace, GLS e BRT sono eseguiti da `hapa-automation`.
 
-### 7.1 Contesto di autenticazione
+Qualunque client HAPA futuro deve comunque applicare:
 
-Il pannello usa un contesto di sicurezza principale basato su sessione. Un eventuale accesso macchina tramite token appartiene a un contesto distinto soltanto quando esiste un requisito reale.
+- base URI e allowlist;
+- TLS;
+- timeout;
+- limite redirect e dimensione risposta;
+- correlation ID;
+- redazione dei dati sensibili;
+- retry soltanto per operazioni idempotenti.
 
-### 7.2 Password
+## 11. Cache e Redis
 
-- password hashing tramite algoritmo `auto` o equivalente aggiornabile;
-- rehash trasparente al login quando i parametri diventano obsoleti;
-- password mai registrate o persistite in chiaro;
-- token di reset casuali, monouso, con scadenza e valore hashato a riposo;
-- invalidazione delle sessioni dopo reset password o modifica dei privilegi;
-- MFA richiesta per ruoli amministrativi e operazioni ad alto impatto, quando il pannello entra in esercizio reale.
+Redis resta supporto temporaneo per HAPA. Ogni uso deve definire:
 
-### 7.3 Sessione
-
-- cookie `Secure`, `HttpOnly` e `SameSite` coerente con il flusso;
-- rotazione dell’identificativo dopo autenticazione e variazione dei privilegi;
-- scadenza per inattività e durata massima assoluta;
-- logout server-side e revoca della sessione;
-- reautenticazione per gestione utenti, secret, ristampa massiva, annullamenti e replay di dead letter;
-- protezione da session fixation e session hijacking;
-- sessioni attive consultabili e revocabili dagli amministratori autorizzati.
-
-### 7.4 CSRF e login throttling
-
-La protezione CSRF copre login e ogni operazione mutativa basata su cookie.
-
-Il login throttling combina almeno:
-
-- account normalizzato;
-- indirizzo IP o rete sorgente;
-- finestra temporale;
-- risposta generica che non rivela l’esistenza dell’utente.
-
-Il rate limiting applicativo protegge login e azioni costose; la protezione da saturazione volumetrica appartiene al reverse proxy o alla frontiera di rete.
-
-### 7.5 Autorizzazione
-
-L’autorizzazione segue deny-by-default:
-
-- controllo di accesso per area e route;
-- policy o voter per risorsa e azione;
-- permessi valutati server-side;
-- separazione tra lettura, modifica, approvazione, annullamento, retry e amministrazione;
-- verifica della versione dell’ordine prima di azioni concorrenti;
-- audit di ogni azione concessa ad alto impatto e dei dinieghi rilevanti.
-
-## 8. Transactional outbox e confronto con Messenger
-
-Messenger assume che un messaggio possa essere consegnato più volte. HAPA adotta la stessa semantica e rende gli handler idempotenti.
-
-### 8.1 Sorgente durevole
-
-La tabella outbox PostgreSQL è la sorgente autorevole. Un evento di dominio e il record outbox vengono confermati nella stessa transazione.
-
-Un eventuale transport Messenger può essere usato come meccanismo di esecuzione, mai come unica copia dell’intenzione applicativa.
-
-### 8.2 Lifecycle del worker
-
-Il worker deve supportare:
-
-- identity univoca;
-- claim atomico;
-- lock con scadenza;
-- heartbeat quando il task supera una soglia;
-- timeout per singolo handler;
-- limite di memoria e numero massimo di job per processo;
-- reset dei servizi stateful tra job;
-- chiusura graceful su `SIGTERM` e `SIGINT`;
-- supervisor o orchestratore che garantisca il riavvio;
-- readiness distinta da liveness;
-- deploy con arresto e riavvio coordinato dei worker.
-
-### 8.3 Retry e dead letter
-
-- retry con limite massimo, exponential backoff e jitter;
-- classificazione temporaneo, definitivo, autenticazione, rate limit e payload incompatibile;
-- dead letter persistente;
-- comandi operativi per ispezione, retry e rimozione autorizzata;
-- replay idempotente e auditato;
-- statistiche per tipo messaggio, provider, età e numero tentativi;
-- gestione esplicita dei messaggi indecodificabili dopo variazioni di codice.
-
-## 9. Scheduler e lock distribuiti
-
-Lo scheduler produce intenzioni; i worker eseguono i casi d’uso.
-
-Ogni job ricorrente definisce:
-
-- frequenza;
-- timezone;
-- jitter;
-- policy di sovrapposizione;
-- lock distribuito;
-- scadenza del lock;
-- misfire policy dopo downtime;
-- cursore persistente o watermark;
-- intervallo massimo recuperabile;
-- idempotency key per esecuzione logica;
-- metriche su ultima esecuzione, prossima esecuzione e ritardo.
-
-Import ordini, catalogo prezzi/stock, tracking e riconciliazione conservano cursori nel database. Il cursore Space avanza dopo il commit dell’intero batch; il processo scheduler non usa la memoria come unica sorgente della pianificazione operativa.
-
-Symfony Lock può proteggere il ruolo di scheduler leader e job globali. Le modifiche concorrenti a un singolo ordine restano protette da optimistic locking e transazioni PostgreSQL.
-
-## 10. Rate limiting e quote provider
-
-Esistono tre livelli distinti:
-
-1. frontiera: protezione volumetrica e DoS sul reverse proxy;
-2. applicazione: login, endpoint sensibili e azioni costose;
-3. integrazione: quote Marketplace per operazione ordini/offerte, Space per ordini/catalogo, GLS e BRT.
-
-Le quote provider usano bucket separati per account, operazione e credenziale. Lo stato distribuito può risiedere in Redis; il fallimento di Redis deve seguire una policy esplicita per ciascun limiter.
-
-Il rate limiter non sostituisce la concorrenza controllata dei worker né il backpressure della coda.
-
-## 11. Tempo deterministico
-
-Il dominio e i servizi applicativi ricevono un’interfaccia Clock.
-
-La lettura diretta di `time()`, `microtime()` o `new DateTimeImmutable()` resta confinata nell’implementazione del clock di sistema.
-
-Questo rende deterministici:
-
-- transizioni temporali;
-- scadenze sessione e token;
-- backoff;
-- retry;
-- lock;
-- scheduler;
-- test su timezone e cambio ora legale.
-
-PostgreSQL conserva timestamp UTC; la timezone dell’operatore viene applicata nel delivery.
-
-## 12. Eventi e side effect
-
-EventDispatcher può essere usato per notifiche interne sincrone e disaccoppiamento infrastrutturale, rispettando queste regole:
-
-- il dominio produce eventi espliciti;
-- un listener sincrono non esegue chiamate provider irreversibili;
-- gli effetti esterni attraversano outbox;
-- l’ordine dei listener non rappresenta una regola di business implicita;
-- gli errori dei listener seguono una policy dichiarata;
-- gli eventi destinati alla persistenza hanno schema versionato.
-
-## 13. Cache e Redis
-
-Redis resta un acceleratore e un coordinatore.
-
-Ogni cache definisce:
-
-- namespace e versione;
-- chiave deterministica;
+- namespace;
 - TTL;
-- strategia di invalidazione;
+- invalidazione;
 - comportamento in caso di indisponibilità;
-- protezione da cache stampede quando il carico lo richiede;
-- assenza di dati personali eccedenti il minimo necessario.
+- protezione da stampede;
+- divieto di conservare l’unica copia di dati autorevoli.
 
-Dati necessari alla ricostruzione dell’ordine restano in PostgreSQL.
+Redis non coordina scheduler o adapter del repository esterno.
 
-## 14. Test allineati alle primitive Symfony
+## 12. Testing
 
-La strategia di test aggiunge:
+La strategia HAPA comprende:
 
-- compilazione e validazione del container;
-- test degli alias e dei tagged handler;
-- MockHttpClient o equivalente per adapter;
-- clock finto per retry, scadenze e scheduler;
-- test della matrice ruoli × azioni;
-- test CSRF, session rotation, login throttling e revoca;
-- test SSRF, redirect, timeout e response size;
-- test di messaggi duplicati e replay dead letter;
-- test di graceful shutdown del worker;
-- smoke test di tutte le route pubbliche con URL espliciti;
-- test di compatibilità dei messaggi persistiti tra release consecutive.
+- unit test di dominio;
+- integration test PostgreSQL e Redis;
+- test del container;
+- test HTTP e sicurezza header;
+- test outbox transazionale;
+- futuri test inbox e consumer;
+- contract test producer/consumer con `hapa-automation`;
+- smoke test production.
 
-## 15. Gate architetturali
+Per ogni contratto RabbitMQ servono fixture versionate e test su:
 
-Prima della prima integrazione reale:
+- messaggio valido;
+- duplicato;
+- versione precedente supportata;
+- versione incompatibile;
+- campi mancanti;
+- messaggio fuori ordine;
+- rollback del caso d’uso;
+- dati personali minimizzati.
 
-- container compilato e validato;
-- configurazioni tipizzate;
-- Clock iniettato;
-- scoped HTTP client con policy di rete e timeout;
-- validazione dei payload provider;
-- DTO completi e versionati dove persistiti.
+## 13. Decisioni correnti
 
-Prima del pannello operativo:
+| Area | Decisione HAPA |
+|---|---|
+| framework | custom PHP con componenti Symfony selezionati |
+| DI | container compilato e constructor injection |
+| persistenza | PostgreSQL esplicito, senza ORM obbligatorio |
+| dominio | indipendente da HTTP, RabbitMQ e provider |
+| asincronia | transactional outbox + RabbitMQ + inbox |
+| provider | esecuzione in `hapa-automation` |
+| sicurezza | componenti Symfony adottati progressivamente |
+| scheduler | assente da HAPA |
+| retry provider | assente da HAPA |
+| UI tecnica automazioni | assente da HAPA |
 
-- password hasher aggiornabile;
-- session security completa;
-- CSRF login e operazioni mutative;
-- login throttling;
-- autorizzazione deny-by-default con policy per azione;
-- audit delle operazioni sensibili.
+## 14. Sequenza consigliata
 
-Prima dei worker production:
-
-- idempotenza verificata;
-- lifecycle e graceful shutdown;
-- retry e dead letter;
-- lock e recovery;
-- supervisor e metriche;
-- compatibilità dei messaggi persistiti.
-
-## 16. Riferimenti Symfony ufficiali
-
-- [Best practices](https://symfony.com/doc/current/best_practices.html)
-- [Service container](https://symfony.com/doc/current/service_container.html)
-- [Security](https://symfony.com/doc/current/security.html)
-- [HTTP Client](https://symfony.com/doc/current/http_client.html)
-- [Messenger](https://symfony.com/doc/current/messenger.html)
-- [Scheduler](https://symfony.com/doc/current/scheduler.html)
-- [Lock](https://symfony.com/doc/current/lock.html)
-- [Rate Limiter](https://symfony.com/doc/current/rate_limiter.html)
-- [Secrets](https://symfony.com/doc/current/configuration/secrets.html)
+1. congelare i contratti messaggi;
+2. aggiungere test condivisi;
+3. implementare inbox e consumer HAPA;
+4. implementare relay outbox;
+5. completare autenticazione e autorizzazione;
+6. collegare prodotto e ricarichi;
+7. verificare una vertical slice con fake adapter;
+8. abilitare un provider sandbox nel servizio esterno;
+9. introdurre osservabilità end-to-end;
+10. abilitare gradualmente il traffico reale.

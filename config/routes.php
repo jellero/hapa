@@ -24,109 +24,37 @@ return static function (
             'application' => 'HAPA',
             'status' => 'bootstrapped',
             'interface' => '/ui',
+            'automation_service' => 'jellero/hapa-automation',
             'correlation_id' => $request->attributes->getString('correlation_id'),
         ])],
         methods: ['GET'],
     ));
 
-    $routes->add('login', new Route(
-        '/login',
-        ['_controller' => $ui->login(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('password_recovery', new Route(
-        '/password/recovery',
-        ['_controller' => $ui->recovery(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_dashboard', new Route(
-        '/ui',
-        ['_controller' => $ui->dashboard(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_customers', new Route(
-        '/ui/customers',
-        ['_controller' => $ui->customers(...)],
-        methods: ['GET'],
-    ));
-
+    $routes->add('login', new Route('/login', ['_controller' => $ui->login(...)], methods: ['GET']));
+    $routes->add('password_recovery', new Route('/password/recovery', ['_controller' => $ui->recovery(...)], methods: ['GET']));
+    $routes->add('ui_dashboard', new Route('/ui', ['_controller' => $ui->dashboard(...)], methods: ['GET']));
+    $routes->add('ui_customers', new Route('/ui/customers', ['_controller' => $ui->customers(...)], methods: ['GET']));
     $routes->add('ui_customer_detail', new Route(
         '/ui/customers/{customerId}',
         ['_controller' => $ui->customerDetail(...)],
         requirements: ['customerId' => '[A-Za-z0-9._-]{3,64}'],
         methods: ['GET'],
     ));
-
-    $routes->add('ui_orders', new Route(
-        '/ui/orders',
-        ['_controller' => $ui->orders(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_catalog', new Route(
-        '/ui/catalog',
-        ['_controller' => $ui->catalog(...)],
-        methods: ['GET'],
-    ));
-
+    $routes->add('ui_orders', new Route('/ui/orders', ['_controller' => $ui->orders(...)], methods: ['GET']));
+    $routes->add('ui_catalog', new Route('/ui/catalog', ['_controller' => $ui->catalog(...)], methods: ['GET']));
     $routes->add('ui_order_detail', new Route(
         '/ui/orders/{orderId}',
         ['_controller' => $ui->orderDetail(...)],
         requirements: ['orderId' => '[^/]{1,160}'],
         methods: ['GET'],
     ));
-
-    $routes->add('ui_picking', new Route(
-        '/ui/picking',
-        ['_controller' => $ui->picking(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_shipments', new Route(
-        '/ui/shipments',
-        ['_controller' => $ui->shipments(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_automation', new Route(
-        '/ui/automation',
-        ['_controller' => $ui->automation(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_integrations', new Route(
-        '/ui/integrations',
-        ['_controller' => $ui->integrations(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_users', new Route(
-        '/ui/users',
-        ['_controller' => $ui->users(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_audit', new Route(
-        '/ui/audit',
-        ['_controller' => $ui->audit(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_settings', new Route(
-        '/ui/settings',
-        ['_controller' => $ui->settings(...)],
-        methods: ['GET'],
-    ));
-
-    $routes->add('ui_profile', new Route(
-        '/ui/profile',
-        ['_controller' => $ui->profile(...)],
-        methods: ['GET'],
-    ));
-
+    $routes->add('ui_picking', new Route('/ui/picking', ['_controller' => $ui->picking(...)], methods: ['GET']));
+    $routes->add('ui_shipments', new Route('/ui/shipments', ['_controller' => $ui->shipments(...)], methods: ['GET']));
+    $routes->add('ui_integrations', new Route('/ui/integrations', ['_controller' => $ui->integrations(...)], methods: ['GET']));
+    $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...)], methods: ['GET']));
+    $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...)], methods: ['GET']));
+    $routes->add('ui_settings', new Route('/ui/settings', ['_controller' => $ui->settings(...)], methods: ['GET']));
+    $routes->add('ui_profile', new Route('/ui/profile', ['_controller' => $ui->profile(...)], methods: ['GET']));
     $routes->add('ui_not_found', new Route(
         '/ui/{path}',
         ['_controller' => $ui->notFound(...)],

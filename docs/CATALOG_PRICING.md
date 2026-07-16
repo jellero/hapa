@@ -1,130 +1,138 @@
-# Catalogo, prezzi e disponibilità
+# Anagrafica prodotti, prezzi, stock e ricarichi
 
 Ultimo riesame: 16 luglio 2026.
 
-## Scopo e stato
+## Scopo
 
-HAPA deve acquisire via API da Space il prezzo base e la disponibilità fisica degli articoli, applicare le policy commerciali interne e pubblicare via API prezzo finale e quantità vendibile sui marketplace abilitati.
+HAPA possiede un’anagrafica prodotti. Per ogni prodotto conserva gli identificativi commerciali, il prezzo base e il dato di stock sincronizzati da Space, oltre alle regole di ricarico configurate dagli operatori tramite interfaccia.
 
-La foundation è implementata:
+La formulazione corretta non è «HAPA applica una scorta di sicurezza e delle regole di ricarico» come attività isolata. Il flusso è:
 
-- modulo `Catalog` e tipo monetario in unità minori, senza calcoli `float`;
-- disponibilità vendibile calcolata come disponibilità Space meno scorta di sicurezza, con limite minimo zero;
-- regole di ricarico percentuale, importo fisso o prezzo fisso;
-- precedenza deterministica, priorità, prezzo minimo e prezzo massimo;
-- contratti incrementali `SpaceCatalogAdapter` e `MarketplaceOfferAdapter`;
-- schema PostgreSQL per articoli, regole e stato delle pubblicazioni;
-- versione sorgente, versione HAPA, cursore scheduler e idempotency key;
-- job `sync_space_catalog` e `publish_marketplace_offers`, creati disabilitati;
-- pagina `/ui/catalog` e aggiornamento delle aree Automazioni e Integrazioni.
+1. Space fornisce a HAPA anagrafica, prezzo e stock;
+2. HAPA conserva questi dati nel prodotto canonico;
+3. l’operatore gestisce dall’interfaccia le regole di ricarico;
+4. HAPA calcola e versiona il prezzo finale desiderato;
+5. `hapa-automation` pubblica prezzo e quantità sui marketplace e restituisce l’esito.
 
-Non sono implementati gli adapter HTTP reali, i repository applicativi, gli handler outbox, il read model autorizzato e il CRUD delle regole. Nessun prezzo o stock viene quindi letto da Space o inviato a un marketplace in questa fase.
+## Ownership
 
-## Ownership dei dati
-
-| Dato | Sorgente autorevole | Regola |
+| Dato | Sorgente autorevole | Responsabilità |
 |---|---|---|
-| identificativo articolo Space | Space | HAPA conserva il mapping senza modificarlo |
-| prezzo base | Space | un aggiornamento marketplace non lo sovrascrive |
-| disponibilità fisica | Space | valore non negativo e versionato |
-| scorta di sicurezza | HAPA | protegge da sovravendita e ritardi di propagazione |
-| regole di ricarico | HAPA | modifiche autorizzate, versionate e auditate |
-| prezzo finale | HAPA | derivato da prezzo Space e regola vincente |
-| quantità vendibile | HAPA | `max(0, disponibilità Space - scorta di sicurezza)` |
-| identificativo e versione offerta remota | marketplace | usati per riconciliazione, non come sorgente del prezzo HAPA |
+| SKU canonico HAPA | HAPA | identifica il prodotto nei casi d’uso interni |
+| identificativo prodotto Space | Space | viene mappato al prodotto HAPA |
+| prezzo base | Space | viene sincronizzato senza essere sovrascritto dai marketplace |
+| stock | Space | viene sincronizzato e versionato nel prodotto HAPA |
+| regole di ricarico | HAPA | sono gestite da interfaccia, autorizzate e auditate |
+| prezzo finale desiderato | HAPA | deriva dal prezzo Space e dalla regola applicabile |
+| stato di pubblicazione | HAPA | descrive l’ultima intenzione e l’ultimo esito noto |
+| identificativo/versione remota | marketplace | serve alla riconciliazione |
+| cursori e retry provider | `hapa-automation` | appartengono al database del servizio asincrono |
 
-Il marketplace è un destinatario della proiezione commerciale. Un valore letto in riconciliazione non diventa automaticamente autorevole: una divergenza genera ripubblicazione controllata o revisione manuale.
+Una eventuale politica di quantità pubblicabile o riserva di stock è una regola commerciale distinta e opzionale. Non deve sostituire il dato stock sincronizzato da Space né essere descritta come il centro dell’anagrafica prodotto.
 
-## Modello persistente
+## Modello prodotto
 
-### `catalog_items`
+L’anagrafica prodotto deve esporre almeno:
 
-Conserva SKU canonico, EAN opzionale, mapping Space, valuta, prezzo base in unità minori, disponibilità fisica, scorta di sicurezza, quantità vendibile generata dal database, versione Space e data dell’ultima sincronizzazione.
-
-### `pricing_rules`
-
-Una regola dichiara:
-
-- codice e nome;
-- ambito `global`, `marketplace`, `sku` o `marketplace_sku`;
-- tipo `percentage`, `fixed_amount` o `fixed_price`;
-- valore del ricarico;
+- SKU HAPA;
+- EAN o altri codici commerciali opzionali;
+- identificativo Space;
+- descrizione e stato del prodotto;
 - valuta;
-- priorità;
-- eventuale prezzo minimo e massimo;
-- finestra di validità e stato abilitato.
+- prezzo base Space in unità minori;
+- stock Space;
+- versione sorgente Space;
+- data dell’ultima sincronizzazione;
+- stato di validità del dato;
+- versione HAPA del prezzo commerciale.
 
-Le nuove regole nascono disabilitate. Il database impedisce combinazioni incoerenti tra ambito, marketplace e SKU.
+Prezzo e stock vengono aggiornati soltanto da messaggi Space validi e più recenti della versione già applicata. Gli aggiornamenti fuori ordine vengono ignorati o inviati a riconciliazione.
 
-### `marketplace_offers`
+## Regole di ricarico
 
-Conserva una sola proiezione per articolo e account-canale marketplace: prezzo con valuta e quantità desiderati, regola applicata, versione HAPA, stato di pubblicazione, idempotency key, versione remota, ultimo esito ed errore redatto.
+Le regole sono configurate dall’interfaccia HAPA e possono avere ambito:
 
-Gli stati sono `disabled`, `pending`, `syncing`, `synced` ed `error`. Il passaggio a `syncing` richiederà claim atomico o outbox; un errore temporaneo torna nel ciclo di retry, uno definitivo richiede revisione.
+- globale;
+- marketplace;
+- SKU;
+- marketplace + SKU.
 
-## Calcolo del prezzo
+Tipi supportati:
 
-HAPA seleziona una sola regola vincente per evitare ricarichi involontariamente cumulativi. La precedenza è:
+- percentuale;
+- importo fisso;
+- prezzo finale fisso.
+
+Una regola dichiara codice, nome, ambito, priorità, valuta, valore, finestra di validità, stato e limiti opzionali. Le modifiche richiedono autenticazione, autorizzazione, CSRF, optimistic locking e audit.
+
+HAPA seleziona una sola regola vincente. La precedenza è:
 
 1. marketplace + SKU;
 2. SKU;
 3. marketplace;
 4. globale.
 
-A parità di ambito vince la priorità numerica maggiore; un ulteriore pareggio viene risolto dal codice regola, così il risultato resta riproducibile. Il ricarico percentuale usa basis point e arrotondamento half-up sull’unità minore. Minimo e massimo vengono applicati dopo il ricarico.
+A parità di ambito vince la priorità numerica maggiore; il codice regola risolve in modo deterministico un ulteriore pareggio.
 
-Una valuta diversa tra prezzo Space e regola è un errore di configurazione, non una conversione implicita. Sconti, cambi valuta, imposte e promozioni restano fuori da questa foundation e appartengono alla futura fase e-commerce B2C.
+## Flusso di sincronizzazione
 
-## Flusso previsto
+### Space verso HAPA
 
-1. `sync_space_catalog` legge una pagina incrementale dall’API Space.
-2. L’adapter valida SKU, identificativo, valuta, prezzo, quantità, versione e timestamp.
-3. HAPA aggiorna l’articolo soltanto se la versione sorgente è nuova o riconciliata.
-4. PostgreSQL ricalcola la quantità vendibile sottraendo la scorta di sicurezza.
-5. HAPA seleziona la regola valida per ogni account-canale e calcola il prezzo finale.
-6. La variazione dell’offerta produce un’intenzione idempotente nello stesso transaction boundary.
-7. `publish_marketplace_offers` invia prezzo e quantità tramite il percorso attivo, diretto o SellRapido.
-8. HAPA salva identificativo, versione remota quando disponibile ed esito e riconcilia eventuali divergenze.
+1. `hapa-automation` interroga Space usando un cursore persistito nel proprio database.
+2. Il servizio valida e pubblica su RabbitMQ un evento prodotto/prezzo/stock versionato.
+3. HAPA deduplica il messaggio e aggiorna il prodotto nella propria transazione.
+4. HAPA registra l’evento applicativo derivato nella transactional outbox.
+5. Il cursore Space avanza nel servizio asincrono soltanto dopo l’esito previsto dal contratto.
 
-Il cursore Space avanza soltanto dopo il commit dell’intero batch. Una pagina parzialmente fallita non viene dichiarata completata. La chiave di pubblicazione deriva almeno da account-canale, SKU e versione HAPA, così un retry non duplica l’effetto.
+### HAPA verso marketplace
 
-## Account, canali e connettori
+1. un aggiornamento del prodotto o di una regola modifica il prezzo finale desiderato;
+2. HAPA versiona l’offerta e produce un evento di pubblicazione richiesta;
+3. `hapa-automation` consuma l’evento e chiama il solo connettore attivo per account-canale;
+4. il servizio pubblica su RabbitMQ esito, versione remota ed eventuale errore;
+5. HAPA aggiorna lo stato dell’offerta senza cambiare prezzo base o stock Space.
 
-Amazon, eMAG, Temu e IBS restano canali di vendita; SellRapido resta un connettore aggregatore. Per ogni account-canale può esistere un solo percorso attivo di pubblicazione delle offerte, come già previsto per l’import ordini.
+## Interfaccia
 
-Il contratto `MarketplaceOfferAdapter` non presume che ogni provider supporti lo stesso livello di atomicità tra prezzo e quantità. La discovery deve verificare aggiornamento congiunto o separato, quote, granularità, tempi di propagazione, stato asincrono e meccanismi di riconciliazione.
+La pagina `/ui/catalog` deve consentire, dopo i gate di sicurezza:
 
-## Failure mode e protezioni
+- ricerca e consultazione dell’anagrafica prodotti;
+- visualizzazione di prezzo e stock Space;
+- indicazione della data e versione di sincronizzazione;
+- gestione delle regole di ricarico;
+- anteprima del prezzo finale;
+- consultazione dello stato delle offerte per marketplace;
+- evidenza di dati scaduti o divergenze;
+- audit delle modifiche.
 
-| Caso | Comportamento richiesto |
+La UI HAPA non espone scheduler, retry o dead letter: tali funzioni appartengono a `hapa-automation`.
+
+## Failure mode
+
+| Caso | Comportamento |
 |---|---|
-| timeout Space prima della risposta | retry dal cursore confermato |
-| timeout dopo una pagina Space | non avanzare il cursore senza commit |
-| versione Space vecchia | ignorare e registrare la divergenza |
-| prezzo o quantità non validi | rifiutare l’articolo e non pubblicarlo |
-| regola incoerente | mantenere l’ultima offerta valida e segnalare configurazione |
-| timeout marketplace dopo invio | riconciliare per idempotency key o versione prima del retry |
-| quota provider esaurita | retry temporaneo rispettando `Retry-After` |
-| errore definitivo su un’offerta | stato `error`, audit e revisione autorizzata |
-| Space non disponibile a lungo | nessuna invenzione dello stock; applicare policy di stale data ancora da approvare |
+| evento duplicato | nessun doppio aggiornamento |
+| versione Space precedente | ignorare e registrare la divergenza |
+| prezzo o stock non validi | non aggiornare il prodotto e richiedere verifica |
+| dato Space scaduto | mostrare lo stato e applicare una policy commerciale esplicita |
+| regola incoerente | mantenere l’ultima configurazione valida |
+| timeout marketplace dopo invio | riconciliare prima del retry |
+| errore definitivo provider | stato errore e revisione autorizzata |
 
-La policy su dati Space scaduti deve essere definita prima dell’esercizio. L’opzione più prudente è sospendere o azzerare la quantità pubblicabile oltre una soglia, ma la soglia non viene scelta nel codice senza decisione operativa.
+## Gate
 
-## Gate di attivazione
+Prima dell’esercizio reale servono:
 
-I due job restano disabilitati finché non sono disponibili:
+1. repository e casi d’uso prodotto;
+2. consumer RabbitMQ HAPA idempotente;
+3. API o adapter Space verificati nel servizio `hapa-automation`;
+4. autenticazione, autorizzazione, CSRF e audit della gestione ricarichi;
+5. test di versionamento e messaggi fuori ordine;
+6. test di calcolo prezzi e rounding;
+7. riconciliazione marketplace;
+8. metriche sull’età del dato Space e sulle pubblicazioni;
+9. pilot su un solo account-canale.
 
-1. specifiche API Space e marketplace congelate per versione;
-2. account sandbox, credenziali in secret e allowlist host;
-3. repository e casi d’uso transazionali con audit;
-4. handler outbox, errori tipizzati, timeout e rate limit;
-5. test su paginazione, duplicati, versioni fuori ordine e crash a metà batch;
-6. test su rounding, minimo/massimo e precedenza delle regole;
-7. riconciliazione dopo timeout ambiguo;
-8. autorizzazione e CSRF per modificare ricarichi e scorta di sicurezza;
-9. metriche su età dato Space, coda offerte, errori e divergenze;
-10. pilot su un solo account-canale con arresto rapido.
+## Futuro B2C
 
-## Relazione con il futuro B2C
-
-Il futuro e-commerce potrà riutilizzare articolo canonico, quantità vendibile e motore prezzi come input. Restano comunque TODO distinti: varianti e contenuti, listini B2C, imposte, promozioni, carrello, checkout, pagamenti, resi e area cliente. La presenza del catalogo operativo non rende attivo alcuno storefront.
+L’anagrafica prodotto e il motore di ricarico possono essere riutilizzati dal futuro e-commerce, ma non implementano varianti, contenuti, imposte, promozioni, checkout, pagamenti, resi o area cliente.

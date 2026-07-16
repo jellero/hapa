@@ -5,27 +5,22 @@ declare(strict_types=1);
 namespace Hapa\Tests\Integration;
 
 use DateTimeImmutable;
-use Hapa\Core\Clock\FrozenClock;
 use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Database\PdoTransactionManager;
-use Hapa\Core\Outbox\OutboxHandlerRegistry;
-use Hapa\Core\Outbox\OutboxWorker;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
-use Hapa\Core\Outbox\RetryBackoff;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Domain\Order;
 use Hapa\Modules\Orders\Domain\OrderLine;
 use Hapa\Modules\Orders\Domain\OrderNumber;
 use Hapa\Modules\Orders\Domain\OrderStatus;
 use Hapa\Modules\Orders\Domain\StaleOrderVersion;
-use Hapa\Modules\Orders\Infrastructure\Automation\OrderAuditOutboxHandler;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Throwable;
 
-final class OrderOutboxAutomationTest extends TestCase
+final class OrderTransactionalOutboxTest extends TestCase
 {
     private PDO $pdo;
 
@@ -46,15 +41,14 @@ final class OrderOutboxAutomationTest extends TestCase
         }
     }
 
-    public function testOrderAndOutboxArePersistedThenProcessedIdempotently(): void
+    public function testOrderAndEventsArePersistedAtomicallyForExternalDelivery(): void
     {
         $suffix = bin2hex(random_bytes(5));
         $marketplaceId = $this->createMarketplace($suffix);
-        $outbox = new PostgresOutboxRepository($this->pdo);
         $repository = new PostgresOrderRepository(
             $this->pdo,
             new PdoTransactionManager($this->pdo),
-            $outbox,
+            new PostgresOutboxRepository($this->pdo),
             new OrderEventOutboxMapper(),
         );
         $number = new OrderNumber('ORD-' . strtoupper($suffix));
@@ -78,24 +72,37 @@ final class OrderOutboxAutomationTest extends TestCase
         $loaded->accept(new DateTimeImmutable('2026-07-16T10:01:00+00:00'));
         $repository->save($loaded, 1);
 
-        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM outbox_messages WHERE aggregate_id = :order_number');
+        $statement = $this->pdo->prepare(<<<'SQL'
+SELECT event_type, schema_version, correlation_id, status, payload::text AS payload
+FROM outbox_messages
+WHERE aggregate_id = :order_number
+ORDER BY id
+SQL);
         $statement->execute(['order_number' => (string) $number]);
-        self::assertSame(2, (int) $statement->fetchColumn());
+        /** @var list<array{event_type: string, schema_version: int|string, correlation_id: string, status: string, payload: string}> $messages */
+        $messages = $statement->fetchAll();
 
-        $clock = new FrozenClock(new DateTimeImmutable('2026-07-16T10:02:00+00:00'));
-        $worker = new OutboxWorker(
-            $outbox,
-            new OutboxHandlerRegistry([new OrderAuditOutboxHandler($this->pdo, $clock)]),
-            new RetryBackoff(30, 3600),
-            $clock,
-            300,
-        );
-        $report = $worker->runOnce('integration-worker', 10);
+        self::assertCount(2, $messages);
+        self::assertSame('pending', $messages[0]['status']);
+        self::assertSame('pending', $messages[1]['status']);
+        self::assertSame('order.changed', $messages[0]['event_type']);
+        self::assertSame('order.changed', $messages[1]['event_type']);
+        self::assertSame(1, (int) $messages[0]['schema_version']);
+        self::assertNotSame('', $messages[0]['correlation_id']);
 
-        self::assertSame(2, $report->completed);
-        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM audit_logs WHERE entity_id = :order_number');
-        $statement->execute(['order_number' => (string) $number]);
-        self::assertSame(2, (int) $statement->fetchColumn());
+        /** @var array<string, mixed> $createdPayload */
+        $createdPayload = json_decode($messages[0]['payload'], true, 512, JSON_THROW_ON_ERROR);
+        /** @var array<string, mixed> $acceptedPayload */
+        $acceptedPayload = json_decode($messages[1]['payload'], true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame('order.created', $createdPayload['change_type']);
+        self::assertSame(1, $createdPayload['version']);
+        self::assertSame('imported', $createdPayload['status']);
+        self::assertSame('order.status_changed', $acceptedPayload['change_type']);
+        self::assertSame(2, $acceptedPayload['version']);
+        self::assertSame('accepted', $acceptedPayload['status']);
+        self::assertArrayNotHasKey('order_version', $acceptedPayload);
+        self::assertArrayNotHasKey('to_status', $acceptedPayload);
 
         $this->expectException(StaleOrderVersion::class);
         $repository->save($loaded, 1);
@@ -109,8 +116,8 @@ VALUES (:code, :name, :adapter, TRUE, NOW(), NOW())
 RETURNING id
 SQL);
         $statement->execute([
-            'code' => 'automation-' . $suffix,
-            'name' => 'Automation test',
+            'code' => 'outbox-' . $suffix,
+            'name' => 'Transactional outbox test',
             'adapter' => 'test',
         ]);
         $id = $statement->fetchColumn();

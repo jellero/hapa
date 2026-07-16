@@ -4,276 +4,227 @@ Ultimo riesame: 16 luglio 2026.
 
 ## Ambito
 
-HAPA gestisce anagrafiche clienti, ordini, dati di spedizione e integrazioni con provider esterni. Sicurezza applicativa, isolamento dei dati, tracciabilità, minimizzazione delle informazioni personali e continuità operativa sono requisiti architetturali.
+HAPA gestisce anagrafiche clienti, ordini, prodotti, regole commerciali, dati di magazzino e stato applicativo delle integrazioni.
 
-Riferimenti:
-
-- [`ARCHITECTURE.md`](ARCHITECTURE.md): architettura generale;
-- [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md): modello e ciclo di vita delle anagrafiche;
-- [`SYMFONY_ALIGNMENT.md`](SYMFONY_ALIGNMENT.md): allineamento con le primitive Symfony;
-- [`TODO.md`](TODO.md): interventi aperti e gate.
+Il runtime asincrono, gli adapter provider, i cursori, i retry e le dead letter appartengono al repository autonomo `jellero/hapa-automation`. I due servizi hanno database, credenziali, immagini e cicli di deploy separati e comunicano soltanto tramite RabbitMQ.
 
 ## Principi
 
 - deny-by-default per accessi e autorizzazioni;
-- least privilege per utenti, processi, database, cache e secret;
-- defense in depth tra reverse proxy, Nginx, applicazione, PostgreSQL e container;
-- validazione di ogni input esterno;
-- separazione tra dominio, diagnostica e payload provider;
-- idempotenza e audit per operazioni irreversibili;
-- segreti e dati personali esclusi da log e messaggi di errore;
-- PostgreSQL come sorgente autorevole del processo.
+- least privilege per utenti, processi, database, broker e secret;
+- nessun database condiviso tra HAPA e `hapa-automation`;
+- validazione di ogni input HTTP o RabbitMQ;
+- idempotenza per messaggi ed effetti esterni;
+- minimizzazione di dati personali e payload;
+- segreti esclusi da codice, log, audit ed eventi;
+- audit delle decisioni applicative in HAPA;
+- audit tecnico dei provider nel servizio esterno;
+- PostgreSQL HAPA come sorgente autorevole del dominio HAPA.
 
 ## Segnalazione
 
-Le vulnerabilità devono essere comunicate al proprietario del repository attraverso un canale privato. Issue, pull request e discussioni pubbliche devono restare prive di dettagli sfruttabili, credenziali, payload reali e dati personali.
+Le vulnerabilità devono essere comunicate al proprietario tramite un canale privato. Issue, pull request e discussioni pubbliche non devono contenere credenziali, payload reali, dati personali o dettagli immediatamente sfruttabili.
 
-## Segreti
+## Segreti e identità di servizio
 
-- credenziali, token, certificati e chiavi restano fuori dal repository;
-- la produzione usa secret file montati in `/run/secrets` o un secret manager equivalente;
-- PostgreSQL e Redis ricevono i segreti tramite file;
-- i file locali sotto `secrets/` sono esclusi da Git e usano permessi restrittivi;
-- i valori di `.env.example` hanno esclusivo scopo locale;
-- i segreti production devono essere ruotabili indipendentemente dal codice;
-- log, audit e delivery tecniche applicano redazione prima della persistenza;
-- ogni rotazione prevede verifica applicativa e procedura di rollback;
-- immagini e artifact restano privi di secret decrittati;
-- eventuali vault Symfony possono essere usati come alternativa, mantenendo una sola sorgente autorevole per ambiente.
+HAPA conserva soltanto i propri secret:
 
-## Repository e supply chain
+- credenziali PostgreSQL HAPA;
+- credenziali Redis HAPA;
+- credenziali RabbitMQ limitate alle exchange e routing key necessarie;
+- secret di sessione e autenticazione quando implementati.
 
-- il repository proprietario richiede visibilità privata; lo stato aperto è tracciato nella roadmap;
-- `composer.lock` viene versionato;
-- la CI esegue `composer audit --locked`;
-- le action CI sono referenziate tramite commit SHA;
-- Dependabot propone aggiornamenti per Composer, GitHub Actions e immagini Docker;
-- gli aggiornamenti delle dipendenze attraversano pull request e pipeline completa;
-- immagini e artifact production vengono associati al commit di origine;
-- le immagini base production verranno fissate tramite digest prima dell’esercizio reale;
-- il container dependency injection verrà compilato e validato in CI;
-- dipendenze introdotte per adapter o sicurezza richiedono valutazione di manutenzione, licenza e advisory.
-
-## Dati personali
-
-Prima dell’attivazione degli adapter reali devono essere definite e verificate:
-
-- minimizzazione dei payload salvati;
-- campi soggetti a redazione, cifratura o tokenizzazione;
-- retention per indirizzi, API log, audit e label;
-- procedure di cancellazione o anonimizzazione;
-- autorizzazioni operative per visualizzazione, esportazione e ristampa;
-- tracciamento delle consultazioni sensibili;
-- separazione tra dati di dominio e diagnostica tecnica;
-- accesso ai backup limitato e auditato;
-- eliminazione sicura di file temporanei ed etichette scadute.
-
-L’anagrafica cliente tratta email, telefono, indirizzi e identificativi fiscali come dati personali. L’email normalizzata serve alla ricerca ma non produce deduplicazione automatica. Le identità esterne sono separate per sorgente e account; ogni merge richiede un caso d’uso autorizzato e auditato.
-
-La rubrica indirizzi del cliente e gli snapshot storici dell’ordine hanno finalità e retention distinte. La modifica o anonimizzazione del profilo non deve alterare silenziosamente documenti e ordini che richiedono conservazione, mentre la conservazione legale non autorizza un uso operativo illimitato. Accesso, rettifica, portabilità, cancellazione e anonimizzazione richiedono procedure verificabili anche su audit e backup.
-
-## Autenticazione e password
-
-Il pannello operativo adotterà un contesto di autenticazione principale basato su sessione. Eventuali accessi macchina tramite token appartengono a un contesto distinto quando esiste un requisito effettivo.
-
-Il layer di presentazione corrente espone soltanto route GET, stati vuoti e controlli disabilitati. Login e recupero accesso sono schermate non operative: non ricevono credenziali finché sessione, throttling, CSRF e repository utenti non sono implementati. Nessun dato personale o operativo viene inserito per finalità dimostrative.
+Le credenziali Space, marketplace, GLS e BRT appartengono a `hapa-automation` e non devono essere montate nel container HAPA.
 
 Requisiti:
 
-- password hashing aggiornabile tramite algoritmo `auto` o equivalente;
-- rehash trasparente al login quando parametri o algoritmo diventano obsoleti;
-- password assenti da log, audit, eccezioni e payload persistiti;
-- token di reset casuali, monouso, con scadenza e valore hashato a riposo;
-- risposte di login e recupero account prive di indicazioni sull’esistenza dell’utente;
-- invalidazione delle sessioni dopo reset password, disabilitazione utente o modifica dei privilegi;
-- MFA per ruoli amministrativi e operazioni ad alto impatto prima dell’esercizio reale;
-- protezione da credential stuffing tramite throttling e monitoraggio.
+- secret file o secret manager;
+- permessi restrittivi;
+- rotazione indipendente dei due servizi;
+- account RabbitMQ separati per publisher e consumer;
+- virtual host o ACL per ambiente;
+- TLS fuori dall’ambiente locale;
+- nessun secret in `.env.example`, command line o artifact CI.
 
-## Sicurezza della sessione
+## Repository e supply chain
 
-- cookie `Secure`, `HttpOnly` e `SameSite` coerente con il flusso applicativo;
-- rotazione dell’identificativo dopo autenticazione e variazione dei privilegi;
-- scadenza per inattività e durata massima assoluta;
-- logout server-side e revoca della sessione;
-- reautenticazione per gestione utenti, secret, annullamenti, ristampa massiva e replay di dead letter;
-- sessioni attive consultabili e revocabili da amministratori autorizzati;
-- invalidazione delle sessioni esistenti dopo eventi di sicurezza rilevanti;
-- clock applicativo iniettato per rendere scadenze e test deterministici.
+- repository proprietari con visibilità adeguata;
+- `composer.lock` versionato;
+- `composer audit --locked` in CI;
+- GitHub Actions referenziate tramite commit SHA;
+- aggiornamenti dipendenze tramite pull request e pipeline;
+- immagini associate al commit distribuito;
+- immagini base fissate tramite digest prima dell’esercizio reale;
+- scansione dipendenze, immagini e secret;
+- SBOM e firma artifact quando supportate dall’infrastruttura.
 
-## CSRF e login throttling
+## Dati personali
 
-- protezione CSRF sul login e su ogni operazione mutativa basata su cookie;
-- token legato all’intenzione o al form quando il rischio lo richiede;
-- throttling combinato per account normalizzato e indirizzo IP o rete sorgente;
-- limiti distinti per login, recupero credenziali e operazioni amministrative;
-- risposta uniforme in caso di limite raggiunto;
-- audit e alert su pattern ripetuti o distribuiti.
+HAPA tratta email, telefono, indirizzi, identificativi fiscali, dati ordine e spedizione come dati personali o operativi sensibili.
 
-## Autorizzazione
+Devono essere definite:
+
+- minimizzazione dei view model e dei messaggi RabbitMQ;
+- cifratura o tokenizzazione quando richiesta;
+- retention distinta per anagrafiche, ordini, audit e label;
+- cancellazione o anonimizzazione controllata;
+- autorizzazione per consultazione, export e ristampa;
+- tracciamento degli accessi sensibili;
+- gestione coerente di backup e diritti dell’interessato.
+
+Un messaggio verso `hapa-automation` contiene soltanto i dati necessari all’operazione. Payload provider grezzi non vengono copiati nel database HAPA.
+
+## Autenticazione e sessione
+
+Il pannello HAPA userà un contesto di autenticazione basato su sessione.
+
+Requisiti:
+
+- password hashing aggiornabile;
+- rehash trasparente;
+- token reset monouso, con scadenza e hash a riposo;
+- risposta uniforme per account esistente o inesistente;
+- cookie `Secure`, `HttpOnly` e `SameSite`;
+- rotazione sessione dopo login o variazione privilegi;
+- timeout per inattività e durata massima;
+- revoca server-side;
+- MFA per ruoli sensibili;
+- throttling per account e rete sorgente;
+- audit di login, dinieghi e modifiche privilegiate.
+
+Le schermate correnti restano presentazionali e non devono ricevere credenziali finché questi gate non sono implementati.
+
+## Autorizzazione e CSRF
 
 L’autorizzazione segue deny-by-default:
 
-- controllo per area e route;
-- policy o voter per risorsa e azione;
-- permessi valutati server-side;
-- separazione tra lettura, modifica, approvazione, annullamento, retry, replay e amministrazione;
-- permessi distinti per consultazione, export, merge e anonimizzazione delle anagrafiche cliente;
-- permessi distinti per modifica di scorta di sicurezza, ricarichi, limiti prezzo e attivazione delle pubblicazioni;
-- verifica della versione dell’ordine prima di azioni concorrenti;
-- audit delle operazioni con impatto operativo;
-- registrazione dei dinieghi rilevanti con dati minimizzati;
-- account di servizio con permessi limitati alla singola integrazione.
+- permessi per route, risorsa e azione;
+- separazione tra lettura, modifica, approvazione e amministrazione;
+- CSRF su login e ogni mutazione basata su cookie;
+- optimistic locking per modifiche concorrenti;
+- reautenticazione per operazioni ad alto impatto;
+- audit di ricarichi, ordini, spedizioni, utenti e configurazioni.
+
+La gestione tecnica di retry, dead letter e credenziali provider non viene esposta nella UI HAPA. Un eventuale collegamento operativo con `hapa-automation` deve essere in sola lettura o protetto da un contratto amministrativo separato.
 
 ## Validazione degli input
 
-Ogni confine applicativo applica validazione strutturata:
+HAPA valida:
 
-- request HTTP e form;
-- parametri route e query;
-- payload Marketplace, catalogo Space, offerte prezzo/stock, GLS e BRT;
-- messaggi outbox persistiti;
-- file o label ricevuti dai provider;
-- configurazioni e feature flag.
+- request, route, query e form;
+- messaggi RabbitMQ ricevuti;
+- envelope, schema version e routing key;
+- payload applicativi di prodotti, ordini ed esiti provider;
+- configurazioni e feature flag;
+- label o documenti prima della loro esposizione.
 
-La validazione del boundary usa DTO e constraint. Le invarianti del dominio restano protette nel modello e tramite vincoli PostgreSQL.
+Le invarianti finali restano nel dominio e nei vincoli PostgreSQL.
 
-## Client HTTP e protezione SSRF
+## Sicurezza RabbitMQ
 
-Ogni provider usa un client dedicato con:
+Ogni messaggio deve includere:
 
-- base URI fissa e allowlist degli host;
-- verifica TLS attiva;
-- timeout di connessione, inattività e durata massima;
-- limite redirect minimo, preferibilmente zero per operazioni mutative;
-- limite alla dimensione della risposta;
-- content type atteso e decoding controllato;
-- correlation ID e user agent identificabile;
-- redazione di `Authorization`, cookie, token, email, contatti, indirizzi, IP e parametri sensibili.
+- `message_id` stabile;
+- `event_type` ammesso;
+- `schema_version` positivo;
+- `occurred_at` UTC;
+- `correlation_id`;
+- `causation_id` quando disponibile;
+- payload JSON object minimizzato.
 
-URL derivati da payload esterni vengono validati contro schema e host autorizzati. Reti private, loopback, link-local e metadata endpoint vengono bloccati, salvo allowlist infrastrutturale esplicita.
+Controlli richiesti:
 
-I retry HTTP vengono applicati soltanto a errori temporanei e operazioni idempotenti. Operazioni mutative richiedono idempotency key o riconciliazione sicura.
+- allowlist delle routing key;
+- limite dimensione messaggi;
+- deduplica nel database locale del consumer;
+- applicazione del messaggio e aggiornamento inbox nella stessa transazione;
+- compatibilità tra almeno due versioni consecutive;
+- rifiuto in dead letter dei messaggi non decodificabili;
+- nessun ordinamento globale presunto;
+- versione entità per eventi fuori ordine;
+- metriche su lag, rifiuti e duplicati.
 
-Per i marketplace, credenziali, quote, cursori e audit sono isolati per account e connettore. Il canale sorgente viene conservato separatamente dal percorso tecnico: un ordine Amazon ricevuto tramite SellRapido non viene riclassificato come ordine SellRapido. L’attivazione concorrente di un adapter diretto e dell’aggregatore sullo stesso account-canale è vietata per prevenire doppie importazioni, notifiche e pubblicazioni prezzo/stock.
+La transactional outbox HAPA conserva l’intenzione applicativa. Il relay RabbitMQ può ritentare esclusivamente la consegna al broker; non esegue logica provider.
 
-Prezzi e quantità sono dati operativi ad alto impatto. I calcoli usano unità minori intere, la scorta di sicurezza non può diventare negativa e ogni variazione di regola richiede versione, attore e audit. HAPA non accetta aggiornamenti marketplace come sorgente implicita del prezzo base Space.
+## Sicurezza delle integrazioni provider
 
-## Webhook e callback in ingresso
+Le seguenti responsabilità appartengono a `hapa-automation`:
 
-Quando un provider usa webhook o callback:
+- allowlist host e protezione SSRF;
+- TLS e autenticazione provider;
+- timeout e limiti risposta;
+- retry HTTP e rate limit;
+- webhook, firma e anti-replay;
+- cursori e watermark;
+- dead letter e riconciliazione;
+- redazione dei payload tecnici.
 
-- firma e timestamp vengono verificati sul body originale;
-- esiste una finestra massima anti-replay;
-- l’identificativo evento è idempotente;
-- source IP o certificato vengono verificati quando il provider offre tale garanzia;
-- payload e dimensione vengono limitati;
-- la risposta HTTP viene prodotta rapidamente e il lavoro prosegue tramite outbox;
-- secret di firma supportano rotazione controllata;
-- errori di verifica producono audit minimizzato e metrica dedicata.
+HAPA definisce i dati e gli esiti applicativi ammessi, ma non contiene client HTTP concreti per Space, marketplace, GLS o BRT.
 
-## Rate limiting
+## File, label e documenti
 
-La protezione è distribuita su tre livelli:
-
-1. reverse proxy o frontiera per traffico volumetrico e DoS;
-2. applicazione per login, endpoint sensibili e azioni costose;
-3. integrazione per quote Marketplace, Space, GLS e BRT.
-
-Symfony RateLimiter o un componente equivalente può gestire i limiti applicativi. Lo stato condiviso risiede in Redis o altro backend distribuito; ogni limiter dichiara comportamento in caso di indisponibilità del backend.
-
-## Transactional outbox e worker
-
-La consegna asincrona segue semantica almeno una volta. Ogni handler deve essere idempotente oppure usare una chiave idempotente stabile derivata dall’evento di business.
-
-Requisiti di sicurezza e affidabilità:
-
-- schema versione nei messaggi persistiti;
-- validazione prima dell’esecuzione;
-- claim atomico e lock con scadenza;
-- identity univoca del worker;
-- timeout per handler;
-- reset dei servizi stateful tra job;
-- graceful shutdown su segnali di terminazione;
-- retry limitato con backoff e jitter;
-- dead letter persistente;
-- replay autorizzato, idempotente e auditato;
-- accesso ai payload falliti limitato ai ruoli necessari;
-- gestione esplicita dei messaggi indecodificabili dopo un deploy.
-
-## Scheduler e lock
-
-Ogni job ricorrente definisce frequenza, timezone, jitter, lock distribuito, policy di sovrapposizione, misfire policy e cursore persistente. Per il catalogo Space il cursore avanza solo dopo il commit del batch; la policy su dati scaduti deve essere approvata prima dell’attivazione.
-
-Symfony Lock o un meccanismo equivalente protegge il ruolo di scheduler leader e i job globali. Modifiche concorrenti a un ordine usano optimistic locking e transazioni PostgreSQL.
-
-## File, etichette e documenti
-
-- filename esterni esclusi dai path locali;
+- filename esterni non diventano path locali;
 - storage tramite identificativi interni;
-- content type e dimensione verificati;
-- accesso alle label autorizzato e auditato;
-- download con header sicuri e disposizione coerente;
-- scansione antimalware quando vengono introdotti upload o documenti non generati da provider fidati;
+- verifica di content type e dimensione;
+- accesso autorizzato e auditato;
+- download con header sicuri;
 - retention e cancellazione definite;
-- file temporanei creati con permessi restrittivi.
+- file temporanei con permessi restrittivi;
+- eventuale scansione antimalware.
 
-## Produzione
+`hapa-automation` acquisisce la label dal provider; HAPA conserva soltanto il riferimento o il contenuto secondo il contratto e la retention approvati.
+
+## Produzione HAPA
 
 La configurazione production impone:
 
 - `APP_DEBUG=false`;
 - `APP_URL` HTTPS;
-- terminazione TLS su reverse proxy o load balancer esterno;
-- HSTS sul punto di terminazione TLS;
-- ascolto HTTP applicativo limitato a loopback per impostazione predefinita;
 - trusted proxy espliciti;
-- secret file PostgreSQL e Redis sufficientemente robusti;
+- secret PostgreSQL e Redis robusti;
 - filesystem applicativo read-only;
-- job migration read-only con il solo secret PostgreSQL e ambiente minimo;
 - processi non privilegiati;
 - capability Linux ridotte;
 - reti interne per database e cache;
-- endpoint separati per liveness e readiness;
-- readiness limitata alle reti private e priva dei dettagli dei componenti in produzione;
-- messaggi delle eccezioni esclusi dai log production;
-- immagini applicative associate al commit distribuito;
-- container DI compilato e immutabile;
-- worker supervisionati e arrestati in modo graceful durante il deploy.
+- liveness e readiness separate;
+- backup e restore verificati;
+- log strutturati con redazione;
+- nessuna credenziale provider nei container HAPA.
 
-## Logging, audit e diagnostica
+Il Compose HAPA non avvia RabbitMQ, scheduler o worker provider. Il broker può essere infrastruttura esterna condivisa, governata con ACL e credenziali distinte.
 
-- ogni richiesta riceve un correlation ID;
-- il correlation ID accompagna log, delivery esterne, audit e chiamate provider;
-- i log applicativi sono strutturati;
-- chiavi e valori sensibili vengono redatti;
-- payload completi vengono persistiti soltanto quando necessari e secondo retention;
-- gli errori production espongono messaggi generici verso il client;
-- metriche e alert escludono dati personali e segreti;
-- audit e log tecnici hanno retention e autorizzazioni distinte;
-- alert coprono login anomali, dead letter, retry ripetuti, webhook invalidi e variazioni dei privilegi.
+## Logging, audit e osservabilità
 
-## Backup e ripristino
+Log tecnici:
 
-Prima dell’esercizio production devono essere disponibili:
+- JSON strutturato;
+- correlation ID;
+- nessun segreto o dato personale non necessario;
+- messaggi tecnici limitati in produzione.
 
-- backup automatici PostgreSQL;
-- cifratura e controllo accessi dei backup;
-- retention documentata;
-- restore periodico verificato;
-- definizione di RPO e RTO;
-- procedura di ricostruzione delle delivery e riconciliazione degli ordini;
-- verifica che secret, file temporanei e cache restino fuori dai backup quando superflui.
+Audit HAPA:
 
-## Risposta agli incidenti
+- attore;
+- azione;
+- entità;
+- stato precedente e successivo;
+- correlation ID;
+- timestamp.
 
-Ogni incidente deve essere collegato tramite correlation ID a log applicativi, delivery esterne e audit. Il runbook operativo deve includere:
+L’osservabilità end-to-end deve correlare HAPA, RabbitMQ e `hapa-automation` senza centralizzare payload sensibili.
 
-1. rilevazione e classificazione;
-2. contenimento;
-3. conservazione delle evidenze;
-4. rotazione dei segreti coinvolti;
-5. revoca di sessioni e token;
-6. verifica di integrità di ordini, catalogo, prezzi pubblicati, spedizioni e tracking;
-7. riconciliazione con Marketplace, Space e il corriere coinvolto;
-8. ripristino;
-9. verifica post-incidente e azioni correttive.
+## Incident response
+
+Prima dell’esercizio servono runbook per:
+
+- compromissione account utente;
+- leak o rotazione secret;
+- messaggi RabbitMQ anomali;
+- indisponibilità del broker;
+- backlog outbox o consumer;
+- provider compromesso o indisponibile;
+- duplicati e divergenze di stato;
+- restore PostgreSQL;
+- disabilitazione rapida di un account-canale o adapter.
+
+La risposta distingue incidente applicativo HAPA da incidente tecnico `hapa-automation`, mantenendo escalation e ownership esplicite.

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Ui;
 
-use Hapa\Core\Automation\AutomationCatalog;
 use Hapa\Core\View\ViewRenderer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,7 +13,6 @@ final readonly class UiController
     public function __construct(
         private ViewRenderer $views,
         private string $environment,
-        private AutomationCatalog $automationCatalog,
     ) {
     }
 
@@ -43,19 +41,19 @@ final readonly class UiController
         return $this->operational($request, 'ui/dashboard', 'dashboard', [
             'title' => 'Centro operativo',
             'eyebrow' => 'Panoramica',
-            'description' => 'Controlla il ciclo ordine, le eccezioni e lo stato delle integrazioni da un unico punto.',
+            'description' => 'Controlla anagrafiche, catalogo, ordini e stato delle integrazioni da un unico punto.',
             'metrics' => [
                 ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Read model operativo non collegato', 'tone' => 'neutral'],
                 ['label' => 'Clienti censiti', 'value' => '—', 'detail' => 'Repository clienti non collegato', 'tone' => 'info'],
-                ['label' => 'Revisione manuale', 'value' => '—', 'detail' => 'Disponibile con il dominio Order', 'tone' => 'warning'],
-                ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter corriere non collegati', 'tone' => 'success'],
+                ['label' => 'Prodotti sincronizzati', 'value' => '—', 'detail' => 'Read model catalogo non collegato', 'tone' => 'success'],
+                ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter corriere non collegati', 'tone' => 'neutral'],
             ],
             'workstreams' => [
                 ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'integration'],
                 ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Ordini persistenti', 'tone' => 'success', 'icon' => 'customer'],
-                ['label' => 'Catalogo', 'detail' => 'Prezzi Space, ricarichi e stock vendibile', 'status' => 'Modello pronto', 'tone' => 'success', 'icon' => 'box'],
-                ['label' => 'Space', 'detail' => 'Invio ordine e sincronizzazione catalogo via API', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'automation'],
-                ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'scan'],
+                ['label' => 'Catalogo', 'detail' => 'Anagrafica prodotti, prezzo e stock Space, ricarichi gestiti da interfaccia', 'status' => 'Modello pronto', 'tone' => 'success', 'icon' => 'box'],
+                ['label' => 'Space', 'detail' => 'Sorgente di prezzo e stock e destinazione degli ordini', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'integration'],
+                ['label' => 'Automazioni esterne', 'detail' => 'Runtime separato nel repository hapa-automation tramite RabbitMQ', 'status' => 'Estratto', 'tone' => 'info', 'icon' => 'automation'],
                 ['label' => 'Corrieri', 'detail' => 'GLS e BRT (Bartolini)', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'truck'],
             ],
         ]);
@@ -94,7 +92,7 @@ final readonly class UiController
         return $this->collection($request, 'orders', [
             'title' => 'Ordini',
             'eyebrow' => 'Anagrafiche e operatività',
-            'description' => 'Consulta l’anagrafica ordini e controlla ogni origine lungo l’intero flusso di fulfilment.',
+            'description' => 'Consulta l’anagrafica ordini e controlla ogni origine lungo il flusso di fulfilment.',
             'searchLabel' => 'Cerca per ordine, cliente, origine, SKU o tracking',
             'filters' => ['Tutti gli stati', 'Da accettare', 'In attesa merce', 'Picking', 'Revisione manuale', 'Completati'],
             'columns' => ['Ordine', 'Cliente', 'Origine', 'Stato', 'Righe', 'Aggiornato', 'Azioni'],
@@ -108,9 +106,9 @@ final readonly class UiController
     public function catalog(Request $request): Response
     {
         return $this->operational($request, 'ui/catalog', 'catalog', [
-            'title' => 'Catalogo, prezzi e disponibilità',
-            'eyebrow' => 'Offerte di vendita',
-            'description' => 'Controlla il dato Space, la scorta di sicurezza, le regole di ricarico e la pubblicazione delle offerte sui marketplace.',
+            'title' => 'Anagrafica prodotti, prezzi e stock',
+            'eyebrow' => 'Catalogo commerciale',
+            'description' => 'Consulta prezzo e stock sincronizzati da Space e gestisci da interfaccia le regole di ricarico applicate alle offerte.',
         ]);
     }
 
@@ -158,29 +156,20 @@ final readonly class UiController
         ]);
     }
 
-    public function automation(Request $request): Response
-    {
-        return $this->operational($request, 'ui/automation', 'automation', [
-            'title' => 'Automazioni',
-            'eyebrow' => 'Scheduler e affidabilità',
-            'description' => 'Controlla il ciclo automatico ordini e spedizioni, con outbox transazionale, retry, dead letter e gate manuali.',
-            'automations' => $this->automationCatalog->definitions(),
-        ]);
-    }
-
     public function integrations(Request $request): Response
     {
         return $this->operational($request, 'ui/integrations', 'integrations', [
             'title' => 'Integrazioni',
             'eyebrow' => 'Ecosistema',
-            'description' => 'Configura account marketplace, servizi e corrieri mantenendo separati canale, connettore e provider.',
+            'description' => 'Configura account e provider. L’esecuzione asincrona risiede nel servizio separato hapa-automation.',
             'integrations' => [
+                ['name' => 'hapa-automation', 'kind' => 'Servizio separato · RabbitMQ · database proprio', 'code' => 'automation', 'status' => 'Repository dedicato', 'tone' => 'success'],
                 ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore · ordini e offerte', 'code' => 'sellrapido', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'Amazon', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'eMAG', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'Temu', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'IBS', 'kind' => 'Canale · offerte via percorso verificato', 'code' => 'ibs', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'Space', 'kind' => 'Ordini · prezzi e disponibilità via API', 'code' => 'space', 'status' => 'Contratti pronti', 'tone' => 'info'],
+                ['name' => 'Space', 'kind' => 'Sorgente prezzo e stock · destinazione ordini', 'code' => 'space', 'status' => 'Contratti pronti', 'tone' => 'info'],
                 ['name' => 'GLS', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
                 ['name' => 'BRT (Bartolini)', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'brt', 'status' => 'Contratto pronto', 'tone' => 'info'],
             ],
@@ -210,10 +199,10 @@ final readonly class UiController
             'eyebrow' => 'Controllo',
             'description' => 'Ricostruisci azioni operative, cambi di stato e accessi sensibili.',
             'searchLabel' => 'Cerca attore, azione, entità o correlation ID',
-            'filters' => ['Tutti gli eventi', 'Clienti', 'Ordini', 'Spedizioni', 'Utenti', 'Retry e replay', 'Sicurezza'],
+            'filters' => ['Tutti gli eventi', 'Clienti', 'Prodotti', 'Ordini', 'Spedizioni', 'Utenti', 'Sicurezza'],
             'columns' => ['Data e ora', 'Attore', 'Azione', 'Entità', 'Correlation ID', 'Dettaglio'],
             'emptyTitle' => 'Nessun evento di audit',
-            'emptyBody' => 'Gli eventi ordine vengono già proiettati in modo idempotente; la consultazione richiede ancora query repository, autenticazione e autorizzazione.',
+            'emptyBody' => 'La consultazione richiede query repository, autenticazione e autorizzazione.',
             'emptyIcon' => 'audit',
             'primaryAction' => 'Esporta',
         ]);
@@ -237,10 +226,10 @@ final readonly class UiController
                 ],
                 [
                     'title' => 'Notifiche operative',
-                    'description' => 'Canali e soglie saranno disponibili insieme a metriche e alerting.',
+                    'description' => 'Metriche, code e dead letter sono esposte dal servizio hapa-automation.',
                     'fields' => [
-                        ['label' => 'Dead letter', 'value' => 'Non configurato'],
-                        ['label' => 'Provider indisponibile', 'value' => 'Non configurato'],
+                        ['label' => 'Canale eventi', 'value' => 'RabbitMQ'],
+                        ['label' => 'Runtime automazioni', 'value' => 'Servizio esterno'],
                         ['label' => 'Ordini in revisione', 'value' => 'Non configurato'],
                     ],
                 ],
@@ -332,7 +321,6 @@ final readonly class UiController
             [
                 'label' => 'Controllo',
                 'items' => [
-                    ['label' => 'Automazioni', 'href' => '/ui/automation', 'icon' => 'automation', 'active' => 'automation'],
                     ['label' => 'Integrazioni', 'href' => '/ui/integrations', 'icon' => 'integration', 'active' => 'integrations'],
                     ['label' => 'Audit', 'href' => '/ui/audit', 'icon' => 'audit', 'active' => 'audit'],
                 ],

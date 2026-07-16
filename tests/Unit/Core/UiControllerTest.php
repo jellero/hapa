@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
-use Hapa\Core\Automation\AutomationCatalog;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use PHPUnit\Framework\TestCase;
@@ -25,7 +24,7 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('<fieldset disabled>', (string) $response->getContent());
     }
 
-    public function testItRendersEveryOperationalArea(): void
+    public function testItRendersEveryHapaOperationalArea(): void
     {
         $controller = $this->controller();
         $request = $this->request('/ui');
@@ -36,7 +35,6 @@ final class UiControllerTest extends TestCase
             $controller->catalog($request),
             $controller->picking($request),
             $controller->shipments($request),
-            $controller->automation($request),
             $controller->integrations($request),
             $controller->users($request),
             $controller->audit($request),
@@ -54,8 +52,7 @@ final class UiControllerTest extends TestCase
     public function testItEscapesSearchInputInCollectionPages(): void
     {
         $request = $this->request('/ui/orders?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
-        $response = $this->controller()->orders($request);
-        $content = (string) $response->getContent();
+        $content = (string) $this->controller()->orders($request)->getContent();
 
         self::assertStringNotContainsString('<script>alert(1)</script>', $content);
         self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $content);
@@ -64,7 +61,6 @@ final class UiControllerTest extends TestCase
     public function testItPresentsBrtAndProviderNeutralShipmentCopy(): void
     {
         $controller = $this->controller();
-
         $integrations = (string) $controller->integrations($this->request('/ui/integrations'))->getContent();
         $shipments = (string) $controller->shipments($this->request('/ui/shipments'))->getContent();
 
@@ -74,36 +70,31 @@ final class UiControllerTest extends TestCase
         self::assertStringNotContainsString('Stato GLS', $shipments);
     }
 
-    public function testItPresentsTheConcreteAutomationPlanAndRuntime(): void
-    {
-        $content = (string) $this->controller()->automation($this->request('/ui/automation'))->getContent();
-
-        self::assertStringContainsString('8 job censiti', $content);
-        self::assertStringContainsString('Accetta ordini completi', $content);
-        self::assertStringContainsString('Esporta verso Space', $content);
-        self::assertStringContainsString('Sincronizza catalogo Space', $content);
-        self::assertStringContainsString('Pubblica offerte marketplace', $content);
-        self::assertStringContainsString('Gestisci parziali confermati', $content);
-        self::assertStringContainsString('bin/console automation:run', $content);
-        self::assertStringContainsString('BRT', $content);
-    }
-
-    public function testItPresentsSpacePricingAndMarketplaceAvailabilityFlow(): void
+    public function testItPresentsTheProductRegistryAndMarkupFlow(): void
     {
         $content = (string) $this->controller()->catalog($this->request('/ui/catalog'))->getContent();
 
-        self::assertStringContainsString('Catalogo, prezzi e disponibilità', $content);
-        self::assertStringContainsString('Space fornisce prezzo base e disponibilità fisica', $content);
-        self::assertStringContainsString('Motore ricarichi', $content);
+        self::assertStringContainsString('Anagrafica prodotti, prezzi e stock', $content);
+        self::assertStringContainsString('Space sincronizza prezzo e stock del prodotto', $content);
+        self::assertStringContainsString('Nuova regola di ricarico', $content);
         self::assertStringContainsString('Marketplace + SKU', $content);
-        self::assertStringContainsString('Adapter spenti', $content);
+        self::assertStringContainsString('hapa-automation', $content);
+        self::assertStringNotContainsString('HAPA applica scorta di sicurezza', $content);
+    }
+
+    public function testItPresentsAutomationAsASeparateIntegration(): void
+    {
+        $content = (string) $this->controller()->integrations($this->request('/ui/integrations'))->getContent();
+
+        self::assertStringContainsString('hapa-automation', $content);
+        self::assertStringContainsString('RabbitMQ', $content);
+        self::assertStringContainsString('database proprio', $content);
     }
 
     public function testItIgnoresUnknownCollectionFilters(): void
     {
         $request = $this->request('/ui/orders?status=not-a-real-status');
-        $response = $this->controller()->orders($request);
-        $content = (string) $response->getContent();
+        $content = (string) $this->controller()->orders($request)->getContent();
 
         self::assertStringNotContainsString('value="not-a-real-status" selected', $content);
         self::assertStringContainsString('<option value="Tutti gli stati">Tutti gli stati</option>', $content);
@@ -113,8 +104,7 @@ final class UiControllerTest extends TestCase
     {
         $request = $this->request('/ui/orders/example');
         $request->attributes->set('orderId', '<img src=x onerror=alert(1)>');
-        $response = $this->controller()->orderDetail($request);
-        $content = (string) $response->getContent();
+        $content = (string) $this->controller()->orderDetail($request)->getContent();
 
         self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $content);
         self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $content);
@@ -124,8 +114,7 @@ final class UiControllerTest extends TestCase
     {
         $request = $this->request('/ui/customers/example');
         $request->attributes->set('customerId', '<img src=x onerror=alert(1)>');
-        $response = $this->controller()->customerDetail($request);
-        $content = (string) $response->getContent();
+        $content = (string) $this->controller()->customerDetail($request)->getContent();
 
         self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $content);
         self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $content);
@@ -134,7 +123,6 @@ final class UiControllerTest extends TestCase
     public function testRendererRejectsTemplateTraversal(): void
     {
         $this->expectException(RuntimeException::class);
-
         $this->renderer()->render('../secrets');
     }
 
@@ -148,7 +136,7 @@ final class UiControllerTest extends TestCase
 
     private function controller(): UiController
     {
-        return new UiController($this->renderer(), 'testing', new AutomationCatalog());
+        return new UiController($this->renderer(), 'testing');
     }
 
     private function renderer(): ViewRenderer

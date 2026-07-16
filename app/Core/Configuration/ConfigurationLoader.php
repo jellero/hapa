@@ -46,12 +46,6 @@ final class ConfigurationLoader
             self::decimal('INTEGRATION_REQUEST_TIMEOUT', '30.0'),
             self::integer('INTEGRATION_MAX_RESPONSE_BYTES', '2097152'),
         );
-        $automation = new AutomationConfig(
-            self::integer('AUTOMATION_BATCH_SIZE', '50'),
-            self::integer('AUTOMATION_LOCK_TIMEOUT', '300'),
-            self::integer('AUTOMATION_RETRY_BASE', '30'),
-            self::integer('AUTOMATION_RETRY_MAX', '3600'),
-        );
 
         if ($application->isProduction()) {
             if ($proxy->trustedProxies === []) {
@@ -62,7 +56,7 @@ final class ConfigurationLoader
             self::assertProductionSecret('REDIS_PASSWORD', $redis->password);
         }
 
-        return new ConfigurationSet($application, $database, $redis, $proxy, $integration, $automation);
+        return new ConfigurationSet($application, $database, $redis, $proxy, $integration);
     }
 
     private static function integer(string $name, string $default): int

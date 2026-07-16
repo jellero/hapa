@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Hapa\Tests\Unit\Core;
 
 use Hapa\Core\Configuration\ConfigurationLoader;
-use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -107,22 +106,6 @@ final class EnvironmentTest extends TestCase
         ConfigurationLoader::load();
     }
 
-    public function testItRejectsAnUnsafeAutomationBatchSize(): void
-    {
-        $this->setEnvironment([
-            'APP_ENV' => 'testing',
-            'APP_DEBUG' => 'false',
-            'APP_URL' => 'http://localhost',
-            'APP_TIMEZONE' => 'UTC',
-            'TRUSTED_PROXIES' => '',
-            'AUTOMATION_BATCH_SIZE' => '0',
-        ]);
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('AUTOMATION_BATCH_SIZE');
-        ConfigurationLoader::load();
-    }
-
     public function testProductionRejectsMissingTrustedProxies(): void
     {
         $this->setEnvironment($this->productionEnvironment(['TRUSTED_PROXIES' => '']));
@@ -198,6 +181,7 @@ final class EnvironmentTest extends TestCase
         }
         file_put_contents($file, $secret . PHP_EOL);
         $this->temporaryFiles[] = $file;
+
         return $file;
     }
 }
