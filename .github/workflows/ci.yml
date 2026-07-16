@@ -65,7 +65,21 @@ jobs:
       - run: vendor/bin/phinx migrate -e testing
       - run: composer architecture:check
       - run: composer test:unit
-      - run: composer test:integration
+      - name: Run integration tests
+        id: integration
+        continue-on-error: true
+        run: vendor/bin/phpunit --testsuite Integration --log-junit integration-junit.xml
+      - name: Upload integration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-junit
+          path: integration-junit.xml
+          if-no-files-found: error
+          retention-days: 3
+      - name: Fail on integration errors
+        if: steps.integration.outcome == 'failure'
+        run: exit 1
 
   production-smoke:
     runs-on: ubuntu-latest
