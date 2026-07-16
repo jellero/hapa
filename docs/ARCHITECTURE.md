@@ -49,7 +49,7 @@ La foundation disponibile sulla `main` di `hapa-automation` comprende:
 - proiezioni prodotto, ricarico e ordine;
 - worker long-running con graceful shutdown.
 
-Questa disponibilità non rende operativi i flussi provider. Gli adapter reali Space, marketplace, GLS e BRT, il relay/consumer RabbitMQ lato HAPA, i test di contratto congiunti e l’osservabilità completa restano da implementare. I job provider sono disabilitati per impostazione predefinita.
+Il contratto ordine è allineato tra producer HAPA e consumer `hapa-automation`. Questa disponibilità non rende operativi i flussi provider: adapter reali, relay/consumer RabbitMQ lato HAPA, contratti completi di catalogo/ricarichi e osservabilità restano da implementare. I job provider sono disabilitati per impostazione predefinita.
 
 ## 4. Proprietà dei dati
 
@@ -76,25 +76,35 @@ Ogni messaggio contiene almeno:
 ```json
 {
   "message_id": "uuid",
-  "event_type": "catalog.product.updated",
+  "event_type": "order.changed",
   "schema_version": 1,
-  "occurred_at": "2026-07-16T13:34:00Z",
+  "occurred_at": "2026-07-16T13:34:00+00:00",
   "correlation_id": "uuid",
   "causation_id": "uuid-or-null",
-  "payload": {}
+  "payload": {
+    "order_number": "ORD-2026-0001",
+    "version": 4,
+    "change_type": "order.status_changed",
+    "status": "accepted"
+  }
 }
 ```
 
 Regole HAPA:
 
 - `message_id` è globale e stabile;
-- i consumer deduplicano nel database HAPA;
+- `event_type` coincide con la routing key canonica;
+- i consumer deduplicano nel proprio database;
 - l’applicazione di un messaggio e l’aggiornamento della inbox avvengono nello stesso transaction boundary;
 - gli aggiornamenti di entità usano una versione sorgente;
 - l’ordine globale tra code non è presunto;
 - almeno due versioni consecutive di schema devono essere compatibili durante il deploy;
 - credenziali e segreti non transitano nei payload;
 - dati personali e payload vengono minimizzati.
+
+Il contratto ordine canonico usa `order.changed`. Il payload contiene sempre `order_number`, `version`, `change_type` e `occurred_at`; `status` è presente soltanto quando l’evento inizializza o modifica lo stato. Gli eventi che non determinano lo stato, come `order.address_changed`, non copiano uno stato finale dell’aggregato che potrebbe appartenere a una versione successiva.
+
+Durante il deploy coordinato `hapa-automation` accetta temporaneamente i vecchi event type ordine e gli alias `order_version`, `to_status` e `resulting_status`. HAPA produce soltanto il formato canonico.
 
 ## 6. Transactional outbox HAPA
 
@@ -108,7 +118,7 @@ L’outbox HAPA:
 - non esegue chiamate provider;
 - non contiene logica di retry provider.
 
-Il relay RabbitMQ HAPA dovrà reclamare messaggi, pubblicare con publisher confirm e registrare l’esito della sola consegna al broker.
+Il relay RabbitMQ HAPA dovrà reclamare messaggi, costruire l’envelope condiviso, pubblicare con publisher confirm e registrare l’esito della sola consegna al broker.
 
 ## 7. Flusso catalogo
 
@@ -127,13 +137,14 @@ Lo stock Space rimane un dato del prodotto. Eventuali politiche di quantità pub
 
 1. `hapa-automation` importa l’ordine dal canale.
 2. HAPA deduplica e persiste cliente, ordine, righe e snapshot degli indirizzi.
-3. HAPA produce gli eventi applicativi nella propria outbox.
-4. Il servizio esterno esegue accettazione, invio a Space o altre operazioni provider.
-5. Gli esiti ritornano a HAPA tramite RabbitMQ.
-6. Picking e decisioni manuali avvengono in HAPA.
-7. HAPA produce la richiesta di spedizione.
-8. Il servizio esterno crea label, tracking e fulfilment.
-9. HAPA applica e mostra gli esiti.
+3. HAPA produce eventi canonici `order.changed` nella propria outbox.
+4. Il servizio esterno valida il contratto e aggiorna la proiezione ordine senza regressioni in caso di messaggi fuori ordine.
+5. Il servizio esterno esegue accettazione, invio a Space o altre operazioni provider.
+6. Gli esiti ritornano a HAPA tramite RabbitMQ.
+7. Picking e decisioni manuali avvengono in HAPA.
+8. HAPA produce la richiesta di spedizione.
+9. Il servizio esterno crea label, tracking e fulfilment.
+10. HAPA applica e mostra gli esiti.
 
 ## 9. Moduli HAPA
 
@@ -211,12 +222,13 @@ redis
 
 `hapa-automation` viene costruito e distribuito dal proprio repository. I due progetti hanno pipeline, immagini, migrazioni, database e cicli di rilascio separati. La sua foundation è già presente su `main`, ma i job provider restano disabilitati finché non sono disponibili adapter e contratti end-to-end verificati.
 
-Per modifiche coordinate:
+Per modifiche coordinate del contratto:
 
-1. i contratti devono essere compatibili con la versione già distribuita;
-2. vengono aperte PR distinte nei due repository;
-3. l’ordine di deploy viene dichiarato;
-4. i job provider restano disabilitati finché entrambi i lati non sono verificati.
+1. distribuire prima il consumer `hapa-automation` compatibile sia con il formato corrente sia con quello precedente;
+2. distribuire HAPA con il producer canonico;
+3. verificare code, inbox, deduplica, messaggi fuori ordine e dead letter;
+4. rimuovere gli alias legacy soltanto in una release successiva;
+5. mantenere i job provider disabilitati finché entrambi i lati non sono verificati end-to-end.
 
 ## 13. Sicurezza
 
@@ -240,7 +252,9 @@ Implementato:
 - modello catalogo e motore ricarichi;
 - UI presentazionale del catalogo;
 - rimozione del runtime automazioni da codice, CLI, route, schema e Compose HAPA;
-- decisione architetturale per repository e database separati.
+- decisione architetturale per repository e database separati;
+- producer ordine canonico `order.changed`;
+- test unitari e integration del payload ordine condiviso con `hapa-automation`.
 
 Da completare in HAPA:
 
@@ -248,6 +262,7 @@ Da completare in HAPA:
 - CRUD autorizzato dei ricarichi;
 - relay e consumer RabbitMQ;
 - inbox idempotente;
+- contratti producer e test coordinati per catalogo e ricarichi;
 - autenticazione, autorizzazione e CSRF;
 - vertical slice applicative reali;
-- test di contratto coordinati con `hapa-automation`.
+- test end-to-end con RabbitMQ reale.
