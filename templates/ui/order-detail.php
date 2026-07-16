@@ -22,21 +22,38 @@
 </header>
 
 <section class="summary-grid" aria-label="Riepilogo ordine">
-    <article><span>Canale</span><strong>—</strong><small>Connettore non disponibile</small></article>
-    <article><span>Totale righe</span><strong>—</strong><small>Repository non collegato</small></article>
-    <article><span>Ultimo aggiornamento</span><strong>—</strong><small>Nessun evento caricato</small></article>
+    <article><span>Cliente</span><strong>—</strong><small>Anagrafica non collegata</small></article>
+    <article><span>Origine</span><strong>—</strong><small>Marketplace o futuro B2C</small></article>
+    <article><span>Data ordine</span><strong>—</strong><small>Repository non collegato</small></article>
     <article><span>Versione</span><strong>—</strong><small>Optimistic locking pianificato</small></article>
 </section>
 
 <nav class="tabs" aria-label="Sezioni dettaglio ordine">
     <a class="is-active" href="#overview" aria-current="page">Panoramica</a>
     <a href="#lines">Righe</a>
+    <a href="#addresses">Indirizzi</a>
     <a href="#deliveries">Delivery</a>
     <a href="#audit">Audit</a>
 </nav>
 
 <div class="detail-grid" id="overview">
     <div class="detail-grid__main">
+        <section class="panel" aria-labelledby="order-master-data-title">
+            <div class="panel__header">
+                <div>
+                    <p class="eyebrow">Anagrafica ordine</p>
+                    <h2 id="order-master-data-title">Cliente e provenienza</h2>
+                    <p>Numero interno, ordine esterno, cliente e origine saranno riconciliati senza confondere canale e connettore.</p>
+                </div>
+            </div>
+            <dl class="settings-list">
+                <div><dt>Numero interno</dt><dd><?= $e($orderId) ?></dd></div>
+                <div><dt>Cliente</dt><dd>Non disponibile</dd></div>
+                <div><dt>Origine</dt><dd>Non disponibile</dd></div>
+                <div><dt>Riferimento esterno</dt><dd>Non disponibile</dd></div>
+            </dl>
+        </section>
+
         <section class="panel" id="lines" aria-labelledby="order-lines-title">
             <div class="panel__header">
                 <div>
@@ -63,10 +80,16 @@
         </section>
     </div>
 
-    <aside class="detail-grid__aside">
-        <section class="panel" aria-labelledby="address-title">
-            <div class="panel__header"><div><p class="eyebrow">Destinazione</p><h2 id="address-title">Indirizzo</h2></div></div>
-            <div class="placeholder-lines" aria-label="Indirizzo non disponibile"><span></span><span></span><span></span><span></span></div>
+    <aside class="detail-grid__aside" aria-label="Dati complementari ordine">
+        <section class="panel" id="addresses" aria-labelledby="shipping-address-title">
+            <div class="panel__header"><div><p class="eyebrow">Snapshot storico</p><h2 id="shipping-address-title">Spedizione</h2></div></div>
+            <div class="placeholder-lines" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            <p class="muted-copy">Lo snapshot non cambia quando viene modificato l’indirizzo predefinito del cliente.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="billing-address-title">
+            <div class="panel__header"><div><p class="eyebrow">Snapshot storico</p><h2 id="billing-address-title">Fatturazione</h2></div></div>
+            <div class="placeholder-lines" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
             <p class="muted-copy">I dati personali saranno visibili solo agli operatori autorizzati e per il tempo necessario.</p>
         </section>
 

@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="utf-8">
@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#132238">
     <meta name="description" content="<?= $e($description ?? 'Centro operativo HAPA') ?>">
     <title><?= $e($title ?? 'HAPA') ?> · HAPA</title>
-    <link rel="stylesheet" href="/assets/ui.css?v=2">
-    <script defer src="/assets/ui.js?v=2"></script>
+    <link rel="stylesheet" href="/assets/ui.css?v=3">
+    <script defer src="/assets/ui.js?v=3"></script>
 </head>
 <body class="app-body" data-ui-shell>
     <a class="skip-link" href="#main-content">Vai al contenuto</a>
@@ -28,7 +28,7 @@
                 </button>
             </div>
 
-            <nav class="sidebar__nav">
+            <nav class="sidebar__nav" aria-label="Sezioni principali">
                 <?php foreach ($navigation as $group): ?>
                     <section class="nav-group" aria-labelledby="nav-<?= $e(strtolower($group['label'])) ?>">
                         <div class="nav-group__label" id="nav-<?= $e(strtolower($group['label'])) ?>"><?= $e($group['label']) ?></div>
@@ -52,7 +52,7 @@
                     <span class="environment-pill__dot" aria-hidden="true"></span>
                     <span>Ambiente <?= $e($environment) ?></span>
                 </div>
-                <p>Interfaccia operativa v0.4</p>
+                <p>Interfaccia operativa v0.5</p>
             </div>
         </aside>
 

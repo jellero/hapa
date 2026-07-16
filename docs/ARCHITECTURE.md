@@ -16,20 +16,21 @@ La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicure
 
 ## 2. Obiettivo del sistema
 
-HAPA governa il ciclo ordine tra marketplace, Space API, magazzino e GLS.
+HAPA governa anagrafiche clienti e ordini e il ciclo operativo tra marketplace, Space API, magazzino e GLS. Il modello accetta inoltre come origine il futuro e-commerce B2C, che resta una capacità pianificata e non un canale operativo.
 
 Il sistema deve:
 
-1. importare ordini da marketplace eterogenei;
-2. accettare l’ordine sul canale sorgente;
-3. acquisire e normalizzare l’indirizzo di spedizione;
-4. memorizzare ordine e righe in modo idempotente;
-5. inviare l’ordine a Space tramite API;
-6. aggiornare disponibilità e quantità gestibili;
-7. supportare picking completo o parziale tramite barcode;
-8. produrre colli, spedizione ed etichetta GLS;
-9. restituire tracking e fulfilment al marketplace;
-10. offrire controllo operativo, audit, retry e riconciliazione.
+1. mantenere un cliente canonico con identità e indirizzi provenienti da sorgenti eterogenee;
+2. importare ordini da marketplace eterogenei;
+3. accettare l’ordine sul canale sorgente;
+4. acquisire e normalizzare gli indirizzi;
+5. memorizzare cliente, ordine e righe in modo idempotente;
+6. inviare l’ordine a Space tramite API;
+7. aggiornare disponibilità e quantità gestibili;
+8. supportare picking completo o parziale tramite barcode;
+9. produrre colli, spedizione ed etichetta GLS;
+10. restituire tracking e fulfilment al marketplace;
+11. offrire controllo operativo, audit, retry e riconciliazione.
 
 HAPA mantiene lo **stato autorevole del processo interno**. Marketplace, Space e GLS restano sistemi esterni con stato proprio; la coerenza tra i sistemi viene raggiunta mediante idempotenza, delivery persistite e riconciliazione.
 
@@ -99,8 +100,9 @@ flowchart LR
 
 | Sistema | Responsabilità | Modalità prevista |
 |---|---|---|
-| Canali marketplace | origine ordine, accettazione, indirizzo, fulfilment, tracking | Amazon, eMAG, Temu e IBS tramite adapter |
+| Canali marketplace | origine ordine, identità cliente, accettazione, indirizzo, fulfilment, tracking | Amazon, eMAG, Temu e IBS tramite adapter |
 | Connettori marketplace | percorso tecnico verso uno o più canali | SellRapido aggregatore oppure adapter diretto |
+| Futuro e-commerce B2C | account cliente, checkout e origine ordine diretta | pianificato, nessuna route pubblica attiva |
 | Space | ricezione ordine, approvvigionamento e disponibilità | API |
 | GLS | spedizione, label, tracking e gestione operativa della spedizione | API o servizio integrato GLS |
 | Reverse proxy | TLS, HSTS, routing di frontiera, eventuale rate limiting | infrastruttura esterna al Compose applicativo |
@@ -208,7 +210,7 @@ Contiene:
 
 Dipendenze ammesse: PHP standard e tipi del medesimo dominio.
 
-**Stato:** enum degli stati e alcuni DTO presenti; modello aggregato e macchina a stati pianificati.
+**Stato:** value object clienti e ordini, enum degli stati e DTO di integrazione presenti; modelli aggregati e macchina a stati pianificati.
 
 ### 7.2 Application
 
@@ -344,13 +346,30 @@ Responsabilità:
 - stato e versione;
 - transizioni;
 - eventi di dominio;
-- storico delle transizioni.
+- storico delle transizioni;
+- numero interno, cliente e origine dell’ordine;
+- snapshot storici di spedizione e fatturazione.
 
-**Implementato:** enum `OrderStatus`, schema e vincoli principali.
+**Implementato:** `OrderStatus`, `OrderOrigin`, `OrderNumber`, schema e vincoli principali.
 
 **Pianificato:** aggregato, repository, state machine, optimistic locking e storico.
 
-### 10.2 Marketplace
+### 10.2 Customers
+
+Responsabilità:
+
+- profilo cliente canonico;
+- stato e tipo cliente;
+- contatti e dati fiscali opzionali;
+- identità esterne distinte per sorgente e account;
+- indirizzi attivi e predefiniti;
+- policy future di riconciliazione, merge, archiviazione e anonimizzazione.
+
+**Implementato:** schema PostgreSQL, vincoli, `CustomerCode`, `EmailAddress`, profilo, indirizzo, identità e relativi enum.
+
+**Pianificato:** aggregato, repository, casi d’uso, deduplicazione assistita, retention e audit. L’email non è una chiave univoca e non causa merge automatici.
+
+### 10.3 Marketplace
 
 Responsabilità:
 
@@ -377,7 +396,7 @@ sendTracking(TrackingNotification $notification): void
 
 **Pianificato:** SellRapido, Amazon, eMAG, Temu e IBS secondo [`MARKETPLACES.md`](MARKETPLACES.md); paginazione, cursori, account configurati, recupero singolo ordine, capacità dichiarate, gestione parziali, annullamenti, errori tipizzati e adapter reali.
 
-### 10.3 Space
+### 10.4 Space
 
 Responsabilità:
 
@@ -398,7 +417,7 @@ fetchAvailability(string $spaceOrderId): array
 
 **Pianificato:** client reale, stato remoto, errori tipizzati, timeout, rate limit e riconciliazione.
 
-### 10.4 Warehouse e Picking
+### 10.5 Warehouse e Picking
 
 Responsabilità:
 
@@ -421,7 +440,7 @@ barcode_scans
 partial_order_decisions
 ```
 
-### 10.5 Partial Orders
+### 10.6 Partial Orders
 
 Responsabilità:
 
@@ -434,7 +453,7 @@ Responsabilità:
 
 **Stato:** vincoli quantitativi presenti; casi d’uso pianificati.
 
-### 10.6 GLS
+### 10.7 GLS
 
 Responsabilità:
 
@@ -458,7 +477,7 @@ fetchLabel(string $labelReference): string
 
 **Pianificato:** `ShipmentPackage`, dimensioni, servizi GLS, opzioni, contatti, annullamento e riconciliazione.
 
-### 10.7 Automation
+### 10.8 Automation
 
 Responsabilità:
 
@@ -474,11 +493,12 @@ Responsabilità:
 
 **Pianificato:** worker e handler reali.
 
-### 10.8 Operational Dashboard
+### 10.9 Operational Dashboard
 
 Responsabilità:
 
-- ricerca e filtro ordini;
+- ricerca e filtro clienti e ordini;
+- scheda cliente con identità, indirizzi e storico ordini;
 - dettaglio completo del flusso;
 - stato provider;
 - retry controllato;
@@ -487,7 +507,7 @@ Responsabilità:
 - ristampa label;
 - audit delle azioni.
 
-**Stato:** parziale. Il layer di presentazione è implementato con dashboard, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni. Dati, autenticazione e azioni applicative restano pianificati e non vengono simulati.
+**Stato:** parziale. Il layer di presentazione è implementato con dashboard, clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni. Dati, autenticazione e azioni applicative restano pianificati e non vengono simulati.
 
 ---
 
@@ -567,6 +587,17 @@ Imported
 
 `ManualReview`, `Cancelled` e gli stati di parziale rappresentano rami controllati del processo.
 
+### 11.4 Relazione tra cliente e ordine
+
+Il cliente canonico è separato dalle identità esterne. La tripla sorgente, account e ID cliente identifica univocamente la relazione con Amazon, eMAG, Temu, IBS o il futuro B2C. SellRapido resta un connettore e non diventa una sorgente cliente.
+
+L’ordine conserva un numero interno univoco e un’origine vincolata:
+
+- `marketplace` richiede `marketplace_id` e vieta `origin_reference`;
+- `b2c_ecommerce` vieta `marketplace_id` e richiede il riferimento storefront.
+
+Il collegamento ordine-cliente è opzionale e usa `ON DELETE SET NULL`, così l’ordine storico non viene eliminato con il profilo. Gli indirizzi dell’ordine sono snapshot e non cambiano insieme alla rubrica cliente. Il modello dettagliato è in [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md).
+
 ---
 
 ## 12. Persistenza PostgreSQL
@@ -576,7 +607,10 @@ Imported
 | Tabella | Responsabilità |
 |---|---|
 | `marketplaces` | configurazione logica dei canali |
-| `orders` | testata ordine e stato autorevole |
+| `customers` | profilo cliente canonico |
+| `customer_external_identities` | identità cliente per sorgente e account |
+| `customer_addresses` | rubrica e indirizzi predefiniti |
+| `orders` | testata, cliente, origine, snapshot e stato autorevole |
 | `order_lines` | righe e quantità |
 | `shipments` | spedizione, tracking e label |
 | `outbox_messages` | intenzioni asincrone persistite |
@@ -587,6 +621,13 @@ Imported
 ### 12.2 Vincoli implementati
 
 - unicità marketplace + ID ordine esterno;
+- unicità numero ordine interno;
+- coerenza esclusiva tra origine marketplace e origine B2C;
+- unicità storefront + ID ordine esterno B2C;
+- codice, stato e tipo cliente validi;
+- identità esterna univoca per sorgente, account e ID;
+- un solo indirizzo predefinito di spedizione e fatturazione per cliente;
+- collegamento cliente eliminabile senza cancellare l’ordine storico;
 - unicità ordine + ID riga esterno;
 - stati ordine ammessi;
 - codice valuta a tre lettere maiuscole;
@@ -645,6 +686,7 @@ Contratti iniziali previsti:
 
 ```text
 OrderRepository
+CustomerRepository
 MarketplaceRepository
 ShipmentRepository
 OutboxRepository
@@ -1521,6 +1563,8 @@ Il pannello operativo dovrà offrire viste orientate alle eccezioni, oltre alla 
 
 Filtri previsti:
 
+- cliente;
+- origine ordine;
 - marketplace;
 - stato;
 - data;
@@ -1536,7 +1580,7 @@ Filtri previsti:
 
 Sezioni previste:
 
-- testata e indirizzo;
+- testata, cliente, origine e snapshot degli indirizzi;
 - righe e quantità;
 - storico stati;
 - disponibilità Space;
@@ -1562,6 +1606,10 @@ Sezioni previste:
 
 Ogni azione richiede permesso, validazione, audit e idempotenza.
 
+### 30.4 Anagrafica clienti
+
+La UI presenta elenco e dettaglio cliente con profilo, contatti, identità esterne, indirizzi e storico ordini. Query e mutazioni restano disabilitate finché non sono presenti repository, view model minimizzati, autenticazione, permessi per risorsa, CSRF e audit delle consultazioni sensibili.
+
 ---
 
 ## 31. Decisioni architetturali correnti
@@ -1578,6 +1626,9 @@ Ogni azione richiede permesso, validazione, audit e idempotenza.
 | Nginx + PHP-FPM | separazione frontiera HTTP e runtime PHP |
 | vertical slice | valore funzionale verificabile e minore accumulo di infrastruttura inutilizzata |
 | DTO immutabili | contratti chiari e riduzione degli array generici |
+| cliente canonico separato dalle identità esterne | riconciliazione controllata senza deduplicazione fragile basata sull’email |
+| snapshot indirizzi sull’ordine | integrità storica indipendente dalle modifiche della rubrica cliente |
+| origine B2C predisposta ma non operativa | evoluzione dello schema senza fingere checkout o pagamenti già disponibili |
 
 Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`.
 
@@ -1600,6 +1651,9 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | contratti Space | parziale | adapter reale e riconciliazione assenti |
 | contratti GLS | parziale | colli, dimensioni e adapter reale assenti |
 | dominio Order | parziale | enum presente, aggregato pianificato |
+| anagrafica clienti | parziale | schema, vincoli, tipi dominio e UI presenti; repository e casi d’uso pianificati |
+| anagrafica ordini | parziale | numero, cliente, origine e snapshot presenti; repository e aggregato pianificati |
+| e-commerce B2C | pianificato | sola compatibilità dell’origine ordine presente |
 | repository | pianificato | prima vertical slice |
 | transaction manager | pianificato | prima vertical slice |
 | outbox worker | pianificato | schema presente |
@@ -1607,7 +1661,7 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | picking | parziale | UI presentazionale presente; modello e casi d’uso assenti |
 | gestione parziali | pianificato | vincoli preparatori presenti |
 | autenticazione e ruoli | pianificato | prima del collegamento di dati e azioni UI |
-| pannello operativo | parziale | design system e schermate implementati; dati, auth e azioni non collegati |
+| pannello operativo | parziale | design system e schermate clienti/ordini implementati; dati, auth e azioni non collegati |
 | metriche e tracing | pianificato | con workload reali |
 | backup e runbook | pianificato | requisito pre-esercizio |
 

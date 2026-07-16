@@ -1,6 +1,6 @@
 # HAPA
 
-HAPA è la piattaforma proprietaria che governa il ciclo ordine tra marketplace, Space API, magazzino e GLS.
+HAPA è la piattaforma proprietaria che governa anagrafiche clienti e ordini, ciclo marketplace, Space API, magazzino e GLS, predisponendo l’origine ordini del futuro e-commerce B2C.
 
 Il progetto usa un **framework custom proprietario in PHP 8.4**, costruito su componenti Symfony selezionati e su confini applicativi espliciti. PostgreSQL conserva lo stato autorevole del processo; Redis supporta coordinamento e capacità temporanee; le integrazioni esterne attraversano adapter tipizzati, transactional outbox, retry e riconciliazione.
 
@@ -8,17 +8,18 @@ Il progetto usa un **framework custom proprietario in PHP 8.4**, costruito su co
 
 Il flusso completo previsto comprende:
 
-1. importazione incrementale dell’ordine dal marketplace;
-2. accettazione sul canale sorgente;
-3. acquisizione e normalizzazione dell’indirizzo di spedizione;
-4. persistenza idempotente di ordine e righe;
-5. invio dell’ordine a Space tramite API;
-6. aggiornamento della disponibilità;
-7. picking barcode completo o parziale;
-8. definizione di colli, peso reale, volumetrico e tariffabile;
-9. creazione spedizione ed etichetta GLS;
-10. restituzione di tracking e fulfilment al marketplace;
-11. controllo operativo tramite audit, retry e riconciliazione.
+1. acquisizione o aggiornamento dell’anagrafica cliente e delle identità esterne;
+2. importazione incrementale dell’ordine dal marketplace;
+3. accettazione sul canale sorgente;
+4. acquisizione e normalizzazione degli indirizzi;
+5. persistenza idempotente di ordine, cliente e righe;
+6. invio dell’ordine a Space tramite API;
+7. aggiornamento della disponibilità;
+8. picking barcode completo o parziale;
+9. definizione di colli, peso reale, volumetrico e tariffabile;
+10. creazione spedizione ed etichetta GLS;
+11. restituzione di tracking e fulfilment al marketplace;
+12. controllo operativo tramite audit, retry e riconciliazione.
 
 ## Stato del progetto
 
@@ -39,8 +40,11 @@ Il flusso completo previsto comprende:
 - distinzione tipizzata tra canale marketplace e connettore tecnico;
 - invarianti runtime sui contratti Marketplace, Space e GLS;
 - canali futuri registrati per Amazon, eMAG, Temu e IBS, con SellRapido come connettore aggregatore;
+- anagrafica clienti con stato, tipo, contatti, dati fiscali, identità esterne e indirizzi predefiniti;
+- anagrafica ordini con numero interno, cliente, origine vincolata e snapshot distinti di spedizione e fatturazione;
+- origine `b2c_ecommerce` predisposta nel modello, con e-commerce completo mantenuto in roadmap;
 - interfaccia operativa server-rendered, responsive e accessibile per tutte le aree previste;
-- schermate di accesso, dashboard, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
+- schermate di accesso, dashboard, clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
 - schema iniziale della transactional outbox;
 - manifest versionato per la readiness dello schema PostgreSQL;
 - documentazione architetturale, sicurezza e roadmap.
@@ -51,12 +55,12 @@ La roadmap parte dalla composizione applicativa e dal dominio ordine:
 
 1. container Dependency Injection compilato;
 2. configurazioni tipizzate e Clock iniettato;
-3. aggregato `Order` e macchina a stati deterministica;
-4. repository PostgreSQL e transaction boundary;
+3. aggregati e casi d’uso per clienti e ordini;
+4. repository PostgreSQL e transaction boundary per le anagrafiche;
 5. scrittura di dominio e outbox nella stessa transazione;
 6. prima vertical slice Marketplace → HAPA → Space.
 
-Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e GLS, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). La strategia per SellRapido, Amazon, eMAG, Temu e IBS è definita in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md).
+Le integrazioni provider reali, il worker outbox, i casi d’uso di picking e GLS, l’autenticazione e il collegamento della UI a dati e azioni appartengono alle fasi successive descritte in [`docs/TODO.md`](docs/TODO.md). Il modello delle anagrafiche è documentato in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md); la strategia per SellRapido, Amazon, eMAG, Temu e IBS è definita in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md).
 
 ## Architettura
 
@@ -201,6 +205,7 @@ L’indice documentale è [`docs/README.md`](docs/README.md).
 | Documento | Contenuto |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini, dominio, persistenza, flussi, runtime, deploy e operatività |
+| [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | modello canonico di clienti, identità, indirizzi, ordini e confine B2C |
 | [`docs/INTERFACE.md`](docs/INTERFACE.md) | architettura UI, mappa delle schermate, accessibilità e sicurezza |
 | [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) | canali futuri, connettori, gate di discovery e prevenzione dei duplicati |
 | [`docs/SYMFONY_ALIGNMENT.md`](docs/SYMFONY_ALIGNMENT.md) | componenti Symfony adottati, esclusi o valutati |

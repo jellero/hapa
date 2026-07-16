@@ -44,16 +44,45 @@ final readonly class UiController
             'description' => 'Controlla il ciclo ordine, le eccezioni e lo stato delle integrazioni da un unico punto.',
             'metrics' => [
                 ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Repository ordini non collegato', 'tone' => 'neutral'],
+                ['label' => 'Clienti censiti', 'value' => '—', 'detail' => 'Repository clienti non collegato', 'tone' => 'info'],
                 ['label' => 'Revisione manuale', 'value' => '—', 'detail' => 'Disponibile con il dominio Order', 'tone' => 'warning'],
-                ['label' => 'Messaggi outbox', 'value' => '—', 'detail' => 'Worker non ancora attivo', 'tone' => 'info'],
                 ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter GLS non collegato', 'tone' => 'success'],
             ],
             'workstreams' => [
-                ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['label' => 'Space', 'detail' => 'Invio ordine e disponibilità', 'status' => 'Contratto pronto', 'tone' => 'info'],
-                ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['label' => 'GLS', 'detail' => 'Colli, etichette e tracking', 'status' => 'Contratto pronto', 'tone' => 'info'],
+                ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'integration'],
+                ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Schema pronto', 'tone' => 'info', 'icon' => 'customer'],
+                ['label' => 'Space', 'detail' => 'Invio ordine e disponibilità', 'status' => 'Contratto pronto', 'tone' => 'info', 'icon' => 'automation'],
+                ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'scan'],
+                ['label' => 'GLS', 'detail' => 'Colli, etichette e tracking', 'status' => 'Contratto pronto', 'tone' => 'info', 'icon' => 'truck'],
             ],
+        ]);
+    }
+
+    public function customers(Request $request): Response
+    {
+        return $this->collection($request, 'customers', [
+            'title' => 'Clienti',
+            'eyebrow' => 'Anagrafiche',
+            'description' => 'Gestisci il profilo cliente canonico, i contatti, gli indirizzi e le identità provenienti dai diversi canali.',
+            'searchLabel' => 'Cerca per codice, nome, email o identità esterna',
+            'filters' => ['Tutti i clienti', 'Attivi', 'Inattivi', 'Archiviati'],
+            'columns' => ['Codice', 'Cliente', 'Contatti', 'Origini', 'Ordini', 'Stato', 'Azioni'],
+            'emptyTitle' => 'Nessun cliente disponibile',
+            'emptyBody' => 'Schema e modello di dominio sono pronti; i clienti compariranno dopo il collegamento del repository e dei casi d’uso protetti.',
+            'emptyIcon' => 'customer',
+            'primaryAction' => 'Nuovo cliente',
+        ]);
+    }
+
+    public function customerDetail(Request $request): Response
+    {
+        $customerId = $request->attributes->getString('customerId');
+
+        return $this->operational($request, 'ui/customer-detail', 'customers', [
+            'title' => sprintf('Cliente %s', $customerId),
+            'eyebrow' => 'Scheda cliente',
+            'description' => 'Profilo canonico, contatti, identità esterne, indirizzi e ordini collegati.',
+            'customerId' => $customerId,
         ]);
     }
 
@@ -61,13 +90,13 @@ final readonly class UiController
     {
         return $this->collection($request, 'orders', [
             'title' => 'Ordini',
-            'eyebrow' => 'Operatività',
-            'description' => 'Cerca e controlla gli ordini lungo l’intero flusso di fulfilment.',
-            'searchLabel' => 'Cerca per ordine, marketplace, SKU o tracking',
+            'eyebrow' => 'Anagrafiche e operatività',
+            'description' => 'Consulta l’anagrafica ordini e controlla ogni origine lungo l’intero flusso di fulfilment.',
+            'searchLabel' => 'Cerca per ordine, cliente, origine, SKU o tracking',
             'filters' => ['Tutti gli stati', 'Da accettare', 'In attesa merce', 'Picking', 'Revisione manuale', 'Completati'],
-            'columns' => ['Ordine', 'Canale', 'Stato', 'Righe', 'Aggiornato', 'Azioni'],
+            'columns' => ['Ordine', 'Cliente', 'Origine', 'Stato', 'Righe', 'Aggiornato', 'Azioni'],
             'emptyTitle' => 'Nessun ordine disponibile',
-            'emptyBody' => 'Gli ordini compariranno qui dopo l’attivazione del primo adapter marketplace e del repository PostgreSQL.',
+            'emptyBody' => 'Lo schema supporta ordini marketplace e la futura origine B2C; i dati compariranno dopo il collegamento del repository PostgreSQL.',
             'emptyIcon' => 'orders',
             'primaryAction' => 'Importa ordini',
         ]);
@@ -80,7 +109,7 @@ final readonly class UiController
         return $this->operational($request, 'ui/order-detail', 'orders', [
             'title' => sprintf('Ordine %s', $orderId),
             'eyebrow' => 'Dettaglio ordine',
-            'description' => 'Vista completa di stato, righe, indirizzo, delivery esterne e audit.',
+            'description' => 'Vista completa di cliente, origine, righe, snapshot degli indirizzi, delivery esterne e audit.',
             'orderId' => $orderId,
         ]);
     }
@@ -174,7 +203,7 @@ final readonly class UiController
             'eyebrow' => 'Controllo',
             'description' => 'Ricostruisci azioni operative, cambi di stato e accessi sensibili.',
             'searchLabel' => 'Cerca attore, azione, entità o correlation ID',
-            'filters' => ['Tutti gli eventi', 'Ordini', 'Spedizioni', 'Utenti', 'Retry e replay', 'Sicurezza'],
+            'filters' => ['Tutti gli eventi', 'Clienti', 'Ordini', 'Spedizioni', 'Utenti', 'Retry e replay', 'Sicurezza'],
             'columns' => ['Data e ora', 'Attore', 'Azione', 'Entità', 'Correlation ID', 'Dettaglio'],
             'emptyTitle' => 'Nessun evento di audit',
             'emptyBody' => 'Gli eventi verranno esposti quando i casi d’uso applicativi scriveranno nell’audit log.',
@@ -286,6 +315,7 @@ final readonly class UiController
                 'label' => 'Operatività',
                 'items' => [
                     ['label' => 'Dashboard', 'href' => '/ui', 'icon' => 'dashboard', 'active' => 'dashboard'],
+                    ['label' => 'Clienti', 'href' => '/ui/customers', 'icon' => 'customer', 'active' => 'customers'],
                     ['label' => 'Ordini', 'href' => '/ui/orders', 'icon' => 'orders', 'active' => 'orders'],
                     ['label' => 'Picking', 'href' => '/ui/picking', 'icon' => 'scan', 'active' => 'picking'],
                     ['label' => 'Spedizioni', 'href' => '/ui/shipments', 'icon' => 'truck', 'active' => 'shipments'],

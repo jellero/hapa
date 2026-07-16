@@ -4,11 +4,12 @@ Ultimo riesame: 16 luglio 2026.
 
 ## Ambito
 
-HAPA gestisce ordini, dati di spedizione e integrazioni con provider esterni. Sicurezza applicativa, isolamento dei dati, tracciabilità, minimizzazione delle informazioni personali e continuità operativa sono requisiti architetturali.
+HAPA gestisce anagrafiche clienti, ordini, dati di spedizione e integrazioni con provider esterni. Sicurezza applicativa, isolamento dei dati, tracciabilità, minimizzazione delle informazioni personali e continuità operativa sono requisiti architetturali.
 
 Riferimenti:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): architettura generale;
+- [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md): modello e ciclo di vita delle anagrafiche;
 - [`SYMFONY_ALIGNMENT.md`](SYMFONY_ALIGNMENT.md): allineamento con le primitive Symfony;
 - [`TODO.md`](TODO.md): interventi aperti e gate.
 
@@ -67,6 +68,10 @@ Prima dell’attivazione degli adapter reali devono essere definite e verificate
 - accesso ai backup limitato e auditato;
 - eliminazione sicura di file temporanei ed etichette scadute.
 
+L’anagrafica cliente tratta email, telefono, indirizzi e identificativi fiscali come dati personali. L’email normalizzata serve alla ricerca ma non produce deduplicazione automatica. Le identità esterne sono separate per sorgente e account; ogni merge richiede un caso d’uso autorizzato e auditato.
+
+La rubrica indirizzi del cliente e gli snapshot storici dell’ordine hanno finalità e retention distinte. La modifica o anonimizzazione del profilo non deve alterare silenziosamente documenti e ordini che richiedono conservazione, mentre la conservazione legale non autorizza un uso operativo illimitato. Accesso, rettifica, portabilità, cancellazione e anonimizzazione richiedono procedure verificabili anche su audit e backup.
+
 ## Autenticazione e password
 
 Il pannello operativo adotterà un contesto di autenticazione principale basato su sessione. Eventuali accessi macchina tramite token appartengono a un contesto distinto quando esiste un requisito effettivo.
@@ -112,6 +117,7 @@ L’autorizzazione segue deny-by-default:
 - policy o voter per risorsa e azione;
 - permessi valutati server-side;
 - separazione tra lettura, modifica, approvazione, annullamento, retry, replay e amministrazione;
+- permessi distinti per consultazione, export, merge e anonimizzazione delle anagrafiche cliente;
 - verifica della versione dell’ordine prima di azioni concorrenti;
 - audit delle operazioni con impatto operativo;
 - registrazione dei dinieghi rilevanti con dati minimizzati;

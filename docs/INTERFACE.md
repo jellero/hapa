@@ -4,7 +4,7 @@ Ultimo riesame: 16 luglio 2026.
 
 ## 1. Scopo e maturità
 
-L’interfaccia operativa fornisce il layer di presentazione per ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e configurazione.
+L’interfaccia operativa fornisce il layer di presentazione per clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e configurazione.
 
 Lo stato corrente è **parziale**:
 
@@ -53,8 +53,10 @@ La logica di business non entra nei template. Controller, view model e template 
 | `/login` | accesso operatore | presentazione, form disabilitato |
 | `/password/recovery` | recupero credenziali | presentazione, form disabilitato |
 | `/ui` | dashboard operativa | layout e capacità, dati non collegati |
+| `/ui/customers` | ricerca e filtri clienti | tabella e stato vuoto |
+| `/ui/customers/{customerId}` | scheda cliente | profilo, contatti, identità, indirizzi e ordini collegati |
 | `/ui/orders` | ricerca e filtri ordini | tabella e stato vuoto |
-| `/ui/orders/{orderId}` | dettaglio ordine | sezioni, righe, delivery, indirizzo e audit |
+| `/ui/orders/{orderId}` | dettaglio ordine | cliente, origine, righe, snapshot indirizzi, delivery e audit |
 | `/ui/picking` | sessioni di picking | tabella e stato vuoto |
 | `/ui/shipments` | colli, label e tracking | tabella e stato vuoto |
 | `/ui/automation` | outbox, retry e dead letter | tabella e stato vuoto |
@@ -70,7 +72,7 @@ La route tecnica `/` resta JSON e indica `/ui` come ingresso dell’interfaccia.
 
 La navigazione è divisa in tre gruppi:
 
-1. **Operatività**: dashboard, ordini, picking e spedizioni;
+1. **Operatività**: dashboard, clienti, ordini, picking e spedizioni;
 2. **Controllo**: automazioni, integrazioni e audit;
 3. **Amministrazione**: utenti, ruoli e impostazioni.
 
@@ -177,7 +179,7 @@ Ogni area deve gestire esplicitamente:
 - errore temporaneo con retry sicuro;
 - errore definitivo o revisione manuale.
 
-Lo stato corrente usa esclusivamente stati vuoti o “non collegato”. Non vengono inseriti ordini, utenti, metriche o incidenti fittizi che possano essere confusi con dati operativi.
+Lo stato corrente usa esclusivamente stati vuoti o “non collegato”. Non vengono inseriti clienti, ordini, utenti, metriche o incidenti fittizi che possano essere confusi con dati operativi.
 
 ## 9. Collegamento futuro ai casi d’uso
 

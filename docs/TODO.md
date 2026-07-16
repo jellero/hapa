@@ -32,7 +32,11 @@ Riferimenti:
 - [x] Contratti iniziali tipizzati per Marketplace, Space e GLS.
 - [x] Distinzione tipizzata tra canale marketplace e connettore tecnico.
 - [x] Portafoglio futuro definito per SellRapido, Amazon, eMAG, Temu e IBS.
+- [x] Schema e tipi di dominio iniziali per clienti, identità esterne e indirizzi.
+- [x] Anagrafica ordine estesa con numero interno, cliente, origine e snapshot di fatturazione.
+- [x] Predisposizione vincolata dell’origine `b2c_ecommerce`, senza funzionalità e-commerce attive.
 - [x] Design system e interfaccia operativa responsive per tutte le aree previste.
+- [x] Viste presentazionali per elenco e dettaglio clienti.
 - [x] Schema iniziale transactional outbox.
 - [x] Documentazione architetturale completa.
 - [x] Confronto architetturale con le pratiche Symfony attuali.
@@ -79,9 +83,28 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 **Gate:** ogni modifica di stato attraversa un metodo di dominio testato; transizioni arbitrarie risultano impossibili.
 
+## Fase 1A — Anagrafiche clienti e ordini
+
+- [x] Definire codice cliente, stato, tipo, contatti e dati fiscali opzionali.
+- [x] Separare identità canonica e identità esterne per sorgente, account e ID cliente.
+- [x] Evitare deduplicazione automatica basata sulla sola email.
+- [x] Modellare indirizzi attivi e predefiniti di spedizione e fatturazione.
+- [x] Collegare opzionalmente l’ordine al cliente senza perdere lo storico alla cancellazione.
+- [x] Introdurre numero ordine interno univoco, origine e data ordine.
+- [x] Separare rubrica cliente e snapshot storici di spedizione e fatturazione.
+- [x] Predisporre l’origine ordine `b2c_ecommerce` con vincoli PostgreSQL.
+- [ ] Definire aggregato `Customer` e policy di modifica, archiviazione, merge e anonimizzazione.
+- [ ] Definire `CustomerRepository` e query repository per clienti e ordini.
+- [ ] Implementare casi d’uso di creazione, modifica, consultazione e associazione identità.
+- [ ] Implementare ricerca paginata e criteri espliciti di riconciliazione.
+- [ ] Collegare UI e API soltanto dopo autenticazione, autorizzazione, CSRF e audit.
+- [ ] Definire retention e procedure per diritti dell’interessato e obblighi di conservazione ordine.
+
+**Gate:** cliente e ordine sono gestibili tramite casi d’uso transazionali, autorizzati e auditati; nessuna fusione o cancellazione modifica dati storici senza policy esplicita.
+
 ## Fase 2 — Persistenza e transazioni
 
-- [ ] Definire le porte `OrderRepository` e `MarketplaceRepository`.
+- [ ] Definire le porte `CustomerRepository`, `OrderRepository` e `MarketplaceRepository`.
 - [ ] Implementare repository PostgreSQL espliciti.
 - [ ] Definire il transaction boundary applicativo.
 - [ ] Implementare transaction manager o Unit of Work esplicita.
@@ -202,7 +225,7 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 
 - [x] Implementare layout applicativo, navigazione responsive e componenti condivisi.
 - [x] Implementare le schermate di login e recupero accesso in stato non operativo.
-- [x] Implementare le viste di dashboard, ordini, dettaglio ordine, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni.
+- [x] Implementare le viste di dashboard, clienti, dettaglio cliente, ordini, dettaglio ordine, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni.
 - [x] Implementare stati vuoti espliciti senza dati dimostrativi.
 - [x] Applicare escaping centralizzato, CSP, no-store e header di isolamento alle risposte UI.
 - [ ] Introdurre view model immutabili collegati alle query applicative.
@@ -247,6 +270,24 @@ La prossima sequenza deve consolidare il composition root e produrre la prima ca
 - [ ] Eseguire test di carico sui flussi di import, worker e picking.
 
 **Gate:** backup e restore sono provati, alert e runbook sono operativi, segreti e immagini seguono una policy verificabile e i worker attraversano deploy controllati.
+
+## Fase 10 — Futuro e-commerce B2C
+
+Questa fase resta un TODO di prodotto. La presenza dell’origine ordine nel database non rende operativo alcun flusso pubblico.
+
+- [ ] Definire storefront, account cliente, verifica email, consensi e recupero accesso.
+- [ ] Modellare catalogo, prodotti, varianti, contenuti e disponibilità pubblicabile.
+- [ ] Modellare listini, promozioni, imposte, valute e arrotondamenti.
+- [ ] Implementare carrello persistente e checkout idempotente.
+- [ ] Calcolare spedizione, sconti, imposte e totale autorevole lato server.
+- [ ] Integrare provider di pagamento con SCA, webhook firmati e riconciliazione.
+- [ ] Implementare autorizzazioni, catture, rimborsi, storni e gestione degli errori.
+- [ ] Trasformare il checkout confermato in ordine HAPA senza duplicati.
+- [ ] Implementare conferme, notifiche, area personale, resi e cancellazioni.
+- [ ] Implementare privacy web, cookie, antifrode, rate limiting e protezioni anti-abuso.
+- [ ] Coprire acquisto, pagamento, fulfilment, rimborso e recovery con test end-to-end.
+
+**Gate:** un acquisto B2C attraversa checkout, pagamento e creazione ordine in modo idempotente, sicuro, riconciliabile e conforme alle policy sui dati personali.
 
 ## Debito tecnico controllato
 

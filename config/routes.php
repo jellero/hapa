@@ -47,6 +47,19 @@ return static function (Bootstrap $bootstrap): RouteCollection {
         methods: ['GET'],
     ));
 
+    $routes->add('ui_customers', new Route(
+        '/ui/customers',
+        ['_controller' => $ui->customers(...)],
+        methods: ['GET'],
+    ));
+
+    $routes->add('ui_customer_detail', new Route(
+        '/ui/customers/{customerId}',
+        ['_controller' => $ui->customerDetail(...)],
+        requirements: ['customerId' => '[A-Za-z0-9._-]{3,64}'],
+        methods: ['GET'],
+    ));
+
     $routes->add('ui_orders', new Route(
         '/ui/orders',
         ['_controller' => $ui->orders(...)],

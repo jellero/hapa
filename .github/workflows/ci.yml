@@ -107,6 +107,8 @@ jobs:
             /login
             /password/recovery
             /ui
+            /ui/customers
+            /ui/customers/SMOKE-CUSTOMER
             /ui/orders
             /ui/orders/SMOKE-ORDER
             /ui/picking
@@ -121,7 +123,7 @@ jobs:
 
           for route in "${routes[@]}"; do
             body="$(curl --fail --silent --show-error "$base_url$route")"
-            grep --quiet '<!doctype html>' <<< "$body"
+            grep --quiet '<!DOCTYPE html>' <<< "$body"
           done
 
           headers="$(curl --fail --silent --show-error --dump-header - --output /dev/null "$base_url/ui")"
@@ -129,8 +131,8 @@ jobs:
           grep --ignore-case --quiet "^content-security-policy:.*object-src 'none'" <<< "$headers"
           grep --ignore-case --quiet '^x-frame-options:.*DENY' <<< "$headers"
 
-          css="$(curl --fail --silent --show-error "$base_url/assets/ui.css?v=2")"
-          javascript="$(curl --fail --silent --show-error "$base_url/assets/ui.js?v=2")"
+          css="$(curl --fail --silent --show-error "$base_url/assets/ui.css?v=3")"
+          javascript="$(curl --fail --silent --show-error "$base_url/assets/ui.js?v=3")"
           grep --quiet ':root' <<< "$css"
           grep --quiet 'synchronizeNavigation' <<< "$javascript"
 

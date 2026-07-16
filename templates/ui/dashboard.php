@@ -43,7 +43,7 @@
             <?php foreach ($workstreams as $stream): ?>
                 <article class="workstream-item">
                     <span class="workstream-item__icon" aria-hidden="true">
-                        <svg class="icon"><use href="/assets/icons.svg#integration"></use></svg>
+                        <svg class="icon"><use href="/assets/icons.svg#<?= $e($stream['icon']) ?>"></use></svg>
                     </span>
                     <div class="workstream-item__copy">
                         <strong><?= $e($stream['label']) ?></strong>
@@ -69,7 +69,7 @@
             </li>
             <li>
                 <span>02</span>
-                <div><strong>Dominio ordine</strong><small>Aggregato, transizioni e repository</small></div>
+                <div><strong>Anagrafiche operative</strong><small>Aggregati e repository clienti/ordini</small></div>
             </li>
             <li>
                 <span>03</span>

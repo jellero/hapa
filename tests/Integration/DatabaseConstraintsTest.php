@@ -112,12 +112,13 @@ final class DatabaseConstraintsTest extends TestCase
 
         return $this->insertAndReturnId(
             'INSERT INTO orders (
-                marketplace_id, external_order_id, status, currency, version, created_at, updated_at
+                marketplace_id, order_number, external_order_id, status, currency, version, created_at, updated_at
              ) VALUES (
-                :marketplace_id, :external_order_id, :status, :currency, 1, NOW(), NOW()
+                :marketplace_id, :order_number, :external_order_id, :status, :currency, 1, NOW(), NOW()
              ) RETURNING id',
             [
                 'marketplace_id' => $marketplaceId,
+                'order_number' => 'ORD-' . strtoupper($suffix),
                 'external_order_id' => 'order-' . $suffix,
                 'status' => 'imported',
                 'currency' => 'EUR',

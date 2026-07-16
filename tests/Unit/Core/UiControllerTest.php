@@ -30,6 +30,7 @@ final class UiControllerTest extends TestCase
         $request = $this->request('/ui');
         $responses = [
             $controller->dashboard($request),
+            $controller->customers($request),
             $controller->orders($request),
             $controller->picking($request),
             $controller->shipments($request),
@@ -73,6 +74,17 @@ final class UiControllerTest extends TestCase
         $request = $this->request('/ui/orders/example');
         $request->attributes->set('orderId', '<img src=x onerror=alert(1)>');
         $response = $this->controller()->orderDetail($request);
+        $content = (string) $response->getContent();
+
+        self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $content);
+        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $content);
+    }
+
+    public function testItEscapesTheCustomerIdentifier(): void
+    {
+        $request = $this->request('/ui/customers/example');
+        $request->attributes->set('customerId', '<img src=x onerror=alert(1)>');
+        $response = $this->controller()->customerDetail($request);
         $content = (string) $response->getContent();
 
         self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $content);

@@ -19,6 +19,8 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/login', $routes->get('login')?->getPath());
         self::assertSame('/password/recovery', $routes->get('password_recovery')?->getPath());
         self::assertSame('/ui', $routes->get('ui_dashboard')?->getPath());
+        self::assertSame('/ui/customers', $routes->get('ui_customers')?->getPath());
+        self::assertSame('/ui/customers/{customerId}', $routes->get('ui_customer_detail')?->getPath());
         self::assertSame('/ui/orders', $routes->get('ui_orders')?->getPath());
         self::assertSame('/ui/orders/{orderId}', $routes->get('ui_order_detail')?->getPath());
         self::assertSame('/ui/picking', $routes->get('ui_picking')?->getPath());
@@ -42,6 +44,21 @@ final class UiRoutesTest extends TestCase
         self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
         self::assertSame('DENY', $response->headers->get('X-Frame-Options'));
         self::assertStringContainsString('Centro operativo', (string) $response->getContent());
+    }
+
+    public function testTheKernelServesCustomerMasterDataPages(): void
+    {
+        $basePath = dirname(__DIR__, 3);
+        $kernel = (new KernelFactory())->create($basePath, Bootstrap::initialize($basePath));
+
+        $collection = $kernel->handle(Request::create('/ui/customers'));
+        self::assertSame(200, $collection->getStatusCode());
+        self::assertStringContainsString('Nessun cliente disponibile', (string) $collection->getContent());
+
+        $detail = $kernel->handle(Request::create('/ui/customers/CUST-0001'));
+        self::assertSame(200, $detail->getStatusCode());
+        self::assertStringContainsString('Cliente CUST-0001', (string) $detail->getContent());
+        self::assertStringContainsString('Identità esterne', (string) $detail->getContent());
     }
 
     public function testTheKernelServesTheBrandedNotFoundPageForNestedUiPaths(): void

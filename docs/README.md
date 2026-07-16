@@ -3,6 +3,7 @@
 La documentazione tecnica è organizzata nei seguenti riferimenti principali:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): architettura applicativa, infrastrutturale e operativa; stato implementativo; decisioni e confini.
+- [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md): anagrafiche canoniche, identità esterne, indirizzi, ordini e predisposizione B2C.
 - [`INTERFACE.md`](INTERFACE.md): architettura e stato dell’interfaccia, design system, accessibilità, sicurezza e integrazione futura.
 - [`MARKETPLACES.md`](MARKETPLACES.md): portafoglio SellRapido, Amazon, eMAG, Temu e IBS; identità, gate e strategia di attivazione.
 - [`SYMFONY_ALIGNMENT.md`](SYMFONY_ALIGNMENT.md): confronto con Symfony e decisioni su dependency injection, client HTTP, sicurezza, worker, scheduler e componenti selezionati.
