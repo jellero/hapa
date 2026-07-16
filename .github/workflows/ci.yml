@@ -114,7 +114,6 @@ jobs:
             /ui/catalog
             /ui/picking
             /ui/shipments
-            /ui/automation
             /ui/integrations
             /ui/users
             /ui/audit
@@ -137,6 +136,8 @@ jobs:
           grep --quiet ':root' <<< "$css"
           grep --quiet 'synchronizeNavigation' <<< "$javascript"
 
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/ui/automation")"
+          test "$status" = 404
           status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/ui/not/a/real/page")"
           test "$status" = 404
       - name: Show container diagnostics
