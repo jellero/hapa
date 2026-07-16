@@ -7,6 +7,7 @@ namespace Hapa\Core;
 use Hapa\Composition\ContainerFactory;
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Configuration\ConfigurationLoader;
+use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use RuntimeException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -62,6 +63,16 @@ final readonly class Bootstrap
         $command = $this->container->get(SystemCheckCommand::class);
         if (!$command instanceof SystemCheckCommand) {
             throw new RuntimeException('Il container non ha prodotto il comando system:check.');
+        }
+
+        return $command;
+    }
+
+    public function outboxRelayCommand(): OutboxRelayCommand
+    {
+        $command = $this->container->get(OutboxRelayCommand::class);
+        if (!$command instanceof OutboxRelayCommand) {
+            throw new RuntimeException('Il container non ha prodotto il comando outbox:relay.');
         }
 
         return $command;

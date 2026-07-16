@@ -13,16 +13,33 @@ x-app-environment: &app-environment
   REDIS_PORT: 6379
   REDIS_PASSWORD: ${REDIS_PASSWORD:-hapa-local-redis-change-me}
   REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-2.0}
+  RABBITMQ_ENABLED: ${RABBITMQ_ENABLED:-false}
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+  RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-hapa_automation}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-hapa-automation-rabbit-change-me}
+  RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-hapa.events}
+  RABBITMQ_CONNECT_TIMEOUT: ${RABBITMQ_CONNECT_TIMEOUT:-5.0}
+  RABBITMQ_READ_WRITE_TIMEOUT: ${RABBITMQ_READ_WRITE_TIMEOUT:-30.0}
+  RABBITMQ_HEARTBEAT: ${RABBITMQ_HEARTBEAT:-30}
+  OUTBOX_RELAY_WORKER_ID: ${OUTBOX_RELAY_WORKER_ID:-hapa-relay-local-1}
+  OUTBOX_RELAY_BATCH_SIZE: ${OUTBOX_RELAY_BATCH_SIZE:-50}
+  OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS: ${OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS:-300}
+  OUTBOX_RELAY_RETRY_BASE_SECONDS: ${OUTBOX_RELAY_RETRY_BASE_SECONDS:-30}
+  OUTBOX_RELAY_RETRY_MAX_SECONDS: ${OUTBOX_RELAY_RETRY_MAX_SECONDS:-3600}
   INTEGRATION_CONNECT_TIMEOUT: ${INTEGRATION_CONNECT_TIMEOUT:-5.0}
   INTEGRATION_REQUEST_TIMEOUT: ${INTEGRATION_REQUEST_TIMEOUT:-30.0}
   INTEGRATION_MAX_RESPONSE_BYTES: ${INTEGRATION_MAX_RESPONSE_BYTES:-2097152}
   LOG_LEVEL: ${LOG_LEVEL:-debug}
 
+x-php-build: &php-build
+  context: .
+  dockerfile: docker/php/Dockerfile
+
 services:
   php:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile
+    build: *php-build
     environment: *app-environment
     volumes:
       - ./:/var/www/html
@@ -37,6 +54,18 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  outbox-relay:
+    build: *php-build
+    environment: *app-environment
+    command: ["php", "bin/console", "outbox:relay"]
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend, messaging]
+    profiles: [messaging]
 
   nginx:
     build:
@@ -83,6 +112,9 @@ networks:
   frontend: {}
   backend:
     internal: true
+  messaging:
+    name: ${HAPA_MESSAGING_NETWORK:-hapa-messaging}
+    external: true
 
 volumes:
   postgres_data:

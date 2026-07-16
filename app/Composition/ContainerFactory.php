@@ -10,8 +10,11 @@ use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Configuration\ConfigurationSet;
 use Hapa\Core\Configuration\DatabaseConfig;
 use Hapa\Core\Configuration\IntegrationConfig;
+use Hapa\Core\Configuration\OutboxRelayConfig;
 use Hapa\Core\Configuration\ProxyConfig;
+use Hapa\Core\Configuration\RabbitMqConfig;
 use Hapa\Core\Configuration\RedisConfig;
+use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Database\PdoTransactionManager;
@@ -22,6 +25,10 @@ use Hapa\Core\Http\HttpResponsePolicy;
 use Hapa\Core\Kernel;
 use Hapa\Core\KernelFactory;
 use Hapa\Core\Logging\LoggerFactory;
+use Hapa\Core\Messaging\MessagePublisher;
+use Hapa\Core\Messaging\RabbitMqPublisher;
+use Hapa\Core\Outbox\OutboxEnvelopeFactory;
+use Hapa\Core\Outbox\OutboxRelayFactory;
 use Hapa\Core\Outbox\OutboxRepository;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
 use Hapa\Core\Ui\UiController;
@@ -80,6 +87,25 @@ final readonly class ContainerFactory
             $configuration->integration->requestTimeout,
             $configuration->integration->maximumResponseBytes,
         ]));
+        $container->setDefinition(RabbitMqConfig::class, new Definition(RabbitMqConfig::class, [
+            $configuration->rabbitMq->enabled,
+            $configuration->rabbitMq->host,
+            $configuration->rabbitMq->port,
+            $configuration->rabbitMq->vhost,
+            $configuration->rabbitMq->username,
+            $configuration->rabbitMq->password,
+            $configuration->rabbitMq->exchange,
+            $configuration->rabbitMq->connectTimeout,
+            $configuration->rabbitMq->readWriteTimeout,
+            $configuration->rabbitMq->heartbeat,
+        ]));
+        $container->setDefinition(OutboxRelayConfig::class, new Definition(OutboxRelayConfig::class, [
+            $configuration->outboxRelay->workerId,
+            $configuration->outboxRelay->batchSize,
+            $configuration->outboxRelay->lockTimeoutSeconds,
+            $configuration->outboxRelay->retryBaseSeconds,
+            $configuration->outboxRelay->retryMaximumSeconds,
+        ]));
 
         $container->register(SystemClock::class);
         $container->setAlias(Clock::class, SystemClock::class)->setPublic(false);
@@ -91,12 +117,24 @@ final readonly class ContainerFactory
             ->setArguments([new Reference(PDO::class)]);
         $container->setAlias(TransactionManager::class, PdoTransactionManager::class)->setPublic(false);
 
-        // HAPA conserva soltanto l'outbox transazionale dei propri eventi.
-        // Scheduling, retry provider, consumer RabbitMQ e proiezioni operative
-        // appartengono al servizio separato jellero/hapa-automation.
+        // HAPA conserva e pubblica soltanto la propria transactional outbox.
+        // Scheduler, retry provider, adapter e proiezioni operative appartengono
+        // al servizio separato jellero/hapa-automation.
         $container->register(PostgresOutboxRepository::class)
             ->setArguments([new Reference(PDO::class)]);
         $container->setAlias(OutboxRepository::class, PostgresOutboxRepository::class)->setPublic(false);
+        $container->register(RabbitMqPublisher::class)
+            ->setArguments([new Reference(RabbitMqConfig::class)]);
+        $container->setAlias(MessagePublisher::class, RabbitMqPublisher::class)->setPublic(false);
+        $container->register(OutboxEnvelopeFactory::class);
+        $container->register(OutboxRelayFactory::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(MessagePublisher::class),
+                new Reference(OutboxEnvelopeFactory::class),
+                new Reference(Clock::class),
+                new Reference(OutboxRelayConfig::class),
+            ]);
 
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
@@ -141,6 +179,12 @@ final readonly class ContainerFactory
             ->setPublic(true));
         $container->register(SystemCheckCommand::class)
             ->setArguments([new Reference(ReadinessCheck::class)])
+            ->setPublic(true);
+        $container->register(OutboxRelayCommand::class)
+            ->setArguments([
+                new Reference(OutboxRelayFactory::class),
+                new Reference(RabbitMqConfig::class),
+            ])
             ->setPublic(true);
 
         return $container;

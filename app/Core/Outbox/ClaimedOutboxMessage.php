@@ -25,6 +25,7 @@ final readonly class ClaimedOutboxMessage
         public string $workerId,
         public string $lockToken,
         public DateTimeImmutable $availableAt,
+        public DateTimeImmutable $createdAt,
     ) {
     }
 }

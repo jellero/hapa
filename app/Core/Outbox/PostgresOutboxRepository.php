@@ -76,7 +76,7 @@ WHERE message.id = candidates.id
 RETURNING message.id, message.aggregate_type, message.aggregate_id, message.event_type,
           message.payload::text AS payload, message.idempotency_key, message.correlation_id,
           message.schema_version, message.attempts, message.max_attempts,
-          message.available_at, message.locked_by, message.lock_token
+          message.available_at, message.created_at, message.locked_by, message.lock_token
 SQL);
         $statement->bindValue('available_at', self::date($now));
         $statement->bindValue('batch_limit', $limit, PDO::PARAM_INT);
@@ -221,6 +221,7 @@ SQL, $changes));
             (string) $row['locked_by'],
             (string) $row['lock_token'],
             new DateTimeImmutable((string) $row['available_at']),
+            new DateTimeImmutable((string) $row['created_at']),
         );
     }
 
