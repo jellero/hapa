@@ -35,7 +35,21 @@ Dal punto di vista di HAPA, `hapa-automation` è un servizio esterno che:
 - restituisce eventi di esito;
 - mantiene autonomamente il proprio stato tecnico.
 
-HAPA non importa codice dal repository esterno, non include il suo Compose e non accede al suo database. La documentazione operativa del servizio è in [`hapa-automation/docs/RUNTIME_ARCHITECTURE.md`](https://github.com/jellero/hapa-automation/blob/main/docs/RUNTIME_ARCHITECTURE.md).
+HAPA non importa codice dal repository esterno, non include il suo Compose e non accede al suo database. La documentazione operativa del servizio è in [`hapa-automation/docs/RUNTIME_ARCHITECTURE.md`](https://github.com/jellero/hapa-automation/blob/main/docs/RUNTIME_ARCHITECTURE.md); i contratti correnti sono in [`docs/MESSAGE_CONTRACTS.md`](https://github.com/jellero/hapa-automation/blob/main/docs/MESSAGE_CONTRACTS.md).
+
+La foundation disponibile sulla `main` di `hapa-automation` comprende:
+
+- stack Docker autonomo;
+- PostgreSQL dedicato;
+- topologia RabbitMQ;
+- envelope versionati;
+- inbox idempotente;
+- outbox con claim, retry e dead letter;
+- scheduler persistente;
+- proiezioni prodotto, ricarico e ordine;
+- worker long-running con graceful shutdown.
+
+Questa disponibilità non rende operativi i flussi provider. Gli adapter reali Space, marketplace, GLS e BRT, il relay/consumer RabbitMQ lato HAPA, i test di contratto congiunti e l’osservabilità completa restano da implementare. I job provider sono disabilitati per impostazione predefinita.
 
 ## 4. Proprietà dei dati
 
@@ -195,7 +209,7 @@ postgres-hapa
 redis
 ```
 
-`hapa-automation` viene costruito e distribuito dal proprio repository. I due progetti hanno pipeline, immagini, migrazioni, database e cicli di rilascio separati.
+`hapa-automation` viene costruito e distribuito dal proprio repository. I due progetti hanno pipeline, immagini, migrazioni, database e cicli di rilascio separati. La sua foundation è già presente su `main`, ma i job provider restano disabilitati finché non sono disponibili adapter e contratti end-to-end verificati.
 
 Per modifiche coordinate:
 
