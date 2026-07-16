@@ -97,7 +97,7 @@ La sola origine `b2c_ecommerce` è oggi una capacità di compatibilità del mode
 
 - account cliente, verifica email, consensi e recupero accesso;
 - varianti, contenuti, listini B2C, promozioni e imposte;
-- esposizione nello storefront del catalogo operativo, della disponibilità vendibile e delle regole di vendita già predisposte;
+- esposizione nello storefront dell’anagrafica prodotti, del prezzo commerciale e della disponibilità applicativa;
 - carrello, checkout, spedizione e calcolo dei totali;
 - pagamento, SCA, webhook, rimborsi e riconciliazione finanziaria;
 - conferme, notifiche e area personale;
@@ -105,7 +105,7 @@ La sola origine `b2c_ecommerce` è oggi una capacità di compatibilità del mode
 - privacy web, cookie e gestione dei diritti dell’interessato;
 - sicurezza, antifrode, rate limiting e test end-to-end.
 
-La foundation catalogo, prezzi Space, scorta di sicurezza e ricarichi marketplace è descritta in [`CATALOG_PRICING.md`](CATALOG_PRICING.md), ma non sostituisce le capacità e-commerce sopra elencate. Nessuna UI amministrativa o route pubblica attuale accetta ordini B2C.
+L’anagrafica prodotti, i prezzi e lo stock sincronizzati da Space e le regole di ricarico gestite in HAPA sono descritti in [`CATALOG_PRICING.md`](CATALOG_PRICING.md), ma non sostituiscono le capacità e-commerce sopra elencate. Nessuna UI amministrativa o route pubblica attuale accetta ordini B2C.
 
 ## Sicurezza e ciclo di vita
 
