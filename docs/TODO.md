@@ -19,6 +19,22 @@ Questa roadmap contiene soltanto lavoro di proprietà HAPA. Scheduler, worker, r
 - [x] UI presentazionale per clienti, ordini, catalogo, picking e spedizioni.
 - [x] Runtime automazioni rimosso dal container, CLI, route e UI HAPA.
 - [x] Confine RabbitMQ e database separati documentato.
+- [x] Foundation autonoma `hapa-automation` disponibile sulla propria branch `main`.
+
+## Stato dell’integrazione con hapa-automation
+
+La foundation tecnica esterna è disponibile, ma HAPA non è ancora collegato a RabbitMQ.
+
+Blocker verificati:
+
+- `OrderEventOutboxMapper` produce eventi dominio come `order.created` e `order.status_changed`, mentre il contratto esterno canonico corrente documenta `order.changed`;
+- il payload HAPA usa `order_version`, mentre la proiezione esterna richiede `version`;
+- il cambio stato HAPA usa `to_status`, mentre la proiezione esterna richiede `status`;
+- va deciso quali eventi puramente interni, come `order.address_changed`, devono essere pubblicati e quali dati minimi devono proiettare;
+- il relay deve trasformare la riga outbox nell’envelope RabbitMQ con `message_id`, `correlation_id`, `causation_id`, `occurred_at` e `schema_version`;
+- mancano test producer/consumer eseguiti in entrambi i repository.
+
+Nessun job provider deve essere abilitato finché questi punti non sono risolti.
 
 ## Priorità immediata HAPA
 
@@ -26,12 +42,13 @@ Questa roadmap contiene soltanto lavoro di proprietà HAPA. Scheduler, worker, r
 2. repository e read model dell’anagrafica prodotti;
 3. autenticazione, autorizzazione, sessioni e CSRF;
 4. CRUD autorizzato e auditato delle regole di ricarico;
-5. consumer RabbitMQ idempotente per eventi provenienti da `hapa-automation`;
-6. relay della transactional outbox verso RabbitMQ;
-7. vertical slice prodotto Space → HAPA;
-8. vertical slice ricarico HAPA → pubblicazione marketplace;
-9. vertical slice ordine marketplace → HAPA → Space;
-10. picking, colli e richieste spedizione.
+5. normalizzazione e test del contratto messaggi con `hapa-automation`;
+6. consumer RabbitMQ idempotente per eventi provenienti da `hapa-automation`;
+7. relay della transactional outbox verso RabbitMQ;
+8. vertical slice prodotto Space → HAPA;
+9. vertical slice ricarico HAPA → pubblicazione marketplace;
+10. vertical slice ordine marketplace → HAPA → Space;
+11. picking, colli e richieste spedizione.
 
 ## Fase 1 — Anagrafiche
 
@@ -69,7 +86,10 @@ Questa roadmap contiene soltanto lavoro di proprietà HAPA. Scheduler, worker, r
 
 ## Fase 4 — Messaggistica HAPA
 
+- [ ] Congelare il contratto canonico degli eventi ordine e catalogo.
+- [ ] Allineare `OrderEventOutboxMapper` a nomi e payload consumabili da `hapa-automation`.
 - [ ] Definire envelope e routing key versionate.
+- [ ] Definire la generazione stabile di `message_id` e `causation_id` dal record outbox.
 - [ ] Implementare relay outbox con publisher confirm.
 - [ ] Implementare consumer RabbitMQ con inbox idempotente HAPA.
 - [ ] Gestire aggiornamenti fuori ordine tramite versione entità.
