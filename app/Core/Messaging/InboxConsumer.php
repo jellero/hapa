@@ -52,14 +52,22 @@ final readonly class InboxConsumer
                 }
 
                 if ($attempt !== null) {
-                    $this->pdo->beginTransaction();
-                    $this->inbox->recordFailure(
-                        $message,
-                        $attempt,
-                        $this->clock->now(),
-                        $exception->getMessage(),
-                    );
-                    $this->pdo->commit();
+                    try {
+                        $this->pdo->beginTransaction();
+                        $this->inbox->recordFailure(
+                            $message,
+                            $attempt,
+                            $this->clock->now(),
+                            $exception->getMessage(),
+                        );
+                        $this->pdo->commit();
+                    } catch (Throwable $recordingFailure) {
+                        if ($this->pdo->inTransaction()) {
+                            $this->pdo->rollBack();
+                        }
+
+                        throw $recordingFailure;
+                    }
                 }
 
                 if (
