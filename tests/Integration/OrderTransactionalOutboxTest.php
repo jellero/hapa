@@ -73,20 +73,36 @@ final class OrderTransactionalOutboxTest extends TestCase
         $repository->save($loaded, 1);
 
         $statement = $this->pdo->prepare(<<<'SQL'
-SELECT event_type, schema_version, correlation_id, status
+SELECT event_type, schema_version, correlation_id, status, payload::text AS payload
 FROM outbox_messages
 WHERE aggregate_id = :order_number
 ORDER BY id
 SQL);
         $statement->execute(['order_number' => (string) $number]);
-        /** @var list<array{event_type: string, schema_version: int|string, correlation_id: string, status: string}> $messages */
+        /** @var list<array{event_type: string, schema_version: int|string, correlation_id: string, status: string, payload: string}> $messages */
         $messages = $statement->fetchAll();
 
         self::assertCount(2, $messages);
         self::assertSame('pending', $messages[0]['status']);
         self::assertSame('pending', $messages[1]['status']);
+        self::assertSame('order.changed', $messages[0]['event_type']);
+        self::assertSame('order.changed', $messages[1]['event_type']);
         self::assertSame(1, (int) $messages[0]['schema_version']);
         self::assertNotSame('', $messages[0]['correlation_id']);
+
+        /** @var array<string, mixed> $createdPayload */
+        $createdPayload = json_decode($messages[0]['payload'], true, 512, JSON_THROW_ON_ERROR);
+        /** @var array<string, mixed> $acceptedPayload */
+        $acceptedPayload = json_decode($messages[1]['payload'], true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame('order.created', $createdPayload['change_type']);
+        self::assertSame(1, $createdPayload['version']);
+        self::assertSame('imported', $createdPayload['status']);
+        self::assertSame('order.status_changed', $acceptedPayload['change_type']);
+        self::assertSame(2, $acceptedPayload['version']);
+        self::assertSame('accepted', $acceptedPayload['status']);
+        self::assertArrayNotHasKey('order_version', $acceptedPayload);
+        self::assertArrayNotHasKey('to_status', $acceptedPayload);
 
         $this->expectException(StaleOrderVersion::class);
         $repository->save($loaded, 1);
