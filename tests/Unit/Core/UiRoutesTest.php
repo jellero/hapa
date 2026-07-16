@@ -29,6 +29,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/customers/{customerId}', $routes->get('ui_customer_detail')?->getPath());
         self::assertSame('/ui/orders', $routes->get('ui_orders')?->getPath());
         self::assertSame('/ui/orders/{orderId}', $routes->get('ui_order_detail')?->getPath());
+        self::assertSame('/ui/catalog', $routes->get('ui_catalog')?->getPath());
         self::assertSame('/ui/picking', $routes->get('ui_picking')?->getPath());
         self::assertSame('/ui/shipments', $routes->get('ui_shipments')?->getPath());
         self::assertSame('/ui/automation', $routes->get('ui_automation')?->getPath());
@@ -38,6 +39,17 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/settings', $routes->get('ui_settings')?->getPath());
         self::assertSame('/ui/profile', $routes->get('ui_profile')?->getPath());
         self::assertSame('/ui/{path}', $routes->get('ui_not_found')?->getPath());
+    }
+
+    public function testTheKernelServesTheCatalogPricingPage(): void
+    {
+        $basePath = dirname(__DIR__, 3);
+        $kernel = Bootstrap::initialize($basePath)->kernel();
+        $response = $kernel->handle(Request::create('/ui/catalog'));
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('Da Space all’offerta marketplace', (string) $response->getContent());
+        self::assertStringContainsString('Nuova regola di ricarico', (string) $response->getContent());
     }
 
     public function testTheKernelServesTheDashboardWithSecurityHeaders(): void

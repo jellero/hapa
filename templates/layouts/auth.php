@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#132238">
     <meta name="description" content="<?= $e($description ?? 'Accesso HAPA') ?>">
     <title><?= $e($title ?? 'Accesso') ?> · HAPA</title>
-    <link rel="stylesheet" href="/assets/ui.css?v=4">
-    <script defer src="/assets/ui.js?v=4"></script>
+    <link rel="stylesheet" href="/assets/ui.css?v=5">
+    <script defer src="/assets/ui.js?v=5"></script>
 </head>
 <body class="auth-body">
     <a class="skip-link" href="#auth-content">Vai al contenuto</a>
@@ -23,7 +23,7 @@
             </a>
 
             <div class="auth-story__content">
-                <p class="eyebrow eyebrow--inverse">Marketplace → Space → Magazzino → Corrieri</p>
+                <p class="eyebrow eyebrow--inverse">Space → Prezzi e stock → Marketplace → Ordini e corrieri</p>
                 <h1 id="auth-story-title">Ogni ordine.<br>Un solo controllo.</h1>
                 <p>HAPA riunisce ordini, picking, spedizioni, retry e audit in un centro operativo progettato per decisioni rapide e tracciabili.</p>
 

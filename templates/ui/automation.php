@@ -29,7 +29,7 @@
     <article class="metric-card metric-card--info">
         <div class="metric-card__top"><span>Frequenza flusso</span><span class="metric-card__signal" aria-hidden="true"></span></div>
         <strong>10 min</strong>
-        <p>I sette job sono registrati e restano spenti fino al collegamento degli adapter.</p>
+        <p>I <?= $e(count($automations)) ?> job sono registrati e restano spenti fino al collegamento degli adapter.</p>
     </article>
     <article class="metric-card metric-card--warning">
         <div class="metric-card__top"><span>Decisioni parziali</span><span class="metric-card__signal" aria-hidden="true"></span></div>
@@ -44,7 +44,7 @@
             <p class="eyebrow">Piano operativo</p>
             <h2 id="automation-plan-title">Automazioni ordini e spedizioni</h2>
         </div>
-        <span class="status-badge status-badge--info">7 job censiti</span>
+        <span class="status-badge status-badge--info"><?= $e(count($automations)) ?> job censiti</span>
     </div>
     <div class="table-scroll">
         <table class="data-table">
@@ -96,13 +96,18 @@
                 <div class="workstream-item__copy"><strong>Registra audit ordine</strong><span>Handler interno idempotente per creazione e variazioni dell’ordine</span></div>
                 <span class="status-badge status-badge--success">Collegato</span>
             </article>
+            <article class="workstream-item">
+                <span class="workstream-item__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span>
+                <div class="workstream-item__copy"><strong>Prepara offerte marketplace</strong><span>Prezzo Space, ricarico HAPA, scorta di sicurezza e versione di pubblicazione</span></div>
+                <span class="status-badge status-badge--success">Modello pronto</span>
+            </article>
         </div>
     </section>
 
     <aside class="panel" aria-labelledby="activation-title">
         <div class="panel__header"><div><p class="eyebrow">Attivazione controllata</p><h2 id="activation-title">Perché i provider sono spenti</h2></div></div>
         <ol class="priority-list">
-            <li><span>01</span><div><strong>Credenziali reali</strong><small>SellRapido, Space, GLS e BRT</small></div></li>
+            <li><span>01</span><div><strong>Credenziali reali</strong><small>SellRapido, marketplace, Space, GLS e BRT</small></div></li>
             <li><span>02</span><div><strong>Contratti verificati</strong><small>Payload, idempotenza e limiti provider</small></div></li>
             <li><span>03</span><div><strong>Test in sandbox</strong><small>Riconciliazione prima del traffico reale</small></div></li>
             <li><span>04</span><div><strong>Etichetta e tracking</strong><small>Handler event-driven GLS/BRT dopo il picking</small></div></li>

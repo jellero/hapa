@@ -7,6 +7,7 @@ Questo documento ordina il lavoro per dipendenze tecniche, valore operativo e ri
 Riferimenti:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md);
+- [`CATALOG_PRICING.md`](CATALOG_PRICING.md);
 - [`CARRIERS.md`](CARRIERS.md);
 - [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md);
 - [`INTERFACE.md`](INTERFACE.md);
@@ -35,6 +36,9 @@ Riferimenti:
 - [x] Dipendenze tra moduli dichiarate e verificate contro import illegittimi e cicli.
 - [x] Distinzione tipizzata tra canale marketplace e connettore tecnico.
 - [x] Portafoglio futuro definito per SellRapido, Amazon, eMAG, Temu e IBS.
+- [x] Modulo Catalog con prezzo in unità minori, scorta di sicurezza, quantità vendibile e motore ricarichi deterministico.
+- [x] Schema PostgreSQL per articoli, regole prezzo e offerte marketplace versionate.
+- [x] Contratti tipizzati per catalogo Space incrementale e pubblicazione offerte marketplace.
 - [x] Schema e tipi di dominio iniziali per clienti, identità esterne e indirizzi.
 - [x] Anagrafica ordine estesa con numero interno, cliente, origine e snapshot di fatturazione.
 - [x] Aggregato ordine, righe immutabili, macchina a stati, eventi e storico versionato delle transizioni.
@@ -45,7 +49,7 @@ Riferimenti:
 - [x] Composition root separato, container compilato, configurazioni tipizzate e Clock iniettato.
 - [x] Repository PostgreSQL ordine, transaction manager, optimistic locking e outbox atomica.
 - [x] Worker outbox one-shot con claim concorrente, retry, dead letter e lock recovery.
-- [x] Scheduler persistente con i sette job ordini/spedizioni censiti e disattivati fino agli adapter reali.
+- [x] Scheduler persistente con gli otto job ordini/catalogo/spedizioni censiti e disattivati fino agli adapter reali.
 - [x] Documentazione architetturale completa.
 - [x] Confronto architetturale con le pratiche Symfony attuali.
 - [x] Pull request tecniche sostituite chiuse.
@@ -57,8 +61,9 @@ La prossima sequenza deve collegare clienti, sicurezza e primo provider alla bas
 1. aggregato e repository cliente, query paginata per clienti e ordini;
 2. autenticazione, autorizzazione, CSRF e audit delle azioni;
 3. discovery e adapter del primo account-canale;
-4. vertical slice Marketplace → HAPA → Space;
-5. osservabilità e gestione autorizzata delle dead letter.
+4. vertical slice Marketplace → HAPA → Space per gli ordini;
+5. vertical slice Space → pricing HAPA → primo marketplace per catalogo e offerte;
+6. osservabilità e gestione autorizzata delle dead letter.
 
 ## Fase 0 — Composition root e primitive condivise
 
@@ -128,6 +133,7 @@ La prossima sequenza deve collegare clienti, sicurezza e primo provider alla bas
 
 - [x] Introdurre `ExternalOrderLine` al posto degli array strutturati.
 - [x] Introdurre `MarketplaceChannel`, `MarketplaceConnector` ed `ExternalOrderReference`.
+- [x] Introdurre `Money`, batch/cursore Space e DTO di pubblicazione offerta marketplace.
 - [x] Estrarre `CarrierAdapter`, `CarrierCode`, `ShipmentRequest` e `ShipmentResult` nel contratto comune `Shipping`.
 - [x] Registrare i moduli provider GLS e BRT dietro il contratto comune.
 - [ ] Introdurre `SpaceOrderLine` al posto degli array strutturati.
@@ -172,7 +178,7 @@ La prossima sequenza deve collegare clienti, sicurezza e primo provider alla bas
 - [ ] Definire supervisor o orchestratore e strategia di restart.
 - [ ] Esporre liveness, readiness e statistiche del worker.
 - [ ] Implementare comandi autorizzati per inspect, retry, replay e rimozione dead letter.
-- [x] Implementare scheduler persistente e censire i sette job ordini/spedizioni a dieci minuti.
+- [x] Implementare scheduler persistente e censire gli otto job ordini/catalogo/spedizioni a dieci minuti.
 - [x] Proteggere claim scheduler e job globali tramite lock PostgreSQL.
 - [ ] Definire timezone, jitter, overlap policy e misfire policy per ogni job.
 - [ ] Persistire cursori e watermark dei job nel database.
@@ -203,9 +209,31 @@ La prossima sequenza deve collegare clienti, sicurezza e primo provider alla bas
 
 **Gate:** un ordine reale o sandbox attraversa importazione, accettazione, indirizzo, persistenza e invio a Space con retry, sicurezza di rete e tracciabilità completa.
 
-## Fase 6 — Disponibilità, magazzino e picking
+## Fase 5A — Catalogo Space, ricarichi e offerte marketplace
 
-- [ ] Implementare aggiornamento disponibilità da Space.
+- [x] Definire ownership di prezzo base, disponibilità fisica, scorta di sicurezza e offerta pubblicata.
+- [x] Modellare importi monetari senza `float` e disponibilità vendibile mai negativa.
+- [x] Implementare regole percentuali, importo fisso e prezzo fisso con precedenza deterministica.
+- [x] Aggiungere limiti minimo/massimo, priorità e controllo valuta.
+- [x] Creare schema `catalog_items`, `pricing_rules` e `marketplace_offers` con vincoli e versioni.
+- [x] Definire `SpaceCatalogAdapter` con cursore e batch incrementale.
+- [x] Definire `MarketplaceOfferAdapter` con prezzo, quantità, versione e idempotency key.
+- [x] Censire `sync_space_catalog` e `publish_marketplace_offers` come job disabilitati.
+- [x] Aggiungere la pagina `/ui/catalog` senza simulare dati o adapter attivi.
+- [ ] Definire repository e casi d’uso transazionali per articoli, regole e offerte.
+- [ ] Produrre outbox atomica quando prezzo o quantità desiderati cambiano.
+- [ ] Implementare il client Space dopo discovery di endpoint, cursori, versioni, quote e semantica stock.
+- [ ] Implementare la pubblicazione sul primo account-canale dopo la discovery marketplace.
+- [ ] Definire una policy approvata per dati Space scaduti e arresto della pubblicazione.
+- [ ] Implementare riconciliazione, metriche, audit e gestione autorizzata delle regole.
+- [ ] Collegare read model e comandi UI dopo autenticazione, autorizzazione e CSRF.
+- [ ] Coprire crash a metà batch, versioni fuori ordine, timeout ambiguo, rounding e duplicati.
+
+**Gate:** un articolo sandbox attraversa Space → HAPA → marketplace con cursore transazionale, ricarico verificabile, scorta di sicurezza, idempotenza, riconciliazione e visibilità operativa completa.
+
+## Fase 6 — Disponibilità ordine, magazzino e picking
+
+- [ ] Implementare aggiornamento della disponibilità sulle righe ordine da Space, distinto dallo stock catalogo.
 - [ ] Modellare `pick_sessions` e `pick_tasks`.
 - [ ] Modellare scansioni barcode e anomalie di scansione.
 - [ ] Gestire operatore, postazione, timestamp e audit delle attività.
@@ -295,7 +323,7 @@ La prossima sequenza deve collegare clienti, sicurezza e primo provider alla bas
 Questa fase resta un TODO di prodotto. La presenza dell’origine ordine nel database non rende operativo alcun flusso pubblico.
 
 - [ ] Definire storefront, account cliente, verifica email, consensi e recupero accesso.
-- [ ] Modellare catalogo, prodotti, varianti, contenuti e disponibilità pubblicabile.
+- [ ] Estendere il catalogo operativo con prodotti, varianti, contenuti e disponibilità specifica dello storefront.
 - [ ] Modellare listini, promozioni, imposte, valute e arrotondamenti.
 - [ ] Implementare carrello persistente e checkout idempotente.
 - [ ] Calcolare spedizione, sconti, imposte e totale autorevole lato server.

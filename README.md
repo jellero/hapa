@@ -1,6 +1,6 @@
 # HAPA
 
-HAPA è la piattaforma proprietaria che governa anagrafiche clienti e ordini, ciclo marketplace, Space API, magazzino e corrieri GLS e BRT (Bartolini), predisponendo l’origine ordini del futuro e-commerce B2C.
+HAPA è la piattaforma proprietaria che governa anagrafiche clienti e ordini, catalogo con prezzi e disponibilità, ciclo marketplace, Space API, magazzino e corrieri GLS e BRT (Bartolini), predisponendo l’origine ordini del futuro e-commerce B2C.
 
 Il progetto usa un **framework custom proprietario in PHP 8.4**, costruito su componenti Symfony selezionati e su confini applicativi espliciti. PostgreSQL conserva lo stato autorevole del processo; Redis supporta coordinamento e capacità temporanee; le integrazioni esterne attraversano adapter tipizzati, transactional outbox, retry e riconciliazione.
 
@@ -14,12 +14,15 @@ Il flusso completo previsto comprende:
 4. acquisizione e normalizzazione degli indirizzi;
 5. persistenza idempotente di ordine, cliente e righe;
 6. invio dell’ordine a Space tramite API;
-7. aggiornamento della disponibilità;
-8. picking barcode completo o parziale;
-9. definizione di colli, peso reale, volumetrico e tariffabile;
-10. creazione spedizione ed etichetta tramite il corriere selezionato;
-11. restituzione di tracking e fulfilment al marketplace;
-12. controllo operativo tramite audit, retry e riconciliazione.
+7. sincronizzazione via API di prezzo e disponibilità catalogo da Space;
+8. applicazione in HAPA di scorta di sicurezza e regole di ricarico;
+9. pubblicazione via API di prezzo finale e quantità vendibile sui marketplace;
+10. aggiornamento della disponibilità delle righe ordine;
+11. picking barcode completo o parziale;
+12. definizione di colli, peso reale, volumetrico e tariffabile;
+13. creazione spedizione ed etichetta tramite il corriere selezionato;
+14. restituzione di tracking e fulfilment al marketplace;
+15. controllo operativo tramite audit, retry e riconciliazione.
 
 ## Stato del progetto
 
@@ -38,23 +41,27 @@ Il flusso completo previsto comprende:
 - Docker development e production;
 - runtime applicativo separato dall’immagine migrazioni;
 - CI con audit Composer, PostgreSQL, Redis, PHPUnit, PHPStan e smoke test production;
-- contratto Shipping provider-neutral e contratti iniziali tipizzati per Marketplace, Space, GLS e BRT;
+- contratto Shipping provider-neutral e contratti iniziali tipizzati per Marketplace, Space, catalogo, GLS e BRT;
 - distinzione tipizzata tra canale marketplace e connettore tecnico;
-- invarianti runtime sui contratti Marketplace, Space e Shipping;
+- invarianti runtime sui contratti Catalog, Marketplace, Space e Shipping;
 - dipendenze tra moduli dichiarate e verificate automaticamente, senza cicli;
 - canali futuri registrati per Amazon, eMAG, Temu e IBS, con SellRapido come connettore aggregatore;
+- modello catalogo con prezzo Space in unità minori, disponibilità fisica, scorta di sicurezza e stock vendibile non negativo;
+- motore deterministico per ricarico percentuale, importo o prezzo fisso, con precedenza, priorità e soglie;
+- schema PostgreSQL per articoli, regole prezzo e offerte marketplace versionate e idempotenti;
+- contratti API incrementali per acquisire prezzi/stock da Space e pubblicare offerte sui marketplace;
 - anagrafica clienti con stato, tipo, contatti, dati fiscali, identità esterne e indirizzi predefiniti;
 - anagrafica ordini con numero interno, cliente, origine vincolata e snapshot distinti di spedizione e fatturazione;
 - aggregato `Order` con righe immutabili, invarianti sulle quantità, macchina a stati deterministica ed eventi di dominio;
 - storico versionato delle transizioni ordine e numero riga stabile, protetti da vincoli PostgreSQL;
 - origine `b2c_ecommerce` predisposta nel modello, con e-commerce completo mantenuto in roadmap;
 - interfaccia operativa server-rendered, responsive e accessibile per tutte le aree previste;
-- schermate di accesso, dashboard, clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
+- schermate di accesso, dashboard, clienti, ordini, catalogo e prezzi, picking, spedizioni, automazioni, integrazioni, audit, utenti e impostazioni;
 - repository PostgreSQL dell’aggregato ordine con mapping completo e optimistic locking atomico;
 - transaction manager e scrittura di ordine, transizioni e outbox nello stesso commit;
 - transactional outbox operativa con schema versione, correlation ID e deduplica;
 - worker concorrente con `FOR UPDATE SKIP LOCKED`, lock recovery, retry con backoff e jitter e dead letter;
-- scheduler persistente con sette job ordini/spedizioni a intervallo di dieci minuti, censiti ma disattivati fino agli adapter reali;
+- scheduler persistente con otto job per ordini, catalogo e spedizioni a intervallo di dieci minuti, censiti ma disattivati fino agli adapter reali;
 - handler interno idempotente che proietta gli eventi ordine nell’audit log;
 - comando CLI one-shot `automation:run`, adatto a cron o orchestratore;
 - manifest versionato per la readiness dello schema PostgreSQL;
@@ -67,11 +74,12 @@ La roadmap prosegue dalla base transazionale ora operativa verso le vertical sli
 1. aggregato e repository cliente, query paginata per clienti e ordini;
 2. autenticazione, autorizzazione, CSRF e audit delle azioni UI;
 3. discovery e adapter del primo canale SellRapido/marketplace;
-4. vertical slice Marketplace → HAPA → Space;
-5. picking, conferma manuale dei parziali e adapter GLS/BRT;
-6. metriche, gestione operativa delle dead letter e supervisione continuativa dei worker.
+4. vertical slice Marketplace → HAPA → Space per gli ordini;
+5. adapter Space catalogo e pubblicazione offerte sul primo account-canale;
+6. picking, conferma manuale dei parziali e adapter GLS/BRT;
+7. metriche, gestione operativa delle dead letter e supervisione continuativa dei worker.
 
-Gli adapter provider restano disattivati finché contratti, credenziali e sandbox non sono verificati. Il runtime delle automazioni non simula chiamate esterne. Il piano è documentato in [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md), le anagrafiche in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md), marketplace e corrieri rispettivamente in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) e [`docs/CARRIERS.md`](docs/CARRIERS.md).
+Gli adapter provider restano disattivati finché contratti, credenziali e sandbox non sono verificati. Il runtime delle automazioni non simula chiamate esterne. Il piano è documentato in [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md), prezzi e disponibilità in [`docs/CATALOG_PRICING.md`](docs/CATALOG_PRICING.md), le anagrafiche in [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md), marketplace e corrieri rispettivamente in [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) e [`docs/CARRIERS.md`](docs/CARRIERS.md).
 
 ## Architettura
 
@@ -89,6 +97,7 @@ database/
   migrations/              schema PostgreSQL versionato
 docs/
   ARCHITECTURE.md           riferimento architetturale
+  CATALOG_PRICING.md        prezzi Space, ricarichi e offerte marketplace
   CARRIERS.md               contratto Shipping, GLS e BRT
   DEVELOPMENT_WORKFLOW.md   percorso canonico di sviluppo
   SYMFONY_ALIGNMENT.md      adozione selettiva delle primitive Symfony
@@ -165,11 +174,12 @@ Interfaccia operativa:
 ```text
 GET http://localhost:8080/login
 GET http://localhost:8080/ui
+GET http://localhost:8080/ui/catalog
 ```
 
-La UI espone il piano delle sette automazioni e lo stato del runtime, ma non consente ancora azioni mutative né attiva provider reali. Autenticazione, autorizzazione e collegamento dei read model restano gate obbligatori prima dell’esercizio operativo.
+La UI espone il catalogo commerciale, il piano delle otto automazioni e lo stato del runtime, ma non consente ancora azioni mutative né attiva provider reali. Autenticazione, autorizzazione e collegamento dei read model restano gate obbligatori prima dell’esercizio operativo.
 
-`automation:run` è one-shot: recupera lock scaduti, pianifica i job abilitati ed elabora un batch outbox. In produzione va richiamato da un cron o orchestratore con identità worker stabile. I sette job di integrazione sono creati disabilitati e devono essere attivati soltanto quando il relativo handler provider ha superato i test sandbox.
+`automation:run` è one-shot: recupera lock scaduti, pianifica i job abilitati ed elabora un batch outbox. In produzione va richiamato da un cron o orchestratore con identità worker stabile. I job di integrazione sono creati disabilitati e devono essere attivati soltanto quando il relativo handler provider ha superato i test sandbox.
 
 ## Comandi di qualità
 
@@ -223,7 +233,8 @@ L’indice documentale è [`docs/README.md`](docs/README.md).
 | Documento | Contenuto |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini, dominio, persistenza, flussi, runtime, deploy e operatività |
-| [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md) | scheduler, outbox, sette job ordini/spedizioni, retry e criteri di attivazione |
+| [`docs/AUTOMATIONS.md`](docs/AUTOMATIONS.md) | scheduler, outbox, otto job ordini/catalogo/spedizioni, retry e criteri di attivazione |
+| [`docs/CATALOG_PRICING.md`](docs/CATALOG_PRICING.md) | ownership Space/HAPA/marketplace, stock vendibile, ricarichi e sincronizzazione offerte |
 | [`docs/CARRIERS.md`](docs/CARRIERS.md) | ownership Shipping, GLS e BRT, discovery, failure mode e gate operativi |
 | [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | modello canonico di clienti, identità, indirizzi, ordini e confine B2C |
 | [`docs/DEVELOPMENT_WORKFLOW.md`](docs/DEVELOPMENT_WORKFLOW.md) | ownership, livelli applicativi, dipendenze e Definition of Done |

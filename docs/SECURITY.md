@@ -118,6 +118,7 @@ L’autorizzazione segue deny-by-default:
 - permessi valutati server-side;
 - separazione tra lettura, modifica, approvazione, annullamento, retry, replay e amministrazione;
 - permessi distinti per consultazione, export, merge e anonimizzazione delle anagrafiche cliente;
+- permessi distinti per modifica di scorta di sicurezza, ricarichi, limiti prezzo e attivazione delle pubblicazioni;
 - verifica della versione dell’ordine prima di azioni concorrenti;
 - audit delle operazioni con impatto operativo;
 - registrazione dei dinieghi rilevanti con dati minimizzati;
@@ -129,7 +130,7 @@ Ogni confine applicativo applica validazione strutturata:
 
 - request HTTP e form;
 - parametri route e query;
-- payload Marketplace, Space, GLS e BRT;
+- payload Marketplace, catalogo Space, offerte prezzo/stock, GLS e BRT;
 - messaggi outbox persistiti;
 - file o label ricevuti dai provider;
 - configurazioni e feature flag.
@@ -153,7 +154,9 @@ URL derivati da payload esterni vengono validati contro schema e host autorizzat
 
 I retry HTTP vengono applicati soltanto a errori temporanei e operazioni idempotenti. Operazioni mutative richiedono idempotency key o riconciliazione sicura.
 
-Per i marketplace, credenziali, quote, cursori e audit sono isolati per account e connettore. Il canale sorgente viene conservato separatamente dal percorso tecnico: un ordine Amazon ricevuto tramite SellRapido non viene riclassificato come ordine SellRapido. L’attivazione concorrente di un adapter diretto e dell’aggregatore sullo stesso account-canale è vietata per prevenire doppie importazioni e doppie notifiche.
+Per i marketplace, credenziali, quote, cursori e audit sono isolati per account e connettore. Il canale sorgente viene conservato separatamente dal percorso tecnico: un ordine Amazon ricevuto tramite SellRapido non viene riclassificato come ordine SellRapido. L’attivazione concorrente di un adapter diretto e dell’aggregatore sullo stesso account-canale è vietata per prevenire doppie importazioni, notifiche e pubblicazioni prezzo/stock.
+
+Prezzi e quantità sono dati operativi ad alto impatto. I calcoli usano unità minori intere, la scorta di sicurezza non può diventare negativa e ogni variazione di regola richiede versione, attore e audit. HAPA non accetta aggiornamenti marketplace come sorgente implicita del prezzo base Space.
 
 ## Webhook e callback in ingresso
 
@@ -199,7 +202,7 @@ Requisiti di sicurezza e affidabilità:
 
 ## Scheduler e lock
 
-Ogni job ricorrente definisce frequenza, timezone, jitter, lock distribuito, policy di sovrapposizione, misfire policy e cursore persistente.
+Ogni job ricorrente definisce frequenza, timezone, jitter, lock distribuito, policy di sovrapposizione, misfire policy e cursore persistente. Per il catalogo Space il cursore avanza solo dopo il commit del batch; la policy su dati scaduti deve essere approvata prima dell’attivazione.
 
 Symfony Lock o un meccanismo equivalente protegge il ruolo di scheduler leader e i job globali. Modifiche concorrenti a un ordine usano optimistic locking e transazioni PostgreSQL.
 
@@ -270,7 +273,7 @@ Ogni incidente deve essere collegato tramite correlation ID a log applicativi, d
 3. conservazione delle evidenze;
 4. rotazione dei segreti coinvolti;
 5. revoca di sessioni e token;
-6. verifica di integrità di ordini, spedizioni e tracking;
+6. verifica di integrità di ordini, catalogo, prezzi pubblicati, spedizioni e tracking;
 7. riconciliazione con Marketplace, Space e il corriere coinvolto;
 8. ripristino;
 9. verifica post-incidente e azioni correttive.

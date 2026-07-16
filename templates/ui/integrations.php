@@ -16,7 +16,7 @@
     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
     <div>
         <strong>Confini di integrazione espliciti</strong>
-        <span>Per i marketplace resta attivo un solo import per account-canale; GLS e BRT condividono il contratto Shipping ma mantengono configurazioni e adapter separati.</span>
+        <span>Per ogni account-canale resta attivo un solo percorso per ordini e offerte; Space alimenta prezzo e stock base, mentre HAPA pubblica ricarichi e quantità vendibili senza sovrascrivere la sorgente.</span>
     </div>
 </div>
 

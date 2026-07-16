@@ -44,7 +44,7 @@ worker
   -> delivery, retry e riconciliazione
 ```
 
-La foundation HAPA corrente offre bootstrap, container DI compilato, configurazioni tipizzate, routing, risposta HTTP, health check, repository ordine, transaction manager, outbox, worker/scheduler one-shot e UI presentazionale. Autenticazione, permessi, CSRF, repository cliente/read model e adapter provider reali sono ancora gate di roadmap: il nuovo codice non deve descriverli come già operativi.
+La foundation HAPA corrente offre bootstrap, container DI compilato, configurazioni tipizzate, routing, risposta HTTP, health check, repository ordine, transaction manager, outbox, worker/scheduler one-shot, catalogo con motore ricarichi e UI presentazionale. Autenticazione, permessi, CSRF, repository cliente/catalogo, read model e adapter provider reali sono ancora gate di roadmap: il nuovo codice non deve descriverli come già operativi.
 
 ## Responsabilità dei livelli
 
@@ -90,6 +90,8 @@ Esempio corrente:
 ```text
 Gls -> Shipping\Contract
 Brt -> Shipping\Contract
+Space -> Catalog\Contract
+Marketplace -> Catalog\Contract
 ```
 
 Il modulo `Shipping` possiede il modello comune; i moduli provider possiedono mapping e adapter concreti.

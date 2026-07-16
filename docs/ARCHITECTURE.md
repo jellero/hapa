@@ -10,7 +10,7 @@ La documentazione distingue sempre tre livelli di maturità:
 - **parziale**: struttura o contratto presente, comportamento operativo ancora incompleto;
 - **pianificato**: definito come direzione architetturale e riportato nella roadmap.
 
-La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md). Marketplace e corrieri sono descritti in [`MARKETPLACES.md`](MARKETPLACES.md) e [`CARRIERS.md`](CARRIERS.md). Il percorso di sviluppo è in [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md) e il layer di presentazione in [`INTERFACE.md`](INTERFACE.md).
+La roadmap esecutiva è mantenuta in [`TODO.md`](TODO.md). I requisiti di sicurezza sono mantenuti in [`SECURITY.md`](SECURITY.md). Catalogo e pricing, marketplace e corrieri sono descritti in [`CATALOG_PRICING.md`](CATALOG_PRICING.md), [`MARKETPLACES.md`](MARKETPLACES.md) e [`CARRIERS.md`](CARRIERS.md). Il percorso di sviluppo è in [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md) e il layer di presentazione in [`INTERFACE.md`](INTERFACE.md).
 
 ---
 
@@ -26,11 +26,14 @@ Il sistema deve:
 4. acquisire e normalizzare gli indirizzi;
 5. memorizzare cliente, ordine e righe in modo idempotente;
 6. inviare l’ordine a Space tramite API;
-7. aggiornare disponibilità e quantità gestibili;
-8. supportare picking completo o parziale tramite barcode;
-9. produrre colli, spedizione ed etichetta tramite il corriere selezionato;
-10. restituire tracking e fulfilment al marketplace;
-11. offrire controllo operativo, audit, retry e riconciliazione.
+7. sincronizzare via API prezzo e disponibilità catalogo da Space;
+8. calcolare in HAPA scorta di sicurezza, ricarico e offerta vendibile;
+9. pubblicare via API prezzi e disponibilità sui marketplace;
+10. aggiornare disponibilità e quantità gestibili delle righe ordine;
+11. supportare picking completo o parziale tramite barcode;
+12. produrre colli, spedizione ed etichetta tramite il corriere selezionato;
+13. restituire tracking e fulfilment al marketplace;
+14. offrire controllo operativo, audit, retry e riconciliazione.
 
 HAPA mantiene lo **stato autorevole del processo interno**. Marketplace, Space, GLS e BRT restano sistemi esterni con stato proprio; la coerenza tra i sistemi viene raggiunta mediante idempotenza, delivery persistite e riconciliazione.
 
@@ -103,7 +106,7 @@ flowchart TB
 | Canali marketplace | origine ordine, identità cliente, accettazione, indirizzo, fulfilment, tracking | Amazon, eMAG, Temu e IBS tramite adapter |
 | Connettori marketplace | percorso tecnico verso uno o più canali | SellRapido aggregatore oppure adapter diretto |
 | Futuro e-commerce B2C | account cliente, checkout e origine ordine diretta | pianificato, nessuna route pubblica attiva |
-| Space | ricezione ordine, approvvigionamento e disponibilità | API |
+| Space | ricezione ordine, approvvigionamento, prezzo base e disponibilità fisica | API |
 | GLS | spedizione, label e tracking | adapter dedicato, pianificato |
 | BRT (Bartolini) | spedizione, label e tracking | adapter dedicato, pianificato |
 | Reverse proxy | TLS, HSTS, routing di frontiera, eventuale rate limiting | infrastruttura esterna al Compose applicativo |
@@ -193,7 +196,7 @@ tests/
 6. Infrastruttura e adapter dipendono dai contratti applicativi, mentre il dominio conserva indipendenza dai dettagli dei provider.
 7. Entry point e composizione possono conoscere più moduli perché rappresentano il composition root.
 
-Lo script `scripts/check-architecture.php` verifica automaticamente namespace, manifesto, direzione degli import, contratti pubblici e cicli. Il grafo iniziale dichiara `Gls -> Shipping` e `Brt -> Shipping`; `Shipping` non dipende dai provider.
+Lo script `scripts/check-architecture.php` verifica automaticamente namespace, manifesto, direzione degli import, contratti pubblici e cicli. Il grafo dichiara `Gls -> Shipping`, `Brt -> Shipping`, `Space -> Catalog` e `Marketplace -> Catalog`; i moduli proprietari dei contratti non dipendono dai loro consumer.
 
 ---
 
@@ -363,7 +366,9 @@ Responsabilità:
 
 **Implementato:** `Order`, `OrderLine`, indirizzi snapshot tipizzati, stati e origine, macchina a stati, eventi, controllo versione attesa e storico delle transizioni.
 
-**Pianificato:** repository, mapping PostgreSQL, optimistic locking atomico, casi d’uso e persistenza transazionale degli eventi outbox.
+**Implementato inoltre:** repository PostgreSQL, mapping, optimistic locking atomico e persistenza transazionale degli eventi outbox.
+
+**Pianificato:** casi d’uso applicativi completi e query autorizzate.
 
 ### 10.2 Customers
 
@@ -390,6 +395,7 @@ Responsabilità:
 - normalizzazione righe;
 - aggiornamento fulfilment;
 - invio tracking;
+- pubblicazione e riconciliazione di prezzo e disponibilità vendibile;
 - riconciliazione stato remoto.
 
 Contratto attuale:
@@ -401,9 +407,10 @@ importOpenOrders(): array
 acceptOrder(ExternalOrderReference $order): void
 fetchShippingAddress(ExternalOrderReference $order): ?ShippingAddress
 sendTracking(TrackingNotification $notification): void
+publishOffer(MarketplaceOfferUpdate $offer, string $idempotencyKey): MarketplaceOfferPublication
 ```
 
-**Implementato:** contratto iniziale, distinzione tra canale e connettore, riferimento ordine esterno e righe ordine tipizzate.
+**Implementato:** contratto iniziale, distinzione tra canale e connettore, riferimento ordine esterno, righe ordine tipizzate e contratto provider-neutral per pubblicare offerte versionate.
 
 **Pianificato:** SellRapido, Amazon, eMAG, Temu e IBS secondo [`MARKETPLACES.md`](MARKETPLACES.md); paginazione, cursori, account configurati, recupero singolo ordine, capacità dichiarate, gestione parziali, annullamenti, errori tipizzati e adapter reali.
 
@@ -413,7 +420,8 @@ Responsabilità:
 
 - invio ordine;
 - associazione identificativo Space;
-- aggiornamento disponibilità;
+- aggiornamento disponibilità delle righe ordine;
+- acquisizione incrementale di prezzo e disponibilità catalogo;
 - riconciliazione;
 - eventuale annullamento o aggiornamento compatibile con le API disponibili.
 
@@ -422,13 +430,29 @@ Contratto attuale:
 ```php
 submitOrder(SpaceOrderRequest $order, string $idempotencyKey): string
 fetchAvailability(string $spaceOrderId): array
+fetchCatalogChanges(SpaceCatalogCursor $cursor, int $limit): SpaceCatalogBatch
 ```
 
-**Implementato:** contratto e DTO iniziali.
+**Implementato:** contratto ordine e DTO iniziali; contratto catalogo con cursore, batch, versione sorgente, prezzo in unità minori e quantità non negativa.
 
 **Pianificato:** client reale, stato remoto, errori tipizzati, timeout, rate limit e riconciliazione.
 
-### 10.5 Warehouse e Picking
+### 10.5 Catalog
+
+Responsabilità:
+
+- SKU canonico e mapping verso Space;
+- prezzo base e disponibilità fisica ricevuti da Space;
+- scorta di sicurezza e quantità vendibile;
+- regole di ricarico, precedenza e limiti prezzo;
+- proiezioni per account-canale marketplace;
+- versioni, idempotenza e stato di pubblicazione.
+
+**Implementato:** tipo `Money`, calcolo dello stock vendibile, motore prezzi deterministico, schema `catalog_items`, `pricing_rules` e `marketplace_offers`, contratti cross-module e test delle invarianti.
+
+**Pianificato:** repository, casi d’uso, handler outbox, adapter reali, riconciliazione, audit delle regole e read model UI. Vedere [`CATALOG_PRICING.md`](CATALOG_PRICING.md).
+
+### 10.6 Warehouse e Picking
 
 Responsabilità:
 
@@ -451,7 +475,7 @@ barcode_scans
 partial_order_decisions
 ```
 
-### 10.6 Partial Orders
+### 10.7 Partial Orders
 
 Responsabilità:
 
@@ -464,7 +488,7 @@ Responsabilità:
 
 **Stato:** vincoli quantitativi presenti; casi d’uso pianificati.
 
-### 10.7 Shipping, GLS e BRT
+### 10.8 Shipping, GLS e BRT
 
 Il modulo `Shipping` possiede:
 
@@ -497,7 +521,7 @@ fetchLabel(string $labelReference): string
 
 **Pianificato:** `ShipmentPackage`, dimensioni, contatti, adapter HTTP, servizi e opzioni provider-specifiche, annullamento, suite di conformità e riconciliazione. Le specifiche BRT e GLS non vengono dedotte: richiedono la discovery di [`CARRIERS.md`](CARRIERS.md).
 
-### 10.8 Automation
+### 10.9 Automation
 
 Responsabilità:
 
@@ -509,11 +533,11 @@ Responsabilità:
 - riconciliazione;
 - metriche asincrone.
 
-**Implementato:** outbox transazionale, schema versione, claim concorrente, worker one-shot, retry/dead letter, lock recovery, registry taggato, scheduler persistente e handler audit ordine idempotente. I sette job del flusso ordini/spedizioni sono censiti a dieci minuti e disabilitati per impostazione predefinita.
+**Implementato:** outbox transazionale, schema versione, claim concorrente, worker one-shot, retry/dead letter, lock recovery, registry taggato, scheduler persistente e handler audit ordine idempotente. Gli otto job dei flussi ordini, catalogo e spedizioni sono censiti a dieci minuti e disabilitati per impostazione predefinita.
 
 **Pianificato:** handler provider reali, heartbeat/timeout dei job lunghi, metriche e gestione autorizzata delle dead letter. Vedere [`AUTOMATIONS.md`](AUTOMATIONS.md).
 
-### 10.9 Operational Dashboard
+### 10.10 Operational Dashboard
 
 Responsabilità:
 
@@ -527,7 +551,7 @@ Responsabilità:
 - ristampa label;
 - audit delle azioni.
 
-**Stato:** parziale. Il layer di presentazione è implementato con dashboard, clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni. Dati, autenticazione e azioni applicative restano pianificati e non vengono simulati.
+**Stato:** parziale. Il layer di presentazione è implementato con dashboard, clienti, ordini, catalogo e prezzi, picking, spedizioni, automazioni, integrazioni, audit, utenti, profilo e impostazioni. Dati, autenticazione e azioni applicative restano pianificati e non vengono simulati.
 
 ---
 
@@ -766,6 +790,9 @@ ExternalOrderLine
 ExternalOrderReference
 MarketplaceChannel
 MarketplaceConnector
+MarketplaceOfferUpdate
+MarketplaceOfferPublication
+MarketplaceOfferAdapter
 ShippingAddress
 TrackingNotification
 ```
@@ -775,6 +802,22 @@ Space:
 ```text
 SpaceOrderRequest
 AvailabilityLine
+SpaceCatalogCursor
+SpaceCatalogItem
+SpaceCatalogBatch
+SpaceCatalogAdapter
+```
+
+Catalog:
+
+```text
+Money
+ProductAvailability
+PricingRule
+PricingRuleScope
+PriceAdjustmentType
+PriceCalculator
+CalculatedPrice
 ```
 
 Shipping:
@@ -1036,7 +1079,18 @@ Passaggi previsti:
 9. identificativo Space e delivery vengono persistiti;
 10. riconciliazione periodica verifica lo stato.
 
-### 18.2 Disponibilità e picking
+### 18.2 Catalogo, prezzi e disponibilità pubblicabile
+
+1. scheduler richiede una pagina incrementale del catalogo Space;
+2. Space restituisce SKU, identificativo, prezzo, disponibilità e versione sorgente;
+3. HAPA valida e persiste il batch senza avanzare il cursore prima del commit;
+4. la quantità vendibile viene calcolata sottraendo la scorta di sicurezza;
+5. il motore seleziona una sola regola di ricarico deterministica per account-canale e SKU;
+6. ogni offerta variata diventa una pubblicazione idempotente;
+7. l’adapter attivo invia prezzo finale e quantità al marketplace;
+8. HAPA salva versione remota ed esito e riconcilia le divergenze.
+
+### 18.3 Disponibilità ordine e picking
 
 1. scheduler richiede aggiornamento disponibilità;
 2. Space restituisce disponibilità per SKU;
@@ -1049,7 +1103,7 @@ Passaggi previsti:
 9. un parziale richiede decisione e approvazione;
 10. HAPA produce la richiesta di spedizione.
 
-### 18.3 Corriere e tracking
+### 18.4 Corriere e tracking
 
 1. l’operatore o il sistema definisce uno o più colli;
 2. ogni collo contiene peso e dimensioni;
@@ -1062,7 +1116,7 @@ Passaggi previsti:
 9. tracking viene inviato al marketplace;
 10. HAPA conclude il fulfilment o mantiene il ramo parziale.
 
-### 18.4 Riconciliazione
+### 18.5 Riconciliazione
 
 La riconciliazione confronta periodicamente:
 
@@ -1680,6 +1734,7 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | Docker development | implementato | stack locale |
 | Docker production | implementato | hardening e smoke CI |
 | migrazioni PostgreSQL | implementato | schema foundation e vincoli |
+| catalogo e pricing | parziale | schema, invarianti, motore ricarichi, contratti e UI presenti; repository e adapter reali assenti |
 | contratti Marketplace | parziale | canali/connettori e righe tipizzati; adapter reali e funzioni avanzate assenti |
 | contratti Space | parziale | adapter reale e riconciliazione assenti |
 | contratto Shipping | parziale | codici GLS/BRT e DTO comuni presenti; colli tipizzati e casi d’uso assenti |
@@ -1692,11 +1747,11 @@ Le decisioni con impatto duraturo verranno formalizzate in ADR sotto `docs/adr/`
 | repository | parziale | repository Order implementato; Customer, Marketplace e query read model pianificati |
 | transaction manager | implementato | boundary PostgreSQL riutilizzabile e nesting controllato |
 | outbox worker | parziale | claim concorrente, retry, dead letter e handler audit implementati; operazioni manuali e metriche pianificate |
-| scheduler | parziale | runtime e sette job censiti; handler provider disattivati fino alla discovery |
+| scheduler | parziale | runtime e otto job censiti; handler provider disattivati fino alla discovery |
 | picking | parziale | UI presentazionale presente; modello e casi d’uso assenti |
 | gestione parziali | pianificato | vincoli preparatori presenti |
 | autenticazione e ruoli | pianificato | prima del collegamento di dati e azioni UI |
-| pannello operativo | parziale | design system e schermate clienti/ordini implementati; dati, auth e azioni non collegati |
+| pannello operativo | parziale | design system e schermate clienti/ordini/catalogo implementati; dati, auth e azioni non collegati |
 | metriche e tracing | pianificato | con workload reali |
 | backup e runbook | pianificato | requisito pre-esercizio |
 

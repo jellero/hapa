@@ -96,8 +96,8 @@ L’identificativo ordine esterno resta univoco per marketplace; per il futuro B
 La sola origine `b2c_ecommerce` è oggi una capacità di compatibilità del modello, non un e-commerce operativo. Restano esplicitamente da progettare e implementare:
 
 - account cliente, verifica email, consensi e recupero accesso;
-- catalogo, varianti, contenuti, listini, promozioni e imposte;
-- disponibilità pubblicabile e regole di vendita;
+- varianti, contenuti, listini B2C, promozioni e imposte;
+- esposizione nello storefront del catalogo operativo, della disponibilità vendibile e delle regole di vendita già predisposte;
 - carrello, checkout, spedizione e calcolo dei totali;
 - pagamento, SCA, webhook, rimborsi e riconciliazione finanziaria;
 - conferme, notifiche e area personale;
@@ -105,7 +105,7 @@ La sola origine `b2c_ecommerce` è oggi una capacità di compatibilità del mode
 - privacy web, cookie e gestione dei diritti dell’interessato;
 - sicurezza, antifrode, rate limiting e test end-to-end.
 
-Queste capacità entreranno tramite casi d’uso e adapter dedicati. Nessuna UI amministrativa o route pubblica attuale accetta ordini B2C.
+La foundation catalogo, prezzi Space, scorta di sicurezza e ricarichi marketplace è descritta in [`CATALOG_PRICING.md`](CATALOG_PRICING.md), ma non sostituisce le capacità e-commerce sopra elencate. Nessuna UI amministrativa o route pubblica attuale accetta ordini B2C.
 
 ## Sicurezza e ciclo di vita
 

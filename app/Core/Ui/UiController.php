@@ -53,7 +53,8 @@ final readonly class UiController
             'workstreams' => [
                 ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'integration'],
                 ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Ordini persistenti', 'tone' => 'success', 'icon' => 'customer'],
-                ['label' => 'Space', 'detail' => 'Invio ordine e disponibilità', 'status' => 'Contratto pronto', 'tone' => 'info', 'icon' => 'automation'],
+                ['label' => 'Catalogo', 'detail' => 'Prezzi Space, ricarichi e stock vendibile', 'status' => 'Modello pronto', 'tone' => 'success', 'icon' => 'box'],
+                ['label' => 'Space', 'detail' => 'Invio ordine e sincronizzazione catalogo via API', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'automation'],
                 ['label' => 'Magazzino', 'detail' => 'Picking barcode e parziali', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'scan'],
                 ['label' => 'Corrieri', 'detail' => 'GLS e BRT (Bartolini)', 'status' => 'Contratti pronti', 'tone' => 'info', 'icon' => 'truck'],
             ],
@@ -101,6 +102,15 @@ final readonly class UiController
             'emptyBody' => 'Il repository PostgreSQL transazionale supporta ordini marketplace e la futura origine B2C; l’elenco richiede ancora read model, autenticazione e autorizzazione.',
             'emptyIcon' => 'orders',
             'primaryAction' => 'Importa ordini',
+        ]);
+    }
+
+    public function catalog(Request $request): Response
+    {
+        return $this->operational($request, 'ui/catalog', 'catalog', [
+            'title' => 'Catalogo, prezzi e disponibilità',
+            'eyebrow' => 'Offerte di vendita',
+            'description' => 'Controlla il dato Space, la scorta di sicurezza, le regole di ricarico e la pubblicazione delle offerte sui marketplace.',
         ]);
     }
 
@@ -165,12 +175,12 @@ final readonly class UiController
             'eyebrow' => 'Ecosistema',
             'description' => 'Configura account marketplace, servizi e corrieri mantenendo separati canale, connettore e provider.',
             'integrations' => [
-                ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore', 'code' => 'sellrapido', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'Amazon', 'kind' => 'Canale · SP-API', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'eMAG', 'kind' => 'Canale · Marketplace API', 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'Temu', 'kind' => 'Canale · Partner Platform', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'IBS', 'kind' => 'Canale · via SellRapido', 'code' => 'ibs', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'Space', 'kind' => 'Approvvigionamento', 'code' => 'space', 'status' => 'Contratto pronto', 'tone' => 'info'],
+                ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore · ordini e offerte', 'code' => 'sellrapido', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Amazon', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'eMAG', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Temu', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'IBS', 'kind' => 'Canale · offerte via percorso verificato', 'code' => 'ibs', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Space', 'kind' => 'Ordini · prezzi e disponibilità via API', 'code' => 'space', 'status' => 'Contratti pronti', 'tone' => 'info'],
                 ['name' => 'GLS', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
                 ['name' => 'BRT (Bartolini)', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'brt', 'status' => 'Contratto pronto', 'tone' => 'info'],
             ],
@@ -314,6 +324,7 @@ final readonly class UiController
                     ['label' => 'Dashboard', 'href' => '/ui', 'icon' => 'dashboard', 'active' => 'dashboard'],
                     ['label' => 'Clienti', 'href' => '/ui/customers', 'icon' => 'customer', 'active' => 'customers'],
                     ['label' => 'Ordini', 'href' => '/ui/orders', 'icon' => 'orders', 'active' => 'orders'],
+                    ['label' => 'Catalogo e prezzi', 'href' => '/ui/catalog', 'icon' => 'box', 'active' => 'catalog'],
                     ['label' => 'Picking', 'href' => '/ui/picking', 'icon' => 'scan', 'active' => 'picking'],
                     ['label' => 'Spedizioni', 'href' => '/ui/shipments', 'icon' => 'truck', 'active' => 'shipments'],
                 ],

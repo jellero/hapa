@@ -17,4 +17,14 @@ final class ModuleDependenciesTest extends TestCase
         self::assertSame(['Shipping'], $dependencies['Brt']);
         self::assertSame([], $dependencies['Shipping']);
     }
+
+    public function testSpaceAndMarketplaceShareOnlyTheCatalogContract(): void
+    {
+        /** @var array<string, list<string>> $dependencies */
+        $dependencies = require dirname(__DIR__, 3) . '/config/module-dependencies.php';
+
+        self::assertSame([], $dependencies['Catalog']);
+        self::assertSame(['Catalog'], $dependencies['Space']);
+        self::assertSame(['Catalog'], $dependencies['Marketplace']);
+    }
 }

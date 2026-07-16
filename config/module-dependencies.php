@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 return [
     'Brt' => ['Shipping'],
+    'Catalog' => [],
     'Customers' => [],
     'Gls' => ['Shipping'],
-    'Marketplace' => [],
+    'Marketplace' => ['Catalog'],
     'Orders' => [],
     'Shipping' => [],
-    'Space' => [],
+    'Space' => ['Catalog'],
 ];

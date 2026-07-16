@@ -35,6 +35,7 @@ use Hapa\Core\Outbox\PostgresOutboxRepository;
 use Hapa\Core\Outbox\RetryBackoff;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Automation\OrderAuditOutboxHandler;
@@ -141,6 +142,7 @@ final readonly class ContainerFactory
                 $configuration->automation->lockTimeoutSeconds,
             ]);
         $container->register(OrderEventOutboxMapper::class);
+        $container->register(PriceCalculator::class);
         $container->register(PostgresOrderRepository::class)
             ->setArguments([
                 new Reference(PDO::class),

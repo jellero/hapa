@@ -4,7 +4,7 @@
 
 - [ ] Obiettivo unico e stato reale della capacità dichiarati.
 - [ ] Modulo proprietario del dato e del caso d’uso espliciti.
-- [ ] Scope account-canale, cliente, ordine o provider definito.
+- [ ] Scope account-canale, SKU, cliente, ordine o provider definito.
 - [ ] Nessun refactor estraneo alla funzionalità.
 
 ## Sicurezza e delivery

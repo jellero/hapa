@@ -66,6 +66,12 @@ return static function (
         methods: ['GET'],
     ));
 
+    $routes->add('ui_catalog', new Route(
+        '/ui/catalog',
+        ['_controller' => $ui->catalog(...)],
+        methods: ['GET'],
+    ));
+
     $routes->add('ui_order_detail', new Route(
         '/ui/orders/{orderId}',
         ['_controller' => $ui->orderDetail(...)],

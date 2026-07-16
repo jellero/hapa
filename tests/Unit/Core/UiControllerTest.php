@@ -33,6 +33,7 @@ final class UiControllerTest extends TestCase
             $controller->dashboard($request),
             $controller->customers($request),
             $controller->orders($request),
+            $controller->catalog($request),
             $controller->picking($request),
             $controller->shipments($request),
             $controller->automation($request),
@@ -77,12 +78,25 @@ final class UiControllerTest extends TestCase
     {
         $content = (string) $this->controller()->automation($this->request('/ui/automation'))->getContent();
 
-        self::assertStringContainsString('7 job censiti', $content);
+        self::assertStringContainsString('8 job censiti', $content);
         self::assertStringContainsString('Accetta ordini completi', $content);
         self::assertStringContainsString('Esporta verso Space', $content);
+        self::assertStringContainsString('Sincronizza catalogo Space', $content);
+        self::assertStringContainsString('Pubblica offerte marketplace', $content);
         self::assertStringContainsString('Gestisci parziali confermati', $content);
         self::assertStringContainsString('bin/console automation:run', $content);
         self::assertStringContainsString('BRT', $content);
+    }
+
+    public function testItPresentsSpacePricingAndMarketplaceAvailabilityFlow(): void
+    {
+        $content = (string) $this->controller()->catalog($this->request('/ui/catalog'))->getContent();
+
+        self::assertStringContainsString('Catalogo, prezzi e disponibilità', $content);
+        self::assertStringContainsString('Space fornisce prezzo base e disponibilità fisica', $content);
+        self::assertStringContainsString('Motore ricarichi', $content);
+        self::assertStringContainsString('Marketplace + SKU', $content);
+        self::assertStringContainsString('Adapter spenti', $content);
     }
 
     public function testItIgnoresUnknownCollectionFilters(): void

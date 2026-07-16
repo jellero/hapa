@@ -4,7 +4,7 @@ Ultimo riesame: 16 luglio 2026.
 
 ## 1. Scopo e maturità
 
-L’interfaccia operativa fornisce il layer di presentazione per clienti, ordini, picking, spedizioni, automazioni, integrazioni, audit, utenti e configurazione.
+L’interfaccia operativa fornisce il layer di presentazione per clienti, ordini, catalogo e prezzi, picking, spedizioni, automazioni, integrazioni, audit, utenti e configurazione.
 
 Lo stato corrente è **parziale**:
 
@@ -13,7 +13,8 @@ Lo stato corrente è **parziale**:
 - tutte le aree previste raggiungibili tramite route GET;
 - escaping centralizzato, CSP e header di isolamento implementati;
 - stati vuoti e indisponibilità espliciti, senza dati dimostrativi;
-- pagina Automazioni con i sette job reali di progetto, distinzione tra runtime pronto e adapter esterni da collegare;
+- pagina Catalogo con ownership dei dati, scorta di sicurezza, precedenza ricarichi e stato delle pubblicazioni;
+- pagina Automazioni con gli otto job reali di progetto, distinzione tra runtime pronto e adapter esterni da collegare;
 - autenticazione, autorizzazione, repository e azioni mutative non ancora collegati.
 
 Le schermate di login e recupero accesso sono presentazionali e mantengono i form disabilitati. Il pannello non espone dati reali né operazioni mutative finché i gate di sicurezza della fase 8 non sono completati.
@@ -58,9 +59,10 @@ La logica di business non entra nei template. Controller, view model e template 
 | `/ui/customers/{customerId}` | scheda cliente | profilo, contatti, identità, indirizzi e ordini collegati |
 | `/ui/orders` | ricerca e filtri ordini | tabella e stato vuoto |
 | `/ui/orders/{orderId}` | dettaglio ordine | cliente, origine, righe, snapshot indirizzi, delivery e audit |
+| `/ui/catalog` | prezzi, scorta di sicurezza, ricarichi e offerte | modello e contratti pronti; read model e adapter disattivati |
 | `/ui/picking` | sessioni di picking | tabella e stato vuoto |
 | `/ui/shipments` | colli, label e tracking | tabella e stato vuoto |
-| `/ui/automation` | scheduler, outbox, retry e dead letter | runtime implementato e sette job censiti; provider disattivati |
+| `/ui/automation` | scheduler, outbox, retry e dead letter | runtime implementato e otto job censiti; provider disattivati |
 | `/ui/integrations` | marketplace, Space, GLS e BRT (Bartolini) | portafoglio pianificato e contratti corrieri pronti |
 | `/ui/audit` | eventi operativi e di sicurezza | tabella e stato vuoto |
 | `/ui/users` | utenti, ruoli e MFA | presentazione, azioni disabilitate |
@@ -73,7 +75,7 @@ La route tecnica `/` resta JSON e indica `/ui` come ingresso dell’interfaccia.
 
 La navigazione è divisa in tre gruppi:
 
-1. **Operatività**: dashboard, clienti, ordini, picking e spedizioni;
+1. **Operatività**: dashboard, clienti, ordini, catalogo e prezzi, picking e spedizioni;
 2. **Controllo**: automazioni, integrazioni e audit;
 3. **Amministrazione**: utenti, ruoli e impostazioni.
 

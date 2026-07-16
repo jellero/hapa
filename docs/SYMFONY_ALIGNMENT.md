@@ -273,7 +273,7 @@ Ogni job ricorrente definisce:
 - idempotency key per esecuzione logica;
 - metriche su ultima esecuzione, prossima esecuzione e ritardo.
 
-Import ordini, disponibilità, tracking e riconciliazione conservano cursori nel database. Il processo scheduler non usa la memoria come unica sorgente della pianificazione operativa.
+Import ordini, catalogo prezzi/stock, tracking e riconciliazione conservano cursori nel database. Il cursore Space avanza dopo il commit dell’intero batch; il processo scheduler non usa la memoria come unica sorgente della pianificazione operativa.
 
 Symfony Lock può proteggere il ruolo di scheduler leader e job globali. Le modifiche concorrenti a un singolo ordine restano protette da optimistic locking e transazioni PostgreSQL.
 
@@ -283,7 +283,7 @@ Esistono tre livelli distinti:
 
 1. frontiera: protezione volumetrica e DoS sul reverse proxy;
 2. applicazione: login, endpoint sensibili e azioni costose;
-3. integrazione: quote Marketplace, Space, GLS e BRT.
+3. integrazione: quote Marketplace per operazione ordini/offerte, Space per ordini/catalogo, GLS e BRT.
 
 Le quote provider usano bucket separati per account, operazione e credenziale. Lo stato distribuito può risiedere in Redis; il fallimento di Redis deve seguire una policy esplicita per ciascun limiter.
 

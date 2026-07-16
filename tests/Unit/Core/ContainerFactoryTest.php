@@ -17,6 +17,7 @@ use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Console\AutomationRunCommand;
 use Hapa\Composition\ContainerFactory;
 use Hapa\Core\Kernel;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use PHPUnit\Framework\TestCase;
 
 final class ContainerFactoryTest extends TestCase
@@ -32,6 +33,7 @@ final class ContainerFactoryTest extends TestCase
         self::assertTrue($container->getDefinition(Kernel::class)->isPublic());
         self::assertTrue($container->getDefinition(SystemCheckCommand::class)->isPublic());
         self::assertTrue($container->getDefinition(AutomationRunCommand::class)->isPublic());
+        self::assertFalse($container->getDefinition(PriceCalculator::class)->isPublic());
     }
 
     public function testTheContainerCompilesAndBuildsBothEntryPoints(): void

@@ -111,6 +111,7 @@ jobs:
             /ui/customers/SMOKE-CUSTOMER
             /ui/orders
             /ui/orders/SMOKE-ORDER
+            /ui/catalog
             /ui/picking
             /ui/shipments
             /ui/automation
@@ -131,8 +132,8 @@ jobs:
           grep --ignore-case --quiet "^content-security-policy:.*object-src 'none'" <<< "$headers"
           grep --ignore-case --quiet '^x-frame-options:.*DENY' <<< "$headers"
 
-          css="$(curl --fail --silent --show-error "$base_url/assets/ui.css?v=4")"
-          javascript="$(curl --fail --silent --show-error "$base_url/assets/ui.js?v=4")"
+          css="$(curl --fail --silent --show-error "$base_url/assets/ui.css?v=5")"
+          javascript="$(curl --fail --silent --show-error "$base_url/assets/ui.js?v=5")"
           grep --quiet ':root' <<< "$css"
           grep --quiet 'synchronizeNavigation' <<< "$javascript"
 

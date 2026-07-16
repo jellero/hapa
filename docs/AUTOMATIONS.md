@@ -4,7 +4,7 @@ Ultimo riesame: 16 luglio 2026.
 
 ## Scopo e stato
 
-Il piano deriva dal flusso operativo condiviso per ordini e spedizioni: marketplace, anagrafica ordine HAPA, passaggio legacy CSV/FTP verso Space, disponibilità, picking, spedizione GLS/BRT e restituzione del tracking.
+Il piano copre due flussi coordinati: ordini e spedizioni, dal marketplace a HAPA, Space e GLS/BRT; catalogo commerciale, da prezzi e disponibilità Space ai ricarichi HAPA e alle offerte marketplace. Il passaggio legacy CSV/FTP resta censito per gli ordini finché il percorso concordato non viene sostituito.
 
 Sono implementati e verificati:
 
@@ -18,6 +18,7 @@ Sono implementati e verificati:
 - scheduler persistente con lock e recupero dopo interruzione;
 - comando one-shot `php bin/console automation:run`;
 - proiezione idempotente degli eventi ordine nell’audit log;
+- schema e contratti per prezzi, disponibilità, scorta di sicurezza, ricarichi e offerte marketplace;
 - pagina `/ui/automation` con il piano operativo completo.
 
 Gli handler verso SellRapido/marketplace, Space, GLS e BRT non sono implementati. I job corrispondenti sono quindi creati con `enabled = false`: nessuna schermata o documento li dichiara operativi.
@@ -30,7 +31,8 @@ Gli handler verso SellRapido/marketplace, Space, GLS e BRT non sono implementati
 | `recover_shipping_addresses` | recupera e normalizza indirizzi | 10 minuti | indirizzo non valido porta a revisione manuale |
 | `import_work_orders` | importa ordini di lavoro | 10 minuti | cursore persistente e deduplica richiesti prima dell’attivazione |
 | `export_space_csv` | genera e trasferisce CSV verso Space | 10 minuti | consegna FTP riconciliabile; API Space resta evoluzione preferita |
-| `refresh_stock_availability` | acquisisce quantità ricevute/disponibili | 10 minuti | aggiornamento completo e atomico di tutte le righe |
+| `sync_space_catalog` | acquisisce via API prezzi e disponibilità Space | 10 minuti | cursore confermato dopo il commit, versione sorgente e scorta di sicurezza |
+| `publish_marketplace_offers` | pubblica prezzi ricalcolati e quantità vendibile | 10 minuti | una delivery per account-canale, SKU e versione HAPA |
 | `manage_confirmed_partials` | prosegue i parziali confermati | 10 minuti | la scelta delle quantità resta obbligatoriamente manuale |
 | `retry_temporary_errors` | recupera errori temporanei e lock scaduti | ogni esecuzione | runtime implementato; non ripete errori definitivi |
 
@@ -46,6 +48,18 @@ Gli handler verso SellRapido/marketplace, Space, GLS e BRT non sono implementati
 8. picking e richiesta spedizione al provider selezionato;
 9. acquisizione etichetta e tracking;
 10. restituzione del tracking al canale e riconciliazione.
+
+Il flusso catalogo procede in parallelo:
+
+1. lettura incrementale di prezzo e disponibilità dall’API Space;
+2. upsert idempotente dell’articolo e della versione sorgente;
+3. calcolo dello stock vendibile al netto della scorta di sicurezza;
+4. selezione deterministica della regola di ricarico;
+5. creazione dell’intenzione di pubblicazione;
+6. invio via API al solo connettore attivo per account-canale;
+7. persistenza della versione remota e riconciliazione.
+
+I dettagli e i gate specifici sono in [`CATALOG_PRICING.md`](CATALOG_PRICING.md).
 
 GLS e BRT (Bartolini) condividono il contratto Shipping provider-neutral. Un errore di validazione dell’indirizzo non deve generare tentativi ciechi: l’ordine entra in revisione manuale e l’operatore può usare il fallback concordato con il corriere.
 
@@ -81,4 +95,5 @@ Un job provider può diventare `enabled` soltanto dopo:
 - supervisore continuativo e graceful shutdown per un futuro worker long-running;
 - cursori effettivi dei provider e rate limiting distribuito;
 - test di concorrenza multi-processo e compatibilità tra release;
+- repository e handler per catalogo, regole prezzo e offerte;
 - adapter reali SellRapido/marketplace, Space, GLS e BRT.

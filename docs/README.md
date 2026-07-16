@@ -3,7 +3,8 @@
 La documentazione tecnica è organizzata nei seguenti riferimenti principali:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): architettura applicativa, infrastrutturale e operativa; stato implementativo; decisioni e confini.
-- [`AUTOMATIONS.md`](AUTOMATIONS.md): flusso ordini e spedizioni, sette job schedulati, runtime outbox, retry e gate di attivazione.
+- [`AUTOMATIONS.md`](AUTOMATIONS.md): flusso ordini, catalogo e spedizioni, otto job schedulati, runtime outbox, retry e gate di attivazione.
+- [`CATALOG_PRICING.md`](CATALOG_PRICING.md): ownership Space/HAPA/marketplace, disponibilità vendibile, ricarichi, schema, contratti e attivazione API.
 - [`CARRIERS.md`](CARRIERS.md): ownership del contratto Shipping, moduli GLS/BRT, discovery, idempotenza e failure mode.
 - [`CUSTOMERS_AND_ORDERS.md`](CUSTOMERS_AND_ORDERS.md): anagrafiche canoniche, identità esterne, indirizzi, ordini e predisposizione B2C.
 - [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md): percorso canonico dal dato alla UI, responsabilità dei livelli e dipendenze tra moduli.
@@ -14,6 +15,7 @@ La documentazione tecnica è organizzata nei seguenti riferimenti principali:
 - [`TODO.md`](TODO.md): roadmap ordinata, gate di completamento, debito tecnico controllato e traguardo end-to-end.
 - [`PR_CHECKLIST.md`](PR_CHECKLIST.md): verifica operativa prima di pubblicare o fondere una modifica.
 - [`adr/0001-provider-neutral-carriers.md`](adr/0001-provider-neutral-carriers.md): decisione sul contratto corrieri condiviso.
+- [`adr/0002-space-catalog-pricing.md`](adr/0002-space-catalog-pricing.md): ownership Space/HAPA/marketplace per prezzi, stock e offerte pubblicabili.
 
 ## Regola di aggiornamento
 

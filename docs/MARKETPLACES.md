@@ -12,17 +12,17 @@ La distinzione fondamentale è:
 - **connettore**: il percorso tecnico usato da HAPA per comunicare con il canale;
 - **account venditore**: la singola configurazione autorizzata, con credenziali, perimetro e policy propri.
 
-SellRapido è quindi modellato come connettore aggregatore, non come canale di vendita. Amazon, eMAG, Temu e IBS sono canali. Per uno stesso account e canale può essere attivo un solo percorso di importazione alla volta.
+SellRapido è quindi modellato come connettore aggregatore, non come canale di vendita. Amazon, eMAG, Temu e IBS sono canali. Per uno stesso account e canale può essere attivo un solo percorso per ciascuna capacità: import ordini e pubblicazione offerte non devono avere due writer concorrenti.
 
 ## 2. Portafoglio pianificato
 
 | Elemento | Ruolo in HAPA | Percorso futuro | Stato |
 |---|---|---|---|
-| SellRapido | connettore aggregatore | adapter HAPA → SellRapido, subordinato alla disponibilità del contratto tecnico e delle credenziali | pianificato |
-| Amazon | canale di vendita | adapter diretto Selling Partner API; eventuale instradamento tramite aggregatore solo dopo conferma contrattuale | pianificato |
-| eMAG | canale di vendita | adapter diretto eMAG Marketplace API; eventuale instradamento tramite aggregatore solo dopo conferma contrattuale | pianificato |
-| Temu | canale di vendita | adapter diretto Temu Partner Platform oppure altro percorso formalmente supportato | pianificato |
-| IBS | canale di vendita | percorso iniziale documentato tramite SellRapido; adapter diretto solo con specifiche ufficiali del partner | pianificato |
+| SellRapido | connettore aggregatore | ordini e offerte tramite adapter HAPA → SellRapido, soltanto per capacità confermate | pianificato |
+| Amazon | canale di vendita | ordini e offerte tramite adapter diretto; eventuale aggregatore solo dopo conferma contrattuale | pianificato |
+| eMAG | canale di vendita | ordini e offerte tramite adapter diretto; eventuale aggregatore solo dopo conferma contrattuale | pianificato |
+| Temu | canale di vendita | ordini e offerte tramite percorso partner formalmente supportato | pianificato |
+| IBS | canale di vendita | percorso iniziale tramite SellRapido; adapter diretto solo con specifiche ufficiali del partner | pianificato |
 
 La scelta tra adapter diretto e SellRapido viene presa per singolo account dopo una discovery verificabile. Non vengono mantenuti due import concorrenti sullo stesso account e canale.
 
@@ -43,7 +43,7 @@ account configurato + canale + external_order_id
 
 Il connettore descrive il percorso di trasporto e viene conservato nelle delivery tecniche e nell’audit. Non sostituisce il canale: un ordine Amazon ricevuto tramite SellRapido resta un ordine del canale Amazon.
 
-Prima del primo adapter reale, ogni record `marketplaces` deve rappresentare una sola coppia account-canale. Più record possono usare lo stesso `adapter_key`, per esempio `sellrapido`, senza perdere l’identità del canale sorgente.
+Prima del primo adapter reale, ogni record `marketplaces` deve rappresentare una sola coppia account-canale. Più record possono usare lo stesso `adapter_key`, per esempio `sellrapido`, senza perdere l’identità del canale sorgente. La stessa identità delimita una proiezione prezzo/stock in `marketplace_offers`.
 
 ## 4. Contratto comune
 
@@ -55,11 +55,15 @@ Ogni adapter marketplace deve dichiarare:
 - capacità disponibili e limitazioni;
 - strategia di import incrementale, paginazione e cursore;
 - regole di accettazione, annullamento, fulfilment e tracking;
+- capacità di aggiornare prezzo e quantità insieme o separatamente;
+- identificativo offerta, versione remota e tempi di propagazione;
 - idempotency key e strategia di riconciliazione;
 - classificazione degli errori e budget complessivo dei retry;
 - trattamento dei dati personali e tempi di conservazione.
 
 Le differenze tra provider non entrano nel dominio. Payload, autenticazione, firma, paginazione e codici di stato rimangono nell’adapter e vengono tradotti in DTO applicativi tipizzati.
+
+Il contratto ordini resta `MarketplaceAdapter`; la capacità commerciale usa `MarketplaceOfferAdapter` con `MarketplaceOfferUpdate` e `MarketplaceOfferPublication`. Prezzo finale e quantità vendibile arrivano dal modulo Catalog: il provider non sovrascrive prezzo base Space, scorta di sicurezza o regola HAPA. Vedere [`CATALOG_PRICING.md`](CATALOG_PRICING.md).
 
 ## 5. Gate di discovery per ogni integrazione
 
@@ -73,8 +77,9 @@ Prima di sviluppare un adapter devono essere disponibili e versionati:
 6. semantica degli stati ordine e delle quantità parziali;
 7. accesso all’indirizzo di spedizione e vincoli sui dati personali;
 8. modalità di invio tracking e fulfilment;
-9. comportamento dopo timeout, duplicati e risposte ambigue;
-10. webhook disponibili, firma, anti-replay e procedura di riconciliazione.
+9. operazioni prezzo/stock, atomicità, granularità, valuta e arrotondamento;
+10. comportamento dopo timeout, duplicati e risposte ambigue;
+11. webhook disponibili, firma, anti-replay e procedura di riconciliazione.
 
 Le capacità non confermate restano disabilitate. Un adapter non simula funzionalità che il provider o l’account non garantiscono.
 
@@ -87,14 +92,14 @@ Per ogni connettore selezionato:
 3. completare DTO, errori tipizzati e configurazione account;
 4. implementare un fake adapter e una suite di conformità condivisa;
 5. implementare client HTTP, autenticazione, timeout, quote e redazione;
-6. coprire import, accettazione, indirizzo, tracking e riconciliazione;
+6. coprire import, accettazione, indirizzo, tracking, pubblicazione offerte e riconciliazione;
 7. verificare idempotenza e recovery con PostgreSQL e outbox reali;
 8. eseguire un pilot su un solo account e canale;
 9. abilitare gradualmente il traffico con metriche e possibilità di arresto rapido.
 
 L’ordine di realizzazione tra SellRapido, Amazon, eMAG, Temu e IBS viene deciso solo dopo la discovery, in base ad accesso tecnico, copertura del flusso HAPA e rischio operativo.
 
-## 7. Prevenzione della doppia importazione
+## 7. Prevenzione di import e pubblicazioni concorrenti
 
 Il passaggio da SellRapido a un adapter diretto, o viceversa, richiede una procedura esplicita:
 
@@ -106,7 +111,7 @@ Il passaggio da SellRapido a un adapter diretto, o viceversa, richiede una proce
 6. verifica dei duplicati prima dell’elaborazione;
 7. conservazione dell’audit della migrazione.
 
-L’invio di tracking e fulfilment continua sul percorso proprietario dell’ordine finché la migrazione non viene completata e riconciliata.
+L’invio di tracking e fulfilment continua sul percorso proprietario dell’ordine finché la migrazione non viene completata e riconciliata. Per le offerte, il vecchio writer viene arrestato e riconciliato prima di abilitare il nuovo; una sola configurazione può pubblicare una data coppia account-canale e SKU.
 
 ## 8. Fonti ufficiali verificate
 
