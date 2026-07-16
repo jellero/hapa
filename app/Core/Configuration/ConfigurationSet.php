@@ -13,6 +13,7 @@ final readonly class ConfigurationSet
         public ProxyConfig $proxy,
         public IntegrationConfig $integration,
         public RabbitMqConfig $rabbitMq,
+        public RabbitMqConsumerConfig $rabbitMqConsumer,
         public OutboxRelayConfig $outboxRelay,
     ) {
     }
