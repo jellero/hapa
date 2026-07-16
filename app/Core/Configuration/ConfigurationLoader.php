@@ -10,15 +10,9 @@ final class ConfigurationLoader
 {
     public static function load(): ConfigurationSet
     {
-        $debugValue = trim(EnvironmentReader::value('APP_DEBUG', 'false'));
-        $debug = filter_var($debugValue, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
-        if ($debug === null) {
-            throw new RuntimeException(sprintf('APP_DEBUG non valido: %s', $debugValue));
-        }
-
         $application = new ApplicationConfig(
             EnvironmentReader::value('APP_ENV', 'development'),
-            $debug,
+            self::boolean('APP_DEBUG', 'false'),
             EnvironmentReader::value('APP_URL', 'http://localhost:8080'),
             EnvironmentReader::value('APP_TIMEZONE', 'Europe/Rome'),
             EnvironmentReader::value('LOG_LEVEL', 'info'),
@@ -46,6 +40,25 @@ final class ConfigurationLoader
             self::decimal('INTEGRATION_REQUEST_TIMEOUT', '30.0'),
             self::integer('INTEGRATION_MAX_RESPONSE_BYTES', '2097152'),
         );
+        $rabbitMq = new RabbitMqConfig(
+            self::boolean('RABBITMQ_ENABLED', 'false'),
+            EnvironmentReader::value('RABBITMQ_HOST', 'rabbitmq'),
+            self::integer('RABBITMQ_PORT', '5672'),
+            EnvironmentReader::value('RABBITMQ_VHOST', '/'),
+            EnvironmentReader::value('RABBITMQ_USERNAME', 'hapa'),
+            EnvironmentReader::secret('RABBITMQ_PASSWORD', ''),
+            EnvironmentReader::value('RABBITMQ_EXCHANGE', 'hapa.events'),
+            self::decimal('RABBITMQ_CONNECT_TIMEOUT', '5.0'),
+            self::decimal('RABBITMQ_READ_WRITE_TIMEOUT', '30.0'),
+            self::integer('RABBITMQ_HEARTBEAT', '30'),
+        );
+        $outboxRelay = new OutboxRelayConfig(
+            EnvironmentReader::value('OUTBOX_RELAY_WORKER_ID', 'hapa-relay-' . (gethostname() ?: 'worker')),
+            self::integer('OUTBOX_RELAY_BATCH_SIZE', '50'),
+            self::integer('OUTBOX_RELAY_LOCK_TIMEOUT_SECONDS', '300'),
+            self::integer('OUTBOX_RELAY_RETRY_BASE_SECONDS', '30'),
+            self::integer('OUTBOX_RELAY_RETRY_MAX_SECONDS', '3600'),
+        );
 
         if ($application->isProduction()) {
             if ($proxy->trustedProxies === []) {
@@ -54,9 +67,31 @@ final class ConfigurationLoader
 
             self::assertProductionSecret('DB_PASSWORD', $database->password);
             self::assertProductionSecret('REDIS_PASSWORD', $redis->password);
+            if ($rabbitMq->enabled) {
+                self::assertProductionSecret('RABBITMQ_PASSWORD', $rabbitMq->password);
+            }
         }
 
-        return new ConfigurationSet($application, $database, $redis, $proxy, $integration);
+        return new ConfigurationSet(
+            $application,
+            $database,
+            $redis,
+            $proxy,
+            $integration,
+            $rabbitMq,
+            $outboxRelay,
+        );
+    }
+
+    private static function boolean(string $name, string $default): bool
+    {
+        $value = trim(EnvironmentReader::value($name, $default));
+        $boolean = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        if ($boolean === null) {
+            throw new RuntimeException(sprintf('%s non è un booleano valido.', $name));
+        }
+
+        return $boolean;
     }
 
     private static function integer(string $name, string $default): int
