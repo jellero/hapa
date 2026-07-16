@@ -12,6 +12,8 @@ final readonly class ConfigurationSet
         public RedisConfig $redis,
         public ProxyConfig $proxy,
         public IntegrationConfig $integration,
+        public RabbitMqConfig $rabbitMq,
+        public OutboxRelayConfig $outboxRelay,
     ) {
     }
 }
