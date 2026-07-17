@@ -45,10 +45,12 @@ Prodotti e ordini non vengono spostati in Automation. Il suo database può conse
 ### Catalogo e offerte
 
 1. Automation legge da Space catalogo, costo di acquisto e disponibilità.
-2. HAPA applica l’osservazione al prodotto e all’offerta fornitore.
-3. HAPA calcola quantità vendibile e prezzo finale usando ricarico, costi e policy del canale.
-4. HAPA emette un comando con prezzo e quantità già decisi.
-5. Automation pubblica l’offerta su IBS e restituisce l’esito tecnico.
+2. HAPA deduplica l’osservazione e cerca il prodotto per ID Space, EAN e SKU.
+3. Se il prodotto non esiste, HAPA lo crea inattivo in `pending_review` e registra separatamente l’offerta Space.
+4. Conflitti di identità finiscono in revisione manuale e non pubblicano offerte.
+5. HAPA calcola quantità vendibile e prezzo finale usando ricarico, costi e policy del canale.
+6. HAPA emette un comando con prezzo e quantità già decisi.
+7. Automation pubblica l’offerta su IBS e restituisce l’esito tecnico.
 
 Automation non ricalcola i ricarichi e non decide il prezzo.
 

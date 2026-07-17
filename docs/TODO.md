@@ -28,14 +28,15 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 
 ## P1 — Catalogo Space → HAPA
 
-- [ ] implementare `space.catalog.item.observed` in Automation;
-- [ ] implementare consumer e caso d’uso HAPA;
-- [ ] separare definitivamente prodotto da offerta Space;
+- [x] implementare producer normalizzato `space.catalog.item.observed` in Automation;
+- [x] implementare consumer RabbitMQ e caso d’uso HAPA;
+- [x] separare prodotto da offerta Space per tutte le nuove osservazioni;
+- [x] creare prodotti nuovi inattivi con revisione manuale e deduplica;
 - [ ] backfill e riconciliazione dei campi Space legacy;
 - [ ] mostrare costo, disponibilità, versione ed età del dato;
 - [ ] pilot read-only su Space.
 
-**Gate:** una variazione Space aggiorna HAPA una sola volta e non regredisce con eventi fuori ordine.
+**Gate:** una variazione Space aggiorna HAPA una sola volta, non regredisce con eventi fuori ordine e un prodotto nuovo non viene pubblicato prima dell’approvazione.
 
 ## P2 — Offerte HAPA → IBS
 

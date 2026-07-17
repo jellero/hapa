@@ -321,6 +321,7 @@ Implementato o disponibile:
 - dominio ordine di vendita e persistenza transazionale;
 - clienti e identità esterne iniziali;
 - catalogo, ricarichi e offerte iniziali;
+- ingestion idempotente dei nuovi prodotti Space con coda dedicata, onboarding e revisione conflitti;
 - outbox HAPA e runtime Automation separato;
 - RabbitMQ con envelope versionato;
 - test end-to-end iniziale HAPA → Automation.

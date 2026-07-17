@@ -67,6 +67,18 @@ services:
     networks: [backend, messaging]
     profiles: [messaging]
 
+  space-catalog-consumer:
+    build: *php-build
+    environment: *app-environment
+    command: ["php", "bin/console", "space:catalog:consume"]
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend, messaging]
+    profiles: [messaging]
+
   nginx:
     build:
       context: .

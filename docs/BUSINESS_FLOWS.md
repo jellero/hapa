@@ -6,13 +6,17 @@ Ultimo riesame: 17 luglio 2026.
 
 1. Il job Automation legge una pagina incrementale da Space.
 2. L’adapter valida il payload e pubblica `space.catalog.item.observed`.
-3. HAPA deduplica e applica soltanto una versione più recente.
-4. HAPA aggiorna prodotto e offerta fornitore nella stessa transazione.
-5. Il motore commerciale calcola quantità e prezzo desiderati per l’account IBS.
-6. HAPA salva la versione dell’offerta e `marketplace.offer.publish.requested` in outbox.
-7. Automation chiama IBS usando l’idempotency key del comando.
-8. Un timeout ambiguo entra in riconciliazione, non in retry cieco.
-9. HAPA applica `marketplace.offer.published` o `marketplace.offer.failed`.
+3. HAPA deduplica per `message_id` e per fornitore + ID esterno + versione sorgente.
+4. Il matching usa nell’ordine ID Space già collegato, EAN univoco e SKU.
+5. Un articolo mai visto crea un prodotto HAPA inattivo in `pending_review` e una distinta offerta Space.
+6. Un conflitto EAN/SKU entra in revisione manuale senza creare collegamenti o offerte marketplace.
+7. Un prodotto già approvato non riceve sovrascritture anagrafiche da Space; cambiano costo e disponibilità dell’offerta fornitore.
+8. Osservazioni più vecchie di quella già applicata vengono conservate ma ignorate.
+9. Il motore commerciale calcola quantità e prezzo desiderati soltanto per prodotti approvati.
+10. HAPA salva la versione dell’offerta e `marketplace.offer.publish.requested` in outbox.
+11. Automation chiama IBS usando l’idempotency key del comando.
+12. Un timeout ambiguo entra in riconciliazione, non in retry cieco.
+13. HAPA applica `marketplace.offer.published` o `marketplace.offer.failed`.
 
 Temu e Amazon riutilizzano la stessa vertical slice dopo discovery e test, senza aggiungere condizioni provider al dominio di pricing.
 

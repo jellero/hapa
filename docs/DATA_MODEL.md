@@ -14,10 +14,13 @@ PostgreSQL HAPA è il registro autorevole del business. PostgreSQL Automation è
 |---|---|
 | `catalog_items` | SKU HAPA, EAN, identità e stato del prodotto |
 | `supplier_catalog_items` | supplier, ID e SKU Space, costo, disponibilità, versione e data osservata |
+| `supplier_catalog_observations` | inbox/audit idempotente delle osservazioni Space e conflitti da revisionare |
 | `pricing_rules` | regole commerciali HAPA |
 | `marketplace_offers` | prezzo e quantità desiderati, stato applicativo e versione remota |
 
 Il costo Space non è un “prezzo base” generico: è un costo di acquisto osservato presso un fornitore. Il prezzo di vendita deve conservare almeno costo utilizzato, regola applicata, versione del calcolo, valuta e arrotondamento.
+
+I prodotti scoperti per la prima volta da Space nascono con `active = false` e `onboarding_status = pending_review`. L’approvazione commerciale è esplicita: fino a quel momento non possono generare offerte marketplace. ID Space, EAN e SKU sono segnali di matching; se EAN e SKU puntano a prodotti differenti l’osservazione resta in `manual_review`.
 
 ## Marketplace
 
