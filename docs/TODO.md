@@ -15,53 +15,75 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 - [x] decisione HAPA system of record e Space fornitore;
 - [x] schema additivo per account marketplace, offerte fornitore, acquisti, storico cliente, colli e label.
 
-## P0 — Sicurezza e messaggistica bidirezionale
+## P0 — Sicurezza, configurazione provider e messaggistica bidirezionale
 
 - [ ] unire e distribuire il consumer HAPA con inbox idempotente;
 - [ ] autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
 - [ ] audit delle azioni commerciali e degli accessi sensibili;
 - [ ] metriche su inbox, outbox, dead letter e consumer lag;
 - [ ] contratti v2 producer/consumer nei due repository;
-- [ ] storage sicuro per etichette e documenti.
+- [ ] storage sicuro per etichette e documenti;
+- [ ] CRUD amministrativo per account Space, SellRapido, GLS e provider futuri;
+- [ ] configurazione da UI di ambiente, endpoint, account, cataloghi, contratti, capacità, mapping, frequenze e batch;
+- [ ] campi credenziale write-only, mascherati e delegati allo storage cifrato di Automation senza persistenza in HAPA;
+- [ ] azioni UI separate per test connessione, rotazione/revoca, abilitazione e disabilitazione per capacità;
+- [ ] mostrare stato connessione, ultima verifica, scadenza token, checkpoint ed errore redatto senza esporre segreti;
+- [ ] versionare e auditare ogni modifica di configurazione e ogni attivazione produzione.
 
-**Gate:** nessun dato reale o comando provider è attivabile senza identità, permesso, deduplica e osservabilità.
+Il confine completo è in [`PROVIDER_CONFIGURATION.md`](PROVIDER_CONFIGURATION.md).
+
+**Gate:** nessun dato reale o comando provider è attivabile senza identità, permesso, deduplica, osservabilità, configurazione validata e test connessione riuscito. Nessun segreto transita su RabbitMQ o viene restituito all'interfaccia.
 
 ## P1 — Catalogo Space → HAPA
 
 - [x] implementare producer normalizzato `space.catalog.item.observed` in Automation;
-- [x] implementare consumer RabbitMQ e caso d’uso HAPA;
+- [x] implementare consumer RabbitMQ e caso d'uso HAPA;
 - [x] separare prodotto da offerta Space per tutte le nuove osservazioni;
 - [x] creare prodotti nuovi inattivi con revisione manuale e deduplica;
 - [ ] backfill e riconciliazione dei campi Space legacy;
 - [ ] mostrare costo, disponibilità, versione ed età del dato;
 - [ ] pilot read-only su Space.
 
-**Gate:** una variazione Space aggiorna HAPA una sola volta, non regredisce con eventi fuori ordine e un prodotto nuovo non viene pubblicato prima dell’approvazione.
+**Gate:** una variazione Space aggiorna HAPA una sola volta, non regredisce con eventi fuori ordine e un prodotto nuovo non viene pubblicato prima dell'approvazione.
 
-## P2 — Offerte HAPA → IBS
+## P2 — Prodotti e offerte HAPA → SellRapido → IBS/marketplace
 
+SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta proprietario di prodotto, prezzo e quantità desiderati; SellRapido distribuisce tali dati ai canali downstream.
+
+- [ ] configurare da UI account SellRapido, catalogo, UUID tecnico, marketplace/canale downstream e capacità abilitate;
+- [ ] ottenere e verificare un'utenza API dedicata con ACL per lettura ordini e, quando richiesta, modifica prodotti;
+- [ ] congelare endpoint e payload reali V2, chiarendo la differenza fra `/api/v2/product` e gli esempi `/api/product/{uuid}` presenti nella guida;
 - [ ] CRUD ricarichi autorizzato e auditato;
 - [ ] calcolo deterministico con costo, ricarico, fee, IVA e arrotondamento approvati;
-- [ ] account IBS esplicito;
-- [ ] comando `marketplace.offer.publish.requested` con prezzo e quantità finali;
-- [ ] adapter IBS e riconciliazione;
-- [ ] pilot su un sottoinsieme SKU;
-- [ ] cutover del writer precedente.
+- [ ] identità prodotto remota stabile `integration_account_id + catalog_id + sku`;
+- [ ] comando `marketplace.product.upsert.requested` per anagrafica, immagini, attributi e campi approvati;
+- [ ] comando `marketplace.offer.publish.requested` per prezzo e quantità finali già decisi da HAPA;
+- [ ] adapter SellRapido `POST`/`PATCH` con batch massimo 1000, esiti parziali per indice e idempotenza applicativa;
+- [ ] usare cataloghi data-entry oppure configurare `fields_lock` per impedire che import esterni sovrascrivano i campi gestiti da HAPA;
+- [ ] riconciliazione mediante `GET /api/v2/product`, rispettando il limite di una richiesta ogni 120 secondi;
+- [ ] rispettare il limite di una scrittura prodotti ogni 300 secondi aggregando le modifiche senza perdere l'ultima versione;
+- [ ] pilot su un sottoinsieme SKU e un solo account SellRapido;
+- [ ] cutover del writer precedente e verifica che esista un solo writer per catalogo/campo.
 
-**Gate:** HAPA riproduce il prezzo pubblicato e IBS viene aggiornato da un solo writer.
+**Gate:** HAPA riproduce i valori inviati; SellRapido viene aggiornato da un solo writer; nessun import automatico sovrascrive silenziosamente i campi HAPA; errori parziali sono riconciliati per singolo SKU.
 
-## P3 — Ordini IBS → HAPA
+## P3 — Ordini SellRapido → HAPA
 
-- [ ] congelare un payload IBS reale redatto;
-- [ ] import incrementale e watermark Automation;
-- [ ] `marketplace.order.observed` idempotente;
-- [ ] account + external order ID come identità;
-- [ ] cliente, identità, snapshot indirizzi e storico;
-- [ ] snapshot economici di ordine e righe;
-- [ ] revisione manuale per anomalie;
-- [ ] riconciliazione con ordini IBS esistenti.
+- [ ] configurare stati importati, frequenza, overlap, pagina e account dalla UI;
+- [ ] autenticazione iniziale una sola volta, rinnovo access token e rotazione refresh token gestiti da Automation;
+- [ ] import JSON incrementale con `GET /api/v2/order`, filtri `modified`, `offset` e `limit`;
+- [ ] verificare con test contrattuali i nomi effettivi dei parametri, perché la guida alterna camelCase e snake_case;
+- [ ] usare un watermark su `modified` con finestra di sovrapposizione e non avanzarlo prima dell'outbox durevole;
+- [ ] `marketplace.order.observed` idempotente con `connector = sellrapido`;
+- [ ] identità tecnica `integration_account_id + head.id`, conservando anche `code`, `marketplace_code`, `channel_code` e identificativi riga;
+- [ ] mappare senza perdita gli stati SellRapido `standby`, `accepted`, `sent` e `cancelled`;
+- [ ] cliente, identità, snapshot indirizzi, dati fiscali necessari e storico;
+- [ ] snapshot economici di testata e righe, valuta, fee, spedizione e pagamento;
+- [ ] minimizzare e non conservare per default `upload_status.request_payload` e token marketplace grezzi;
+- [ ] revisione manuale per anomalie, righe senza SKU, collisioni e modifiche regressive;
+- [ ] riconciliazione iniziale con ordini SellRapido esistenti e deduplica del backfill.
 
-**Gate:** lo stesso ordine non crea duplicati e i dati storici restano ricostruibili.
+**Gate:** lo stesso ordine SellRapido non crea duplicati; aggiornamenti fuori ordine non fanno regredire HAPA; i dati storici restano ricostruibili; il checkpoint avanza soltanto dopo persistenza dell'osservazione.
 
 ## P4 — Acquisto HAPA → Space
 
@@ -99,6 +121,7 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 
 La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discovery corrente deriva dal manuale MU.162 Rev.20 del 1 ottobre 2021: prima del codice produttivo devono essere verificati con GLS l'attivazione del servizio, il WSDL effettivo, i contratti abilitati e l'ambiente di collaudo.
 
+- [ ] configurare da UI endpoint/WSDL, ambiente, sede, cliente, contratto, password write-only, aggregazione, formato label e capacità;
 - [ ] completare picking, quantità finali, colli, peso reale e dimensioni prima di richiedere la spedizione;
 - [ ] modellare separatamente spedizione HAPA, colli HAPA, riferimenti GLS e documenti label;
 - [ ] introdurre gli stati applicativi almeno `requested`, `open`, `awaiting_close`, `closed`, `failed`, `manual_review` e `cancelled`, senza comprimere la spedizione in un singolo flag;
@@ -124,13 +147,21 @@ La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discov
 
 **Gate:** una richiesta logica non crea più spedizioni GLS; `open` e `closed` restano distinti; un timeout viene riconciliato prima del retry; ogni collo mantiene il proprio progressivo e la propria label; una ristampa non crea una nuova spedizione; la chiusura HAPA avviene soltanto dopo conferma GLS verificata.
 
-## P6 — Fulfilment IBS e chiusura
+## P6 — Fulfilment HAPA → SellRapido e chiusura
 
-- [ ] comando di fulfilment IBS;
-- [ ] verifica tracking e quantità;
-- [ ] esiti e riconciliazione marketplace;
-- [ ] read model di stato complessivo;
-- [ ] chiusura ordine solo quando vendita, acquisto e spedizione sono coerenti.
+- [ ] definire mapping esplicito fra stato HAPA e stati SellRapido `standby`, `accepted`, `sent`, `cancelled`;
+- [ ] comando `marketplace.fulfilment.publish.requested` con ID tecnico SellRapido, tracking, corriere e note;
+- [ ] adapter `POST /api/v2/order/status` con aggiornamenti massivi e correlazione degli errori per `index` e `id`;
+- [ ] usare `courier_code` configurato e validare la coppia tracking/corriere prima dell'invio;
+- [ ] trattare la risposta vuota come successo/no-op e ogni elemento di errore come esito parziale da riconciliare;
+- [ ] in caso di richiesta precedente pendente, non duplicare l'aggiornamento: rileggere l'ordine e ritentare con backoff;
+- [ ] non modellare rimozione di tracking, corriere o data pagamento perché l'API consente solo aggiunta/aggiornamento;
+- [ ] verifica tracking, quantità e stato GLS chiuso prima di inviare `sent`;
+- [ ] read model di stato complessivo SellRapido, marketplace downstream, acquisto e spedizione;
+- [ ] riconciliazione tramite `GET /api/v2/order` dopo timeout o errore ambiguo;
+- [ ] chiusura ordine solo quando vendita, acquisto, spedizione e fulfilment SellRapido sono coerenti.
+
+**Gate:** lo stesso fulfilment non viene pubblicato due volte; gli errori parziali non nascondono i successi; un timeout viene riconciliato prima del retry; HAPA non chiude l'ordine finché SellRapido non riflette tracking e stato attesi.
 
 ## P7 — Storico cliente e operatività
 
@@ -153,11 +184,12 @@ Nessun codice fiscale operativo viene introdotto prima dei gate in [`FISCAL.md`]
 
 ## Espansioni
 
-Solo dopo la stabilizzazione IBS/Space/GLS:
+Solo dopo la stabilizzazione Space/SellRapido/IBS/GLS:
 
-1. Temu;
-2. Amazon;
-3. BRT;
-4. eventuale storefront diretto.
+1. ulteriori marketplace gestiti da SellRapido;
+2. Temu diretto se necessario;
+3. Amazon diretto se necessario;
+4. BRT;
+5. eventuale storefront diretto.
 
 Ogni espansione riusa i contratti normalizzati e mantiene un solo writer per account e capacità.

@@ -1,10 +1,10 @@
 # HAPA
 
-HAPA è il gestionale della realtà commerciale separata da Space che acquista articoli da Space e li rivende sui marketplace. IBS è il canale attualmente attivo; Temu e Amazon sono i prossimi canali previsti.
+HAPA è il gestionale della realtà commerciale separata da Space che acquista articoli da Space e li rivende sui marketplace. IBS è il canale attualmente attivo e viene gestito tecnicamente tramite SellRapido; altri marketplace potranno riusare lo stesso connettore o adottare adapter diretti quando necessario.
 
 HAPA è il **system of record aziendale**. Conserva le decisioni e lo storico commerciale: prodotti venduti, offerte e ricarichi, clienti, ordini di vendita, acquisti verso Space, spedizioni, documenti e audit. Space è un fornitore esterno, non il database del gestionale.
 
-Le chiamate tecniche verso Space, IBS, Temu, Amazon, GLS e in futuro BRT vengono eseguite dal servizio separato [`jellero/hapa-automation`](https://github.com/jellero/hapa-automation). Il servizio usa un proprio database per cursori, retry, idempotenza e operazioni provider, ma non diventa proprietario di prodotti, clienti o ordini.
+Le chiamate tecniche verso Space, SellRapido, GLS e futuri provider vengono eseguite dal servizio separato [`jellero/hapa-automation`](https://github.com/jellero/hapa-automation). Il servizio usa un proprio database per cursori, retry, idempotenza, segreti e operazioni provider, ma non diventa proprietario di prodotti, clienti o ordini.
 
 ## Confine del sistema
 
@@ -13,15 +13,18 @@ flowchart LR
     Operator["Operatori HAPA"] --> Hapa["HAPA gestionale"]
     Hapa --> HapaDb[("PostgreSQL HAPA")]
     Hapa <--> Broker["RabbitMQ"]
-    Broker <--> Automation["HAPA Automation"]
+    Hapa -. configurazione sicura .-> Automation["HAPA Automation"]
+    Broker <--> Automation
     Automation --> AutomationDb[("PostgreSQL Automation")]
     Automation <--> Space["Space · fornitore"]
-    Automation <--> IBS["IBS · attivo"]
-    Automation -.-> Temu["Temu · futuro"]
-    Automation -.-> Amazon["Amazon · futuro"]
+    Automation <--> SellRapido["SellRapido · connettore corrente"]
+    SellRapido <--> IBS["IBS · marketplace attivo"]
+    SellRapido -.-> OtherMarketplaces["altri marketplace"]
     Automation <--> GLS["GLS"]
     Automation -.-> BRT["BRT · futuro"]
 ```
+
+La configurazione non segreta degli account è gestita da HAPA. Credenziali e token sono modificabili dall'interfaccia tramite campi write-only, ma vengono conservati soltanto da Automation e non transitano su RabbitMQ.
 
 ## Proprietà dei dati
 
@@ -34,8 +37,9 @@ flowchart LR
 | ordine di vendita marketplace | HAPA |
 | ordine di acquisto verso Space | HAPA |
 | colli, spedizione, tracking e riferimento etichetta | HAPA |
+| configurazione applicativa provider non segreta | HAPA |
 | fatture e corrispettivi futuri | HAPA |
-| cursori, retry, rate limit, chiamate e risposte provider | HAPA Automation |
+| segreti, token, cursori, retry, rate limit e chiamate provider | HAPA Automation |
 | proiezioni tecniche ricostruibili | HAPA Automation |
 
 Prodotti e ordini non vengono spostati in Automation. Il suo database può conservarne soltanto una proiezione minima, derivata e ricostruibile, necessaria a eseguire una specifica chiamata o riconciliazione.
@@ -45,30 +49,36 @@ Prodotti e ordini non vengono spostati in Automation. Il suo database può conse
 ### Catalogo e offerte
 
 1. Automation legge da Space catalogo, costo di acquisto e disponibilità.
-2. HAPA deduplica l’osservazione e cerca il prodotto per ID Space, EAN e SKU.
-3. Se il prodotto non esiste, HAPA lo crea inattivo in `pending_review` e registra separatamente l’offerta Space.
+2. HAPA deduplica l'osservazione e cerca il prodotto per ID Space, EAN e SKU.
+3. Se il prodotto non esiste, HAPA lo crea inattivo in `pending_review` e registra separatamente l'offerta Space.
 4. Conflitti di identità finiscono in revisione manuale e non pubblicano offerte.
 5. HAPA calcola quantità vendibile e prezzo finale usando ricarico, costi e policy del canale.
-6. HAPA emette un comando con prezzo e quantità già decisi.
-7. Automation pubblica l’offerta su IBS e restituisce l’esito tecnico.
+6. HAPA emette comandi con anagrafica, prezzo e quantità già decisi.
+7. Automation aggiorna il catalogo SellRapido; SellRapido distribuisce i dati a IBS e agli altri canali configurati.
+8. Automation restituisce a HAPA esiti tecnici e riconciliazioni per SKU.
 
 Automation non ricalcola i ricarichi e non decide il prezzo.
 
 ### Ordine, acquisto e spedizione
 
-1. Automation osserva un ordine IBS e lo invia a HAPA.
-2. HAPA registra cliente, identità esterna, snapshot degli indirizzi, ordine e righe economiche.
-3. HAPA crea una distinta richiesta di acquisto verso Space; l’ordine di vendita e quello di acquisto non condividono lo stesso stato.
-4. Automation invia l’acquisto a Space e restituisce gli esiti.
+1. Automation importa da SellRapido ordini e modifiche usando un watermark tecnico.
+2. HAPA registra account, canale downstream, cliente, identità esterna, snapshot degli indirizzi, ordine e righe economiche.
+3. HAPA crea una distinta richiesta di acquisto verso Space; l'ordine di vendita e quello di acquisto non condividono lo stesso stato.
+4. Automation invia l'acquisto all'API PHP Space e restituisce gli esiti.
 5. HAPA governa eccezioni, disponibilità, picking, colli e chiusura operativa.
-6. HAPA richiede la spedizione; Automation chiama GLS, acquisisce etichetta e tracking e restituisce l’esito.
-7. L’etichetta viene resa stampabile dall’interfaccia HAPA e il fulfilment viene comunicato a IBS.
+6. HAPA richiede la spedizione; Automation chiama GLS, acquisisce etichetta e tracking e restituisce gli esiti di apertura e chiusura.
+7. L'etichetta viene resa stampabile dall'interfaccia HAPA.
+8. Automation aggiorna tracking e stato ordine in SellRapido, che propaga il fulfilment al marketplace downstream.
 
 Il flusso completo è in [`docs/BUSINESS_FLOWS.md`](docs/BUSINESS_FLOWS.md).
 
+## Configurazione provider
+
+Endpoint, ambienti, account, cataloghi, contratti, capacità, frequenze e mapping devono essere modificabili da interfaccia amministrativa. Password, client secret e token sono write-only e restano nel secret store di Automation. Il disegno completo è in [`docs/PROVIDER_CONFIGURATION.md`](docs/PROVIDER_CONFIGURATION.md).
+
 ## Architettura
 
-I due repository hanno database, immagini, migrazioni e cicli di rilascio separati. RabbitMQ è infrastruttura di integrazione condivisa: trasporta eventi e comandi versionati, non replica i database.
+I due repository hanno database, immagini, migrazioni e cicli di rilascio separati. RabbitMQ è infrastruttura di integrazione condivisa: trasporta eventi e comandi versionati, non replica i database e non trasporta credenziali.
 
 Principi:
 
@@ -79,7 +89,8 @@ Principi:
 - comandi HAPA per le azioni esterne e eventi Automation per osservazioni ed esiti;
 - nessuna decisione commerciale nel runtime tecnico;
 - snapshot storici per ordini, clienti e documenti;
-- vertical slice attivate una alla volta, iniziando da IBS.
+- configurazione provider versionata, auditata e deny-by-default;
+- vertical slice attivate una alla volta, iniziando da Space, SellRapido e GLS.
 
 La progettazione completa, compresi i diagrammi recuperati e riallineati, è in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Il modello dati è in [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
 
@@ -120,6 +131,7 @@ composer ci:full
 | [`docs/BUSINESS_FLOWS.md`](docs/BUSINESS_FLOWS.md) | catalogo, ordini, acquisti e spedizioni |
 | [`docs/CATALOG_PRICING.md`](docs/CATALOG_PRICING.md) | catalogo Space, costi, ricarichi e offerte |
 | [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | clienti, storico e ordini di vendita |
+| [`docs/PROVIDER_CONFIGURATION.md`](docs/PROVIDER_CONFIGURATION.md) | configurazione UI, segreti, capacità e audit provider |
 | [`docs/FISCAL.md`](docs/FISCAL.md) | confine futuro di fatture e corrispettivi |
 | [`docs/TODO.md`](docs/TODO.md) | roadmap per vertical slice |
 
