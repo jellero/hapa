@@ -41,6 +41,8 @@ use Hapa\Core\Outbox\OutboxEnvelopeFactory;
 use Hapa\Core\Outbox\OutboxRelayFactory;
 use Hapa\Core\Outbox\OutboxRepository;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
+use Hapa\Core\Outbox\ProviderCommandFactory;
+use Hapa\Core\Outbox\ProviderCommandPayloadValidator;
 use Hapa\Core\Observability\RuntimeOverview;
 use Hapa\Core\Security\AuthorizationPolicy;
 use Hapa\Core\Security\CredentialAuthenticator;
@@ -177,6 +179,12 @@ final readonly class ContainerFactory
             ->setArguments([new Reference(RabbitMqConfig::class)]);
         $container->setAlias(MessagePublisher::class, RabbitMqPublisher::class)->setPublic(false);
         $container->register(OutboxEnvelopeFactory::class);
+        $container->register(ProviderCommandPayloadValidator::class);
+        $container->register(ProviderCommandFactory::class)
+            ->setArguments([
+                new Reference(ProviderCommandPayloadValidator::class),
+                new Reference(Clock::class),
+            ]);
         $container->register(OutboxRelayFactory::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),

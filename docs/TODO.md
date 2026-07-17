@@ -21,7 +21,7 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 - [x] autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
 - [x] audit consultabile di accessi, logout, configurazione provider, regole di ricarico e revisione prodotti;
 - [x] metriche aggregate autorizzate su dashboard HAPA per inbox, outbox, dead state e lag;
-- [ ] contratti v2 producer/consumer nei due repository;
+- [x] contratti comando v2 con factory/validatore HAPA e consumer/validatore Automation per tutte le operazioni provider correnti;
 - [x] storage privato locale per etichette e documenti con riferimenti opachi, checksum e scrittura atomica;
 - [x] CRUD amministrativo versionato dei dati non segreti per account Space, SellRapido, GLS e provider futuri;
 - [x] configurazione da UI di ambiente, endpoint, account, cataloghi, contratti, capacità, mapping, frequenze e batch;
