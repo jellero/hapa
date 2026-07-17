@@ -87,12 +87,10 @@
             </div>
             <a class="text-link" href="/ui/audit">Apri audit <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a>
         </div>
-        <div class="empty-state empty-state--compact">
-            <span class="empty-state__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#inbox"></use></svg></span>
-            <div>
-                <h3>Nessuna attività da mostrare</h3>
-                <p>Il feed si popolerà con eventi di dominio, retry, riconciliazioni e azioni degli operatori.</p>
-            </div>
+        <div class="workstream-list">
+            <article class="workstream-item"><span class="workstream-item__icon"><svg class="icon"><use href="/assets/icons.svg#inbox"></use></svg></span><div class="workstream-item__copy"><strong>Inbox fallite</strong><span>Lag più vecchio: <?= $e((string) ($runtime['lag_seconds']['inbox_failed_oldest'] ?? 0)) ?> secondi</span></div><span class="status-badge status-badge--<?= ($runtime['inbox']['failed'] ?? 0) > 0 ? 'danger' : 'success' ?>"><?= $e((string) ($runtime['inbox']['failed'] ?? 0)) ?></span></article>
+            <article class="workstream-item"><span class="workstream-item__icon"><svg class="icon"><use href="/assets/icons.svg#automation"></use></svg></span><div class="workstream-item__copy"><strong>Outbox pendenti / dead</strong><span>Lag pubblicazione: <?= $e((string) ($runtime['lag_seconds']['outbox_due_oldest'] ?? 0)) ?> secondi</span></div><span class="status-badge status-badge--<?= ($runtime['outbox']['dead'] ?? 0) > 0 ? 'danger' : 'success' ?>"><?= $e((string) (($runtime['outbox']['pending'] ?? 0) + ($runtime['outbox']['retry'] ?? 0))) ?> / <?= $e((string) ($runtime['outbox']['dead'] ?? 0)) ?></span></article>
+            <article class="workstream-item"><span class="workstream-item__icon"><svg class="icon"><use href="/assets/icons.svg#audit"></use></svg></span><div class="workstream-item__copy"><strong>Audit ultime 24 ore</strong><span>Accessi e modifiche operative registrate</span></div><span class="status-badge status-badge--info"><?= $e((string) ($runtime['audit_last_24h'] ?? 0)) ?></span></article>
         </div>
     </section>
 </div>

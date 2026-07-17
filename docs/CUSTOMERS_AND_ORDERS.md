@@ -11,10 +11,10 @@ Lo stato corrente è **parziale**:
 - schema PostgreSQL, vincoli e indici implementati;
 - value object e tipi di dominio iniziali implementati;
 - aggregato ordine, righe, transizioni ed eventi di dominio implementati e coperti da test;
-- elenco e dettaglio clienti, elenco e dettaglio ordini implementati come presentazione server-rendered;
+- elenco e dettaglio clienti collegati a query PostgreSQL autorizzate; la presentazione ordini è ancora priva del read model operativo;
 - repository PostgreSQL dell’aggregato ordine, optimistic locking e scrittura outbox atomica implementati;
-- repository cliente, query di elenco, casi d’uso, autenticazione, autorizzazione e CRUD non ancora implementati;
-- storico append-only del profilo cliente e acquisti Space distinti introdotti a livello schema, con casi d’uso ancora da implementare;
+- read model cliente con ricerca, identità esterne, indirizzi, ordini e storico implementato; repository mutativo e CRUD non ancora implementati;
+- storico append-only del profilo cliente e acquisti Space distinti introdotti a livello schema; lo storico cliente è consultabile, mentre i casi d’uso mutativi restano da implementare;
 - e-commerce B2C completo pianificato.
 
 ## Cliente canonico

@@ -19,8 +19,8 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 
 - [x] unire e distribuire il consumer HAPA con inbox idempotente;
 - [x] autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
-- [x] audit di accessi, logout e configurazione provider; le future azioni commerciali dovranno usare lo stesso registro;
-- [x] metriche JSON su inbox, outbox, dead state e lag nel runtime Automation; resta da esporre la vista aggregata autorizzata in HAPA;
+- [x] audit consultabile di accessi, logout, configurazione provider, regole di ricarico e revisione prodotti;
+- [x] metriche aggregate autorizzate su dashboard HAPA per inbox, outbox, dead state e lag;
 - [ ] contratti v2 producer/consumer nei due repository;
 - [x] storage privato locale per etichette e documenti con riferimenti opachi, checksum e scrittura atomica;
 - [x] CRUD amministrativo versionato dei dati non segreti per account Space, SellRapido, GLS e provider futuri;
@@ -39,7 +39,7 @@ Il confine completo è in [`PROVIDER_CONFIGURATION.md`](PROVIDER_CONFIGURATION.m
 - [x] implementare producer normalizzato `space.catalog.item.observed` in Automation;
 - [x] implementare consumer RabbitMQ e caso d'uso HAPA;
 - [x] separare prodotto da offerta Space per tutte le nuove osservazioni;
-- [x] creare prodotti nuovi inattivi con revisione manuale e deduplica;
+- [x] creare prodotti nuovi inattivi con deduplica e revisione manuale approva/rifiuta da UI;
 - [ ] backfill e riconciliazione dei campi Space legacy;
 - [x] mostrare costo, disponibilità, versione ed età del dato;
 - [ ] pilot read-only su Space.
@@ -53,7 +53,7 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 - [ ] configurare da UI account SellRapido, catalogo, UUID tecnico, marketplace/canale downstream e capacità abilitate;
 - [ ] ottenere e verificare un'utenza API dedicata con ACL per lettura ordini e, quando richiesta, modifica prodotti;
 - [ ] congelare endpoint e payload reali V2, chiarendo la differenza fra `/api/v2/product` e gli esempi `/api/product/{uuid}` presenti nella guida;
-- [ ] CRUD ricarichi autorizzato e auditato;
+- [x] CRUD ricarichi autorizzato, versionato, protetto da optimistic locking e auditato;
 - [ ] calcolo deterministico con costo, ricarico, fee, IVA e arrotondamento approvati;
 - [ ] identità prodotto remota stabile `integration_account_id + catalog_id + sku`;
 - [ ] comando `marketplace.product.upsert.requested` per anagrafica, immagini, attributi e campi approvati;
@@ -167,7 +167,8 @@ La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discov
 
 - [ ] casi d'uso cliente e versioni append-only;
 - [ ] merge, rettifica, anonimizzazione e retention;
-- [ ] ricerca e timeline completa;
+- [x] ricerca autorizzata e scheda aggregata con profilo, identità, indirizzi, ordini e versioni storiche;
+- [ ] paginazione completa e timeline unificata per volumi elevati;
 - [ ] export autorizzato e auditato;
 - [ ] backup/restore e prove di continuità.
 

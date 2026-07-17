@@ -27,7 +27,7 @@ final class CatalogReadModel implements CatalogOverview
     {
         $limit = max(1, min($limit, 200));
         $statement = $this->connection()->prepare(<<<'SQL'
-SELECT item.id, item.sku, item.ean, item.name, item.onboarding_status, item.active,
+SELECT item.id, item.sku, item.ean, item.name, item.onboarding_status, item.active, item.version,
        offer.purchase_cost_minor, offer.currency, offer.available_quantity,
        offer.source_version, offer.observed_at,
        COUNT(marketplace_offer.id) AS marketplace_offer_count
@@ -62,6 +62,7 @@ SQL);
                 'name' => is_string($row['name']) ? $row['name'] : null,
                 'onboarding_status' => (string) $row['onboarding_status'],
                 'active' => (bool) $row['active'],
+                'version' => (int) $row['version'],
                 'purchase_cost_minor' => is_int($row['purchase_cost_minor'])
                     ? $row['purchase_cost_minor']
                     : (is_string($row['purchase_cost_minor']) ? (int) $row['purchase_cost_minor'] : null),

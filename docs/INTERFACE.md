@@ -67,7 +67,7 @@ Deve mostrare:
 - stato delle offerte per marketplace;
 - divergenze e dati scaduti.
 
-Le azioni future includono creazione, modifica, abilitazione e disabilitazione delle regole di ricarico. Ogni azione richiede permesso, CSRF, optimistic locking e audit.
+Creazione, modifica, abilitazione/disabilitazione e ritiro delle regole di ricarico sono disponibili agli amministratori con permesso, CSRF, optimistic locking, storico versionato e audit. Anteprima prezzo e pubblicazione offerte restano successive.
 
 ## Integrazioni
 

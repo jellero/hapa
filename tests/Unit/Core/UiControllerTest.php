@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Hapa\Tests\Unit\Core;
 
+use DateTimeImmutable;
+use Hapa\Core\Security\UserIdentity;
+use Hapa\Core\Security\WebSession;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use PHPUnit\Framework\TestCase;
@@ -149,6 +152,9 @@ final class UiControllerTest extends TestCase
     {
         $request = Request::create($uri);
         $request->attributes->set('correlation_id', 'test-correlation-id');
+        $user = new UserIdentity('test-user', 'admin@example.test', 'Test Administrator', 'administrator');
+        $request->attributes->set('current_user', $user);
+        $request->attributes->set('security_session', new WebSession('test-session-token', $user, new DateTimeImmutable('+1 hour')));
 
         return $request;
     }

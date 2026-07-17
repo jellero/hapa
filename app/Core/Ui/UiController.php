@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Ui;
 
+use Hapa\Core\Audit\AuditReadModel;
+use Hapa\Core\Observability\RuntimeOverview;
 use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\WebSession;
 use Hapa\Core\Integration\IntegrationAccountConfiguration;
@@ -20,6 +22,10 @@ final readonly class UiController
         private ?CatalogOverview $catalogReadModel = null,
         private ?IntegrationAccountRepository $integrationAccounts = null,
         private ?IntegrationAccountConfiguration $integrationConfiguration = null,
+        private ?AuditReadModel $auditReadModel = null,
+        private ?RuntimeOverview $runtimeOverview = null,
+        private ?PricingRuleManagement $pricingRules = null,
+        private ?CustomerOverview $customerReadModel = null,
     ) {
     }
 
@@ -55,16 +61,25 @@ final readonly class UiController
 
     public function dashboard(Request $request): Response
     {
+        $runtime = $this->runtimeOverview?->snapshot() ?? [
+            'business' => ['open_orders' => 0, 'customers' => 0, 'catalog_items' => 0, 'shipments_today' => 0],
+            'inbox' => [],
+            'outbox' => [],
+            'lag_seconds' => ['inbox_failed_oldest' => 0, 'outbox_due_oldest' => 0],
+            'audit_last_24h' => 0,
+        ];
+
         return $this->operational($request, 'ui/dashboard', 'dashboard', [
             'title' => 'Centro operativo',
             'eyebrow' => 'Panoramica',
             'description' => 'Controlla anagrafiche, catalogo, ordini e stato delle integrazioni da un unico punto.',
             'metrics' => [
-                ['label' => 'Ordini da lavorare', 'value' => '—', 'detail' => 'Read model operativo non collegato', 'tone' => 'neutral'],
-                ['label' => 'Clienti censiti', 'value' => '—', 'detail' => 'Repository clienti non collegato', 'tone' => 'info'],
-                ['label' => 'Prodotti sincronizzati', 'value' => '—', 'detail' => 'Read model catalogo non collegato', 'tone' => 'success'],
-                ['label' => 'Spedizioni di oggi', 'value' => '—', 'detail' => 'Adapter corriere non collegati', 'tone' => 'neutral'],
+                ['label' => 'Ordini da lavorare', 'value' => (string) $runtime['business']['open_orders'], 'detail' => 'Ordini non ancora chiusi o annullati', 'tone' => 'neutral'],
+                ['label' => 'Clienti censiti', 'value' => (string) $runtime['business']['customers'], 'detail' => 'Anagrafiche canoniche persistite', 'tone' => 'info'],
+                ['label' => 'Prodotti sincronizzati', 'value' => (string) $runtime['business']['catalog_items'], 'detail' => 'Prodotti presenti nel catalogo HAPA', 'tone' => 'success'],
+                ['label' => 'Spedizioni di oggi', 'value' => (string) $runtime['business']['shipments_today'], 'detail' => 'Spedizioni create dalla mezzanotte', 'tone' => 'neutral'],
             ],
+            'runtime' => $runtime,
             'workstreams' => [
                 ['label' => 'Marketplace', 'detail' => 'SellRapido, Amazon, eMAG, Temu e IBS', 'status' => 'Pianificato', 'tone' => 'neutral', 'icon' => 'integration'],
                 ['label' => 'Anagrafiche', 'detail' => 'Clienti, identità esterne, indirizzi e ordini', 'status' => 'Ordini persistenti', 'tone' => 'success', 'icon' => 'customer'],
@@ -78,29 +93,30 @@ final readonly class UiController
 
     public function customers(Request $request): Response
     {
-        return $this->collection($request, 'customers', [
+        $query = trim($request->query->getString('q'));
+        $status = $request->query->getString('status');
+
+        return $this->operational($request, 'ui/customers', 'customers', [
             'title' => 'Clienti',
             'eyebrow' => 'Anagrafiche',
             'description' => 'Gestisci il profilo cliente canonico, i contatti, gli indirizzi e le identità provenienti dai diversi canali.',
-            'searchLabel' => 'Cerca per codice, nome, email o identità esterna',
-            'filters' => ['Tutti i clienti', 'Attivi', 'Inattivi', 'Archiviati'],
-            'columns' => ['Codice', 'Cliente', 'Contatti', 'Origini', 'Ordini', 'Stato', 'Azioni'],
-            'emptyTitle' => 'Nessun cliente disponibile',
-            'emptyBody' => 'Schema e modello di dominio sono pronti; i clienti compariranno dopo il collegamento del repository e dei casi d’uso protetti.',
-            'emptyIcon' => 'customer',
-            'primaryAction' => 'Nuovo cliente',
+            'query' => $query,
+            'selectedStatus' => in_array($status, ['active', 'inactive', 'archived'], true) ? $status : '',
+            'customers' => $this->customerReadModel?->search($query, $status) ?? [],
         ]);
     }
 
     public function customerDetail(Request $request): Response
     {
         $customerId = $request->attributes->getString('customerId');
+        $customer = $this->customerReadModel?->detail($customerId);
 
         return $this->operational($request, 'ui/customer-detail', 'customers', [
-            'title' => sprintf('Cliente %s', $customerId),
+            'title' => $customer === null ? sprintf('Cliente %s', $customerId) : (string) $customer['display_name'],
             'eyebrow' => 'Scheda cliente',
             'description' => 'Profilo canonico, contatti, identità esterne, indirizzi e ordini collegati.',
             'customerId' => $customerId,
+            'customer' => $customer,
         ]);
     }
 
@@ -127,14 +143,39 @@ final readonly class UiController
             'items' => [],
             'metrics' => ['total' => 0, 'pending_review' => 0, 'active' => 0, 'stale' => 0],
         ];
+        $session = $request->attributes->get('security_session');
+        $catalogItems = $catalog['items'];
+        foreach ($catalogItems as &$item) {
+            $item['review_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('catalog.review.' . (string) $item['id'])
+                : '';
+        }
+        unset($item);
+        $pricingRules = $this->pricingRules?->all() ?? [];
+        foreach ($pricingRules as &$rule) {
+            $rule['update_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('pricing.update.' . (string) $rule['id'])
+                : '';
+            $rule['retire_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('pricing.retire.' . (string) $rule['id'])
+                : '';
+        }
+        unset($rule);
 
         return $this->operational($request, 'ui/catalog', 'catalog', [
             'title' => 'Anagrafica prodotti, prezzi e stock',
             'eyebrow' => 'Catalogo commerciale',
             'description' => 'Consulta prezzo e stock sincronizzati da Space e gestisci da interfaccia le regole di ricarico applicate alle offerte.',
             'query' => $query,
-            'catalogItems' => $catalog['items'],
+            'catalogItems' => $catalogItems,
             'catalogMetrics' => $catalog['metrics'],
+            'pricingRules' => $pricingRules,
+            'marketplaces' => $this->pricingRules?->marketplaces() ?? [],
+            'createPricingCsrfToken' => $session instanceof WebSession ? $session->csrfToken('pricing.create') : '',
+            'pricingSaved' => $request->query->getBoolean('pricing_saved'),
+            'pricingError' => $request->query->getString('pricing_error'),
+            'reviewSaved' => $request->query->getBoolean('review_saved'),
+            'reviewError' => $request->query->getString('review_error'),
         ]);
     }
 
@@ -237,17 +278,17 @@ final readonly class UiController
 
     public function audit(Request $request): Response
     {
-        return $this->collection($request, 'audit', [
+        $query = trim($request->query->getString('q'));
+        $entityType = $request->query->getString('entity_type');
+
+        return $this->operational($request, 'ui/audit', 'audit', [
             'title' => 'Audit',
             'eyebrow' => 'Controllo',
             'description' => 'Ricostruisci azioni operative, cambi di stato e accessi sensibili.',
-            'searchLabel' => 'Cerca attore, azione, entità o correlation ID',
-            'filters' => ['Tutti gli eventi', 'Clienti', 'Prodotti', 'Ordini', 'Spedizioni', 'Utenti', 'Sicurezza'],
-            'columns' => ['Data e ora', 'Attore', 'Azione', 'Entità', 'Correlation ID', 'Dettaglio'],
-            'emptyTitle' => 'Nessun evento di audit',
-            'emptyBody' => 'La consultazione richiede query repository, autenticazione e autorizzazione.',
-            'emptyIcon' => 'audit',
-            'primaryAction' => 'Esporta',
+            'query' => $query,
+            'selectedEntityType' => $entityType,
+            'entityTypes' => $this->auditReadModel?->entityTypes() ?? [],
+            'auditEntries' => $this->auditReadModel?->search($query, $entityType) ?? [],
         ]);
     }
 

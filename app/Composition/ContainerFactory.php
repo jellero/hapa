@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hapa\Composition;
 
 use Hapa\Core\Audit\AuditLogger;
+use Hapa\Core\Audit\AuditReadModel;
 use Hapa\Core\Clock\Clock;
 use Hapa\Core\Clock\SystemClock;
 use Hapa\Core\Configuration\ApplicationConfig;
@@ -40,17 +41,26 @@ use Hapa\Core\Outbox\OutboxEnvelopeFactory;
 use Hapa\Core\Outbox\OutboxRelayFactory;
 use Hapa\Core\Outbox\OutboxRepository;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
+use Hapa\Core\Observability\RuntimeOverview;
 use Hapa\Core\Security\AuthorizationPolicy;
 use Hapa\Core\Security\CredentialAuthenticator;
 use Hapa\Core\Security\SessionManager;
 use Hapa\Core\Security\UserRepository;
 use Hapa\Core\Ui\AuthenticationController;
+use Hapa\Core\Ui\CatalogProductManagement;
+use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\CatalogOverview;
+use Hapa\Core\Ui\CustomerOverview;
 use Hapa\Core\Ui\IntegrationConfigurationController;
+use Hapa\Core\Ui\PricingRuleController;
+use Hapa\Core\Ui\PricingRuleManagement;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Catalog\Application\CatalogReadModel;
+use Hapa\Modules\Catalog\Application\CatalogProductReviewService;
+use Hapa\Modules\Catalog\Application\PricingRuleService;
+use Hapa\Modules\Customers\Application\CustomerReadModel;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
@@ -196,6 +206,21 @@ final readonly class ContainerFactory
         $container->register(CatalogReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->setAlias(CatalogOverview::class, CatalogReadModel::class)->setPublic(false);
+        $container->register(CustomerReadModel::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->setAlias(CustomerOverview::class, CustomerReadModel::class)->setPublic(false);
+        $container->register(CatalogProductReviewService::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+            ]);
+        $container->setAlias(CatalogProductManagement::class, CatalogProductReviewService::class)->setPublic(false);
+        $container->register(PricingRuleService::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+            ]);
+        $container->setAlias(PricingRuleManagement::class, PricingRuleService::class)->setPublic(false);
         $container->register(SpaceCatalogObservationHandler::class)
             ->setArguments([
                 new Reference(PDO::class),
@@ -254,6 +279,10 @@ final readonly class ContainerFactory
                 new Reference(Clock::class),
                 new Reference(SensitiveDataRedactor::class),
             ]);
+        $container->register(AuditReadModel::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->register(RuntimeOverview::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->register(IntegrationAccountConfiguration::class);
         $container->register(IntegrationAccountRepository::class)
             ->setArguments([
@@ -267,6 +296,10 @@ final readonly class ContainerFactory
                 new Reference(CatalogOverview::class),
                 new Reference(IntegrationAccountRepository::class),
                 new Reference(IntegrationAccountConfiguration::class),
+                new Reference(AuditReadModel::class),
+                new Reference(RuntimeOverview::class),
+                new Reference(PricingRuleManagement::class),
+                new Reference(CustomerOverview::class),
             ]);
         $container->register(AuthenticationController::class)
             ->setArguments([
@@ -280,6 +313,10 @@ final readonly class ContainerFactory
                 new Reference(IntegrationAccountConfiguration::class),
                 new Reference(IntegrationAccountRepository::class),
             ]);
+        $container->register(PricingRuleController::class)
+            ->setArguments([new Reference(PricingRuleManagement::class)]);
+        $container->register(CatalogReviewController::class)
+            ->setArguments([new Reference(CatalogProductManagement::class)]);
         $container->register(KernelFactory::class)
             ->setArguments([
                 new Reference(UiController::class),
@@ -291,6 +328,8 @@ final readonly class ContainerFactory
                 new Reference(SessionManager::class),
                 new Reference(AuthorizationPolicy::class),
                 new Reference(IntegrationConfigurationController::class),
+                new Reference(PricingRuleController::class),
+                new Reference(CatalogReviewController::class),
             ]);
         $container->setDefinition(Kernel::class, (new Definition())
             ->setFactory([new Reference(KernelFactory::class), 'create'])

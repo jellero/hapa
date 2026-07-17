@@ -5,7 +5,9 @@ declare(strict_types=1);
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Health\ReadinessCheck;
 use Hapa\Core\Ui\AuthenticationController;
+use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\IntegrationConfigurationController;
+use Hapa\Core\Ui\PricingRuleController;
 use Hapa\Core\Ui\UiController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -19,6 +21,8 @@ return static function (
     ApplicationConfig $application,
     ?AuthenticationController $authentication = null,
     ?IntegrationConfigurationController $integrationConfiguration = null,
+    ?PricingRuleController $pricingRules = null,
+    ?CatalogReviewController $catalogReview = null,
 ): RouteCollection {
     $routes = new RouteCollection();
     $unavailableAuthentication = static fn (): JsonResponse => new JsonResponse(
@@ -39,6 +43,18 @@ return static function (
         : $unavailableAuthentication;
     $retireIntegrationController = $integrationConfiguration instanceof IntegrationConfigurationController
         ? $integrationConfiguration->retire(...)
+        : $unavailableAuthentication;
+    $createPricingController = $pricingRules instanceof PricingRuleController
+        ? $pricingRules->create(...)
+        : $unavailableAuthentication;
+    $updatePricingController = $pricingRules instanceof PricingRuleController
+        ? $pricingRules->update(...)
+        : $unavailableAuthentication;
+    $retirePricingController = $pricingRules instanceof PricingRuleController
+        ? $pricingRules->retire(...)
+        : $unavailableAuthentication;
+    $reviewCatalogController = $catalogReview instanceof CatalogReviewController
+        ? $catalogReview->review(...)
         : $unavailableAuthentication;
 
     $routes->add('home', new Route(
@@ -76,6 +92,26 @@ return static function (
     ));
     $routes->add('ui_orders', new Route('/ui/orders', ['_controller' => $ui->orders(...), '_permission' => 'orders.view'], methods: ['GET']));
     $routes->add('ui_catalog', new Route('/ui/catalog', ['_controller' => $ui->catalog(...), '_permission' => 'catalog.view'], methods: ['GET']));
+    $routes->add('ui_pricing_create', new Route('/ui/catalog/pricing-rules', [
+        '_controller' => $createPricingController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'pricing.create',
+    ], methods: ['POST']));
+    $routes->add('ui_pricing_update', new Route('/ui/catalog/pricing-rules/{ruleId}', [
+        '_controller' => $updatePricingController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'pricing.update.{ruleId}',
+    ], requirements: ['ruleId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_pricing_retire', new Route('/ui/catalog/pricing-rules/{ruleId}/retire', [
+        '_controller' => $retirePricingController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'pricing.retire.{ruleId}',
+    ], requirements: ['ruleId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_catalog_review', new Route('/ui/catalog/items/{itemId}/review', [
+        '_controller' => $reviewCatalogController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'catalog.review.{itemId}',
+    ], requirements: ['itemId' => '[1-9][0-9]*'], methods: ['POST']));
     $routes->add('ui_order_detail', new Route(
         '/ui/orders/{orderId}',
         ['_controller' => $ui->orderDetail(...), '_permission' => 'orders.view'],
