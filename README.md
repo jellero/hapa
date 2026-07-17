@@ -1,131 +1,93 @@
 # HAPA
 
-HAPA è l’applicazione proprietaria che governa le anagrafiche clienti, ordini e prodotti, il catalogo commerciale, il magazzino, le spedizioni e la configurazione delle integrazioni.
+HAPA è il gestionale della realtà commerciale separata da Space che acquista articoli da Space e li rivende sui marketplace. IBS è il canale attualmente attivo; Temu e Amazon sono i prossimi canali previsti.
 
-L’anagrafica prodotti conserva per ogni SKU il prezzo base e lo stock ricevuti da Space. Gli operatori gestiscono dall’interfaccia HAPA le regole di ricarico e controllano il prezzo finale destinato ai marketplace. Space resta la sorgente del dato di prezzo e disponibilità; HAPA resta la sorgente delle regole commerciali e dello stato applicativo.
+HAPA è il **system of record aziendale**. Conserva le decisioni e lo storico commerciale: prodotti venduti, offerte e ricarichi, clienti, ordini di vendita, acquisti verso Space, spedizioni, documenti e audit. Space è un fornitore esterno, non il database del gestionale.
 
-Le automazioni non vengono sviluppate o eseguite in questo repository. Il servizio autonomo è [`jellero/hapa-automation`](https://github.com/jellero/hapa-automation), che contiene codice, configurazione, documentazione operativa, Compose, database e pipeline propri.
+Le chiamate tecniche verso Space, IBS, Temu, Amazon, GLS e in futuro BRT vengono eseguite dal servizio separato [`jellero/hapa-automation`](https://github.com/jellero/hapa-automation). Il servizio usa un proprio database per cursori, retry, idempotenza e operazioni provider, ma non diventa proprietario di prodotti, clienti o ordini.
 
-## Responsabilità di HAPA
+## Confine del sistema
 
-HAPA possiede:
+```mermaid
+flowchart LR
+    Operator["Operatori HAPA"] --> Hapa["HAPA gestionale"]
+    Hapa --> HapaDb[("PostgreSQL HAPA")]
+    Hapa <--> Broker["RabbitMQ"]
+    Broker <--> Automation["HAPA Automation"]
+    Automation --> AutomationDb[("PostgreSQL Automation")]
+    Automation <--> Space["Space · fornitore"]
+    Automation <--> IBS["IBS · attivo"]
+    Automation -.-> Temu["Temu · futuro"]
+    Automation -.-> Amazon["Amazon · futuro"]
+    Automation <--> GLS["GLS"]
+    Automation -.-> BRT["BRT · futuro"]
+```
 
-- anagrafiche clienti, identità esterne e indirizzi;
-- anagrafica ordini e relativo dominio transazionale;
-- anagrafica prodotti;
-- prezzo e stock sincronizzati da Space;
-- regole di ricarico gestite tramite interfaccia;
-- prezzi finali e stato delle offerte marketplace;
-- picking, colli, spedizioni e tracking;
-- autenticazione, autorizzazione, audit e configurazione;
-- outbox transazionale degli eventi prodotti dai casi d’uso;
-- relay di delivery della propria outbox verso RabbitMQ.
+## Proprietà dei dati
 
-HAPA non possiede:
+| Area | Proprietario autorevole |
+|---|---|
+| prodotto canonico HAPA | HAPA |
+| offerta fornitore, costo e disponibilità Space osservati | HAPA, alimentato da eventi Space |
+| regole di ricarico e prezzo di vendita desiderato | HAPA |
+| cliente, identità marketplace e storico | HAPA |
+| ordine di vendita marketplace | HAPA |
+| ordine di acquisto verso Space | HAPA |
+| colli, spedizione, tracking e riferimento etichetta | HAPA |
+| fatture e corrispettivi futuri | HAPA |
+| cursori, retry, rate limit, chiamate e risposte provider | HAPA Automation |
+| proiezioni tecniche ricostruibili | HAPA Automation |
 
-- scheduler dei job;
-- worker di automazione;
-- retry e dead letter dei provider;
-- cursori di polling dei provider;
-- database operativo delle automazioni;
-- adapter eseguiti in background.
-
-Queste responsabilità appartengono esclusivamente al repository `hapa-automation`.
+Prodotti e ordini non vengono spostati in Automation. Il suo database può conservarne soltanto una proiezione minima, derivata e ricostruibile, necessaria a eseguire una specifica chiamata o riconciliazione.
 
 ## Flussi principali
 
-### Catalogo
+### Catalogo e offerte
 
-1. `hapa-automation` acquisisce da Space le variazioni di prodotto, prezzo e stock.
-2. Il risultato viene pubblicato su RabbitMQ con un evento versionato.
-3. HAPA applica il dato ricevuto alla propria anagrafica prodotti.
-4. Un operatore configura o modifica le regole di ricarico dall’interfaccia HAPA.
-5. HAPA produce l’intenzione di pubblicare una nuova offerta.
-6. `hapa-automation` pubblica prezzo e quantità sul marketplace e restituisce l’esito.
+1. Automation legge da Space catalogo, costo di acquisto e disponibilità.
+2. HAPA applica l’osservazione al prodotto e all’offerta fornitore.
+3. HAPA calcola quantità vendibile e prezzo finale usando ricarico, costi e policy del canale.
+4. HAPA emette un comando con prezzo e quantità già decisi.
+5. Automation pubblica l’offerta su IBS e restituisce l’esito tecnico.
 
-### Ordini e spedizioni
+Automation non ricalcola i ricarichi e non decide il prezzo.
 
-1. `hapa-automation` importa l’ordine dal marketplace.
-2. HAPA persiste cliente, ordine, righe e snapshot degli indirizzi.
-3. HAPA produce nella transactional outbox eventi canonici `order.changed`.
-4. Il relay HAPA costruisce un envelope stabile e pubblica su RabbitMQ con publisher confirm.
-5. `hapa-automation` proietta le modifiche e successivamente esegue invio a Space, riconciliazioni e chiamate provider.
-6. HAPA governa picking, decisioni manuali e dati di spedizione.
-7. `hapa-automation` crea label e fulfilment tramite GLS, BRT e marketplace.
+### Ordine, acquisto e spedizione
 
-## Confine RabbitMQ
+1. Automation osserva un ordine IBS e lo invia a HAPA.
+2. HAPA registra cliente, identità esterna, snapshot degli indirizzi, ordine e righe economiche.
+3. HAPA crea una distinta richiesta di acquisto verso Space; l’ordine di vendita e quello di acquisto non condividono lo stesso stato.
+4. Automation invia l’acquisto a Space e restituisce gli esiti.
+5. HAPA governa eccezioni, disponibilità, picking, colli e chiusura operativa.
+6. HAPA richiede la spedizione; Automation chiama GLS, acquisisce etichetta e tracking e restituisce l’esito.
+7. L’etichetta viene resa stampabile dall’interfaccia HAPA e il fulfilment viene comunicato a IBS.
 
-RabbitMQ trasporta eventi e comandi; non replica direttamente i database.
-
-- PostgreSQL HAPA è autorevole per clienti, ordini, prodotti, ricarichi e stato commerciale.
-- PostgreSQL `hapa-automation` è autorevole per scheduler, inbox, outbox, retry, dead letter, cursori e proiezioni operative.
-- Ogni consumer è idempotente.
-- `event_type` coincide con la routing key canonica.
-- I messaggi hanno `message_id`, `event_type`, `schema_version`, `occurred_at`, `correlation_id`, `causation_id` e payload tipizzato.
-- Il `message_id` HAPA è un UUIDv5 stabile derivato dalla chiave di idempotenza della riga outbox.
-- Nessun servizio accede direttamente al database dell’altro.
-
-Il producer ordine HAPA usa:
-
-- event type e routing key `order.changed`;
-- `version` come versione canonica;
-- `change_type` per conservare l’evento di dominio originario;
-- `status` soltanto quando l’evento inizializza o modifica lo stato.
-
-Il consumer `hapa-automation` mantiene temporaneamente compatibilità con i vecchi event type ordine e con i campi `order_version`, `to_status` e `resulting_status`. Il formato canonico e la procedura di deploy sono documentati in [`hapa-automation/docs/MESSAGE_CONTRACTS.md`](https://github.com/jellero/hapa-automation/blob/main/docs/MESSAGE_CONTRACTS.md).
-
-Il relay HAPA usa claim concorrente, recupero lock scaduti, retry esponenziale e stato dead della transactional outbox. È disabilitato per default tramite `RABBITMQ_ENABLED=false`.
-
-Il confine applicativo HAPA è descritto in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). L’architettura e la documentazione operativa delle automazioni sono mantenute nella [`main` di hapa-automation](https://github.com/jellero/hapa-automation/tree/main/docs).
-
-## Stato di hapa-automation
-
-La foundation autonoma è disponibile sulla branch `main` del repository dedicato e comprende stack Docker separato, PostgreSQL proprio, topologia RabbitMQ, inbox idempotente, outbox con retry e dead letter, scheduler persistente, proiezioni locali e worker long-running.
-
-Il contratto ordine è allineato nel producer HAPA e nel consumer `hapa-automation`, con test nei due repository e gestione degli arrivi fuori ordine. Il relay producer HAPA è implementato. Restano da implementare consumer e inbox RabbitMQ lato HAPA, contratti producer completi per catalogo e ricarichi, adapter reali Space/marketplace/GLS/BRT e osservabilità operativa completa.
-
-I job provider sono creati disabilitati e non devono essere abilitati prima dei test end-to-end con RabbitMQ reale.
-
-## Stack
-
-- PHP 8.4;
-- componenti Symfony selezionati;
-- PostgreSQL;
-- Redis per capacità applicative temporanee;
-- `php-amqplib` per la pubblicazione AMQP;
-- Phinx per le migrazioni;
-- PHPUnit e PHPStan;
-- Docker e Docker Compose.
+Il flusso completo è in [`docs/BUSINESS_FLOWS.md`](docs/BUSINESS_FLOWS.md).
 
 ## Architettura
 
-```text
-app/
-  Composition/             composition root HAPA
-  Core/                    runtime HTTP/CLI, outbox e relay RabbitMQ
-  Modules/                 dominio, casi d’uso, contratti e adapter sincroni
-bin/
-  console                  comandi applicativi HAPA
-config/
-  module-dependencies.php  dipendenze ammesse tra moduli
-  routes.php               routing HTTP
-database/
-  migrations/              schema PostgreSQL HAPA
-docs/
-  ARCHITECTURE.md           confini e flussi applicativi HAPA
-  CATALOG_PRICING.md        anagrafica prodotti, prezzo, stock e ricarichi
-```
+I due repository hanno database, immagini, migrazioni e cicli di rilascio separati. RabbitMQ è infrastruttura di integrazione condivisa: trasporta eventi e comandi versionati, non replica i database.
 
 Principi:
 
-- PostgreSQL HAPA come sorgente autorevole del dominio HAPA;
-- consistenza transazionale interna;
+- un solo writer autorevole per ogni dato di business;
+- transazioni locali con outbox e inbox;
 - consistenza eventuale tra servizi;
 - idempotenza end-to-end;
-- transactional outbox per gli eventi esterni;
-- contratti di messaggio versionati;
-- nessun database condiviso;
-- sviluppo per vertical slice complete.
+- comandi HAPA per le azioni esterne e eventi Automation per osservazioni ed esiti;
+- nessuna decisione commerciale nel runtime tecnico;
+- snapshot storici per ordini, clienti e documenti;
+- vertical slice attivate una alla volta, iniziando da IBS.
+
+La progettazione completa, compresi i diagrammi recuperati e riallineati, è in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Il modello dati è in [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
+
+## Stack
+
+- PHP 8.4 e componenti Symfony selezionati;
+- PostgreSQL e Redis;
+- RabbitMQ tramite `php-amqplib`;
+- Phinx, PHPUnit e PHPStan;
+- Docker e Docker Compose.
 
 ## Avvio locale
 
@@ -138,25 +100,7 @@ docker compose exec php vendor/bin/phinx migrate -e development
 docker compose exec php php bin/console system:check
 ```
 
-Per provare il relay dopo aver avviato RabbitMQ dal repository `hapa-automation`:
-
-```bash
-RABBITMQ_ENABLED=true docker compose --profile messaging run --rm outbox-relay
-```
-
-Endpoint principali:
-
-```text
-GET http://localhost:8080/
-GET http://localhost:8080/health/live
-GET http://localhost:8080/health/ready
-GET http://localhost:8080/login
-GET http://localhost:8080/ui
-GET http://localhost:8080/ui/catalog
-GET http://localhost:8080/ui/integrations
-```
-
-Il runtime asincrono viene avviato esclusivamente dal repository `hapa-automation`. Il Compose HAPA contiene soltanto un relay one-shot della propria transactional outbox nel profilo opzionale `messaging`.
+Il runtime asincrono viene avviato dal repository `hapa-automation`.
 
 ## Qualità
 
@@ -165,24 +109,18 @@ composer ci:fast
 composer ci:full
 ```
 
-`ci:fast` esegue controllo architetturale, test e PHPStan. `ci:full` aggiunge validazione Composer e audit delle dipendenze.
-
 ## Documentazione
 
 | Documento | Contenuto |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | confini HAPA, messaggistica e proprietà dei dati |
-| [`docs/CATALOG_PRICING.md`](docs/CATALOG_PRICING.md) | anagrafica prodotti, prezzo e stock Space, ricarichi UI |
-| [`docs/CARRIERS.md`](docs/CARRIERS.md) | contratto Shipping, GLS e BRT |
-| [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | clienti, identità, indirizzi e ordini |
-| [`docs/DEVELOPMENT_WORKFLOW.md`](docs/DEVELOPMENT_WORKFLOW.md) | percorso di sviluppo e ownership |
-| [`docs/INTERFACE.md`](docs/INTERFACE.md) | interfaccia operativa HAPA |
-| [`docs/MARKETPLACES.md`](docs/MARKETPLACES.md) | canali, connettori e account |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | requisiti di sicurezza |
-| [`docs/TODO.md`](docs/TODO.md) | roadmap e gate HAPA |
-
-La documentazione del runtime asincrono è mantenuta esclusivamente nel repository `hapa-automation`.
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | sistema distribuito, confini e topologia |
+| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | proprietà e struttura dei dati |
+| [`docs/BUSINESS_FLOWS.md`](docs/BUSINESS_FLOWS.md) | catalogo, ordini, acquisti e spedizioni |
+| [`docs/CATALOG_PRICING.md`](docs/CATALOG_PRICING.md) | catalogo Space, costi, ricarichi e offerte |
+| [`docs/CUSTOMERS_AND_ORDERS.md`](docs/CUSTOMERS_AND_ORDERS.md) | clienti, storico e ordini di vendita |
+| [`docs/FISCAL.md`](docs/FISCAL.md) | confine futuro di fatture e corrispettivi |
+| [`docs/TODO.md`](docs/TODO.md) | roadmap per vertical slice |
 
 ## Licenza e proprietà
 
-Il codice e la documentazione sono proprietari. Utilizzo, distribuzione e modifica seguono gli accordi definiti dal proprietario del repository.
+Codice e documentazione sono proprietari.

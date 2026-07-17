@@ -20,10 +20,14 @@ final class RabbitMqPublisher implements MessagePublisher
     {
     }
 
-    public function publish(string $routingKey, MessageEnvelope $message): void
+    public function publish(string $exchangeName, string $routingKey, MessageEnvelope $message): void
     {
         if (!$this->configuration->enabled) {
             throw new RuntimeException('Il relay RabbitMQ è disabilitato.');
+        }
+
+        if (!in_array($exchangeName, ['hapa.events', 'hapa.commands'], true)) {
+            throw new RuntimeException('Exchange RabbitMQ non supportato.');
         }
 
         if (trim($routingKey) === '') {
@@ -31,6 +35,7 @@ final class RabbitMqPublisher implements MessagePublisher
         }
 
         $channel = $this->channel();
+        $channel->exchange_declare($exchangeName, 'topic', false, true, false);
         $body = $message->toJson();
         $amqpMessage = new AMQPMessage($body, [
             'content_type' => 'application/json',
@@ -45,7 +50,7 @@ final class RabbitMqPublisher implements MessagePublisher
 
         $channel->basic_publish(
             $amqpMessage,
-            $this->configuration->exchange,
+            $exchangeName,
             $routingKey,
             false,
             false,
@@ -101,13 +106,6 @@ final class RabbitMqPublisher implements MessagePublisher
             $this->configuration->heartbeat,
         );
         $this->channel = $this->connection->channel();
-        $this->channel->exchange_declare(
-            $this->configuration->exchange,
-            'topic',
-            false,
-            true,
-            false,
-        );
         $this->channel->confirm_select();
 
         return $this->channel;

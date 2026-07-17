@@ -6,5 +6,5 @@ namespace Hapa\Core\Messaging;
 
 interface MessagePublisher
 {
-    public function publish(string $routingKey, MessageEnvelope $message): void;
+    public function publish(string $exchangeName, string $routingKey, MessageEnvelope $message): void;
 }

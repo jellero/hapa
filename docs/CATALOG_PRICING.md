@@ -1,15 +1,15 @@
 # Anagrafica prodotti, prezzi, stock e ricarichi
 
-Ultimo riesame: 16 luglio 2026.
+Ultimo riesame: 17 luglio 2026.
 
 ## Scopo
 
-HAPA possiede un’anagrafica prodotti. Per ogni prodotto conserva gli identificativi commerciali, il prezzo base e il dato di stock sincronizzati da Space, oltre alle regole di ricarico configurate dagli operatori tramite interfaccia.
+HAPA possiede un’anagrafica prodotti. Space è un fornitore: costo di acquisto, identificativo e disponibilità Space sono una distinta offerta fornitore collegata al prodotto, non attributi che definiscono l’identità del prodotto HAPA.
 
 La formulazione corretta non è «HAPA applica una scorta di sicurezza e delle regole di ricarico» come attività isolata. Il flusso è:
 
 1. Space fornisce a HAPA anagrafica, prezzo e stock;
-2. HAPA conserva questi dati nel prodotto canonico;
+2. HAPA conserva identità prodotto e offerta Space in strutture separate;
 3. l’operatore gestisce dall’interfaccia le regole di ricarico;
 4. HAPA calcola e versiona il prezzo finale desiderato;
 5. `hapa-automation` pubblica prezzo e quantità sui marketplace e restituisce l’esito.
@@ -20,8 +20,8 @@ La formulazione corretta non è «HAPA applica una scorta di sicurezza e delle r
 |---|---|---|
 | SKU canonico HAPA | HAPA | identifica il prodotto nei casi d’uso interni |
 | identificativo prodotto Space | Space | viene mappato al prodotto HAPA |
-| prezzo base | Space | viene sincronizzato senza essere sovrascritto dai marketplace |
-| stock | Space | viene sincronizzato e versionato nel prodotto HAPA |
+| costo di acquisto Space | Space | viene sincronizzato nell’offerta fornitore e mai sovrascritto dai marketplace |
+| disponibilità Space | Space | viene sincronizzata e versionata nell’offerta fornitore |
 | regole di ricarico | HAPA | sono gestite da interfaccia, autorizzate e auditate |
 | prezzo finale desiderato | HAPA | deriva dal prezzo Space e dalla regola applicabile |
 | stato di pubblicazione | HAPA | descrive l’ultima intenzione e l’ultimo esito noto |
@@ -32,21 +32,21 @@ Una eventuale politica di quantità pubblicabile o riserva di stock è una regol
 
 ## Modello prodotto
 
-L’anagrafica prodotto deve esporre almeno:
+L’anagrafica prodotto e la collegata offerta fornitore devono esporre almeno:
 
 - SKU HAPA;
 - EAN o altri codici commerciali opzionali;
 - identificativo Space;
 - descrizione e stato del prodotto;
 - valuta;
-- prezzo base Space in unità minori;
-- stock Space;
+- costo di acquisto Space in unità minori;
+- disponibilità Space;
 - versione sorgente Space;
 - data dell’ultima sincronizzazione;
 - stato di validità del dato;
 - versione HAPA del prezzo commerciale.
 
-Prezzo e stock vengono aggiornati soltanto da messaggi Space validi e più recenti della versione già applicata. Gli aggiornamenti fuori ordine vengono ignorati o inviati a riconciliazione.
+Costo e disponibilità vengono aggiornati soltanto da messaggi Space validi e più recenti della versione già applicata. Gli aggiornamenti fuori ordine vengono ignorati o inviati a riconciliazione.
 
 ## Regole di ricarico
 
@@ -79,18 +79,18 @@ A parità di ambito vince la priorità numerica maggiore; il codice regola risol
 ### Space verso HAPA
 
 1. `hapa-automation` interroga Space usando un cursore persistito nel proprio database.
-2. Il servizio valida e pubblica su RabbitMQ un evento prodotto/prezzo/stock versionato.
-3. HAPA deduplica il messaggio e aggiorna il prodotto nella propria transazione.
+2. Il servizio valida e pubblica su RabbitMQ `space.catalog.item.observed`.
+3. HAPA deduplica il messaggio e aggiorna prodotto e offerta fornitore nella propria transazione.
 4. HAPA registra l’evento applicativo derivato nella transactional outbox.
 5. Il cursore Space avanza nel servizio asincrono soltanto dopo l’esito previsto dal contratto.
 
 ### HAPA verso marketplace
 
 1. un aggiornamento del prodotto o di una regola modifica il prezzo finale desiderato;
-2. HAPA versiona l’offerta e produce un evento di pubblicazione richiesta;
+2. HAPA versiona l’offerta e produce un comando con prezzo e quantità già calcolati;
 3. `hapa-automation` consuma l’evento e chiama il solo connettore attivo per account-canale;
 4. il servizio pubblica su RabbitMQ esito, versione remota ed eventuale errore;
-5. HAPA aggiorna lo stato dell’offerta senza cambiare prezzo base o stock Space.
+5. HAPA aggiorna lo stato dell’offerta senza cambiare costo o disponibilità Space.
 
 ## Interfaccia
 

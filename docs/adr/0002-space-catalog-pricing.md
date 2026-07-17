@@ -11,7 +11,7 @@ Prezzo base, disponibilità fisica, prezzo di vendita e quantità pubblicabile h
 
 ## Decisione
 
-- Space è la sorgente autorevole del prezzo base e della disponibilità fisica.
+- Space è la sorgente autorevole della propria offerta fornitore: costo di acquisto e disponibilità osservata.
 - HAPA conserva uno snapshot versionato, sottrae la scorta di sicurezza e calcola l’offerta commerciale.
 - Una sola regola di ricarico vince secondo specificità e priorità; le regole non vengono cumulate implicitamente.
 - HAPA è la sorgente autorevole di prezzo finale e quantità vendibile.
@@ -22,7 +22,7 @@ Prezzo base, disponibilità fisica, prezzo di vendita e quantità pubblicabile h
 
 ## Conseguenze
 
-HAPA introduce il modulo `Catalog`, dipendenza pubblica di `Space` e `Marketplace`, e le tabelle `catalog_items`, `pricing_rules` e `marketplace_offers`. Sono necessari due job distinti: acquisizione catalogo Space e pubblicazione offerte marketplace.
+HAPA introduce il modulo `Catalog` e separa `catalog_items`, `supplier_catalog_items`, `pricing_rules` e `marketplace_offers`. Solo l’acquisizione Space è periodica; la pubblicazione marketplace nasce da un comando HAPA quando cambia l’offerta desiderata.
 
 L’architettura può supportare il futuro storefront B2C, ma non rende operative varianti, contenuti, imposte, promozioni, checkout o pagamenti.
 

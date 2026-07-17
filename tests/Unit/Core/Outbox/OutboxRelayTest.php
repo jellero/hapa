@@ -30,6 +30,7 @@ final class OutboxRelayTest extends TestCase
         self::assertSame(1, $report->claimed);
         self::assertSame(1, $report->published);
         self::assertCount(1, $repository->completed);
+        self::assertSame('hapa.events', $publisher->exchangeNames[0]);
         self::assertSame('order.changed', $publisher->routingKeys[0]);
         self::assertSame('order.changed', $publisher->messages[0]->eventType);
     }
@@ -114,6 +115,9 @@ final class FixedRelayClock implements Clock
 final class RelayPublisherFake implements MessagePublisher
 {
     /** @var list<string> */
+    public array $exchangeNames = [];
+
+    /** @var list<string> */
     public array $routingKeys = [];
 
     /** @var list<MessageEnvelope> */
@@ -123,12 +127,13 @@ final class RelayPublisherFake implements MessagePublisher
     {
     }
 
-    public function publish(string $routingKey, MessageEnvelope $message): void
+    public function publish(string $exchangeName, string $routingKey, MessageEnvelope $message): void
     {
         if ($this->fail) {
             throw new RuntimeException('RabbitMQ non disponibile.');
         }
 
+        $this->exchangeNames[] = $exchangeName;
         $this->routingKeys[] = $routingKey;
         $this->messages[] = $message;
     }

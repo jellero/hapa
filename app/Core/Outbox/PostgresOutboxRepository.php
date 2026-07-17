@@ -19,11 +19,11 @@ final readonly class PostgresOutboxRepository implements OutboxRepository
     {
         $statement = $this->pdo->prepare(<<<'SQL'
 INSERT INTO outbox_messages (
-    aggregate_type, aggregate_id, event_type, payload, status,
+    aggregate_type, aggregate_id, event_type, exchange_name, routing_key, payload, status,
     idempotency_key, correlation_id, schema_version, attempts, max_attempts,
     available_at, created_at, updated_at
 ) VALUES (
-    :aggregate_type, :aggregate_id, :event_type, CAST(:payload AS JSONB), 'pending',
+    :aggregate_type, :aggregate_id, :event_type, :exchange_name, :routing_key, CAST(:payload AS JSONB), 'pending',
     :idempotency_key, :correlation_id, :schema_version, 0, :max_attempts,
     :available_at, :created_at, :updated_at
 )
@@ -33,6 +33,8 @@ SQL);
             'aggregate_type' => $message->aggregateType,
             'aggregate_id' => $message->aggregateId,
             'event_type' => $message->eventType,
+            'exchange_name' => $message->exchangeName,
+            'routing_key' => $message->routingKey ?? $message->eventType,
             'payload' => json_encode($message->payload, JSON_THROW_ON_ERROR),
             'idempotency_key' => $message->idempotencyKey,
             'correlation_id' => $message->correlationId,
@@ -74,7 +76,8 @@ SET status = 'processing',
 FROM candidates
 WHERE message.id = candidates.id
 RETURNING message.id, message.aggregate_type, message.aggregate_id, message.event_type,
-          message.payload::text AS payload, message.idempotency_key, message.correlation_id,
+          message.exchange_name, message.routing_key, message.payload::text AS payload,
+          message.idempotency_key, message.correlation_id,
           message.schema_version, message.attempts, message.max_attempts,
           message.available_at, message.created_at, message.locked_by, message.lock_token
 SQL);
@@ -222,6 +225,8 @@ SQL, $changes));
             (string) $row['lock_token'],
             new DateTimeImmutable((string) $row['available_at']),
             new DateTimeImmutable((string) $row['created_at']),
+            (string) $row['exchange_name'],
+            (string) $row['routing_key'],
         );
     }
 

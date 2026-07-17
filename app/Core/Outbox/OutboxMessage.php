@@ -22,6 +22,8 @@ final readonly class OutboxMessage
         public DateTimeImmutable $availableAt,
         public int $schemaVersion = 1,
         public int $maximumAttempts = 10,
+        public string $exchangeName = 'hapa.events',
+        public ?string $routingKey = null,
     ) {
         foreach ([
             'tipo aggregato' => $aggregateType,
@@ -37,6 +39,14 @@ final readonly class OutboxMessage
 
         if ($schemaVersion < 1 || $maximumAttempts < 1) {
             throw new InvalidArgumentException('Versione schema e numero massimo di tentativi devono essere positivi.');
+        }
+
+        if (!in_array($exchangeName, ['hapa.events', 'hapa.commands'], true)) {
+            throw new InvalidArgumentException('Exchange outbox non supportato.');
+        }
+
+        if ($routingKey !== null && trim($routingKey) === '') {
+            throw new InvalidArgumentException('La routing key outbox non può essere vuota.');
         }
     }
 }

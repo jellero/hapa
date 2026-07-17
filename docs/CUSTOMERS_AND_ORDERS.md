@@ -1,10 +1,10 @@
 # Anagrafiche clienti e ordini
 
-Ultimo riesame: 16 luglio 2026.
+Ultimo riesame: 17 luglio 2026.
 
 ## Scopo e maturità
 
-HAPA mantiene un’anagrafica cliente canonica e un’anagrafica ordine indipendente dal singolo canale. Questa base serve gli ordini marketplace attuali e prepara il futuro e-commerce B2C senza anticiparne catalogo, carrello, checkout o pagamenti.
+HAPA mantiene un’anagrafica cliente canonica e gli ordini di vendita indipendenti dal singolo canale. IBS è il canale corrente; Temu e Amazon sono pianificati. L’acquisto verso Space è un aggregato distinto dalla vendita e non deve essere rappresentato tramite lo stesso stato ordine.
 
 Lo stato corrente è **parziale**:
 
@@ -14,6 +14,7 @@ Lo stato corrente è **parziale**:
 - elenco e dettaglio clienti, elenco e dettaglio ordini implementati come presentazione server-rendered;
 - repository PostgreSQL dell’aggregato ordine, optimistic locking e scrittura outbox atomica implementati;
 - repository cliente, query di elenco, casi d’uso, autenticazione, autorizzazione e CRUD non ancora implementati;
+- storico append-only del profilo cliente e acquisti Space distinti introdotti a livello schema, con casi d’uso ancora da implementare;
 - e-commerce B2C completo pianificato.
 
 ## Cliente canonico
@@ -38,9 +39,11 @@ L’email non è univoca. Account familiari, indirizzi condivisi, alias e dati m
 sorgente + account_reference + external_customer_id
 ```
 
-Le sorgenti iniziali sono Amazon, eMAG, Temu, IBS e il futuro `b2c_ecommerce`. SellRapido non è una sorgente cliente: è un connettore tecnico che trasporta identità appartenenti ai canali effettivi. Questa distinzione segue la stessa regola già applicata agli ordini.
+Le sorgenti prioritarie sono IBS, Temu, Amazon e il futuro `b2c_ecommerce`. Altri canali possono essere aggiunti senza cambiare l’identità canonica. SellRapido non è una sorgente cliente: è un connettore tecnico che trasporta identità appartenenti ai canali effettivi.
 
 La cancellazione del cliente rimuove le identità collegate. L’eventuale merge di clienti sarà un caso d’uso dedicato, transazionale e auditato; non viene effettuato da trigger o vincoli impliciti.
+
+`customer_history` conserva versioni append-only del profilo normalizzato. La tabella non sostituisce l’audit di sicurezza: rende ricostruibile l’evoluzione dell’anagrafica, mentre l’audit conserva attore, motivazione e contesto operativo.
 
 ## Indirizzi e snapshot storici
 
@@ -66,6 +69,19 @@ Ogni ordine dispone di:
 - data di inserimento ordine;
 - snapshot distinti di spedizione e fatturazione;
 - stato, valuta, versione e timestamp già previsti dal dominio operativo.
+- snapshot economici delle righe, necessari per storico, riconciliazione e futuro fiscale.
+
+### Vendita e acquisto Space
+
+`orders` rappresenta la vendita HAPA al cliente marketplace. `supplier_purchase_orders` rappresenta l’acquisto di HAPA da Space. Il collegamento consente più acquisti per una vendita e mantiene separati:
+
+- numero e stato commerciale della vendita;
+- riferimento e stato dell’acquisto Space;
+- quantità comprate e costi di acquisto;
+- disponibilità e parziali fornitore;
+- spedizione e stato fiscale.
+
+Il metodo legacy `submitToSpace()` dell’aggregato ordine descrive oggi una transizione accorpata e deve essere sostituito gradualmente da un caso d’uso che crea un acquisto e pubblica il relativo comando.
 
 I vincoli PostgreSQL impediscono stati ambigui:
 

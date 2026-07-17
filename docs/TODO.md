@@ -1,169 +1,125 @@
 # Roadmap HAPA
 
-Ultimo riesame: 16 luglio 2026.
+Ultimo riesame: 17 luglio 2026.
 
-Questa roadmap contiene soltanto lavoro di proprietà HAPA. Scheduler, worker, retry provider, cursori e adapter asincroni sono mantenuti in `jellero/hapa-automation`.
+La roadmap segue vertical slice di business. HAPA decide e conserva lo stato commerciale; Automation esegue le integrazioni. Nessun job provider viene abilitato globalmente prima del pilot della singola capacità.
 
-## Baseline completata
+## Baseline
 
-- [x] Bootstrap HTTP e CLI condiviso.
-- [x] Container Symfony compilato e configurazioni tipizzate.
-- [x] PostgreSQL, Redis, health check, Docker e CI.
-- [x] Dominio ordine, transizioni, repository e optimistic locking.
-- [x] Transaction manager e transactional outbox.
-- [x] Modello clienti e ordini B2C-ready.
-- [x] Modello catalogo prodotti.
-- [x] Prezzo base e stock Space rappresentati nel prodotto.
-- [x] Motore deterministico delle regole di ricarico.
-- [x] Schema prodotti, regole e offerte marketplace.
-- [x] UI presentazionale per clienti, ordini, catalogo, picking e spedizioni.
-- [x] Runtime automazioni rimosso dal container, CLI, route e UI HAPA.
-- [x] Confine RabbitMQ e database separati documentato.
-- [x] Foundation autonoma `hapa-automation` disponibile sulla propria branch `main`.
-- [x] Contratto ordine `order.changed` allineato tra producer HAPA e consumer `hapa-automation`.
-- [x] Test producer e consumer del payload ordine canonico.
-- [x] Envelope RabbitMQ canonico e routing key versionate nel relay HAPA.
-- [x] `message_id` UUIDv5 stabile derivato dalla chiave di idempotenza.
-- [x] Relay outbox HAPA con publisher confirm, retry e stato dead.
+- [x] runtime HTTP/CLI, PostgreSQL, Redis, Docker e CI;
+- [x] dominio ordine e outbox transazionale;
+- [x] modelli iniziali cliente, prodotto, ricarico e spedizione;
+- [x] runtime Automation fisicamente separato;
+- [x] RabbitMQ e contratto ordine v1 verificati HAPA → Automation;
+- [x] diagrammi architetturali recuperati e riallineati;
+- [x] decisione HAPA system of record e Space fornitore;
+- [x] schema additivo per account marketplace, offerte fornitore, acquisti, storico cliente, colli e label.
 
-## Stato dell’integrazione con hapa-automation
+## P0 — Sicurezza e messaggistica bidirezionale
 
-La foundation tecnica esterna, il contratto ordine e il relay producer HAPA sono implementati. Il relay resta disabilitato per default e l’integrazione non è ancora stata verificata end-to-end con un broker reale.
+- [ ] unire e distribuire il consumer HAPA con inbox idempotente;
+- [ ] autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
+- [ ] audit delle azioni commerciali e degli accessi sensibili;
+- [ ] metriche su inbox, outbox, dead letter e consumer lag;
+- [ ] contratti v2 producer/consumer nei due repository;
+- [ ] storage sicuro per etichette e documenti.
 
-Risolto:
+**Gate:** nessun dato reale o comando provider è attivabile senza identità, permesso, deduplica e osservabilità.
 
-- `OrderEventOutboxMapper` pubblica esclusivamente l’event type canonico `order.changed`;
-- il payload usa `version`, `change_type` e `status` risultante quando l’evento determina lo stato;
-- `order.address_changed` e gli altri eventi non determinanti non inventano uno stato;
-- `hapa-automation` accetta il formato canonico e, durante la transizione, gli alias legacy;
-- la proiezione ordine esterna gestisce messaggi fuori ordine senza regressione della versione;
-- entrambi i repository hanno test sul contratto ordine;
-- il relay trasforma la riga outbox nell’envelope condiviso;
-- `message_id`, `correlation_id`, `occurred_at` e `schema_version` sono pubblicati stabilmente;
-- il publisher usa messaggi persistenti e publisher confirm;
-- lock recovery, retry di delivery e stato dead riutilizzano la transactional outbox HAPA;
-- la connessione RabbitMQ è disponibile tramite una rete Docker esterna condivisa, senza accesso cross-database.
+## P1 — Catalogo Space → HAPA
 
-Da completare prima di qualsiasi attivazione provider:
+- [ ] implementare `space.catalog.item.observed` in Automation;
+- [ ] implementare consumer e caso d’uso HAPA;
+- [ ] separare definitivamente prodotto da offerta Space;
+- [ ] backfill e riconciliazione dei campi Space legacy;
+- [ ] mostrare costo, disponibilità, versione ed età del dato;
+- [ ] pilot read-only su Space.
 
-- HAPA deve implementare consumer e inbox idempotente per gli eventi di esito;
-- catalogo e ricarichi devono avere producer HAPA e test di contratto speculari;
-- publish, consume, deduplica e dead letter devono essere verificati con RabbitMQ reale tra i due repository;
-- devono essere disponibili metriche e alert sul backlog outbox e sui messaggi dead.
+**Gate:** una variazione Space aggiorna HAPA una sola volta e non regredisce con eventi fuori ordine.
 
-Nessun job provider deve essere abilitato finché questi punti non sono risolti. Il relay HAPA deve rimanere disabilitato finché il test end-to-end non è completato.
+## P2 — Offerte HAPA → IBS
 
-## Priorità immediata HAPA
+- [ ] CRUD ricarichi autorizzato e auditato;
+- [ ] calcolo deterministico con costo, ricarico, fee, IVA e arrotondamento approvati;
+- [ ] account IBS esplicito;
+- [ ] comando `marketplace.offer.publish.requested` con prezzo e quantità finali;
+- [ ] adapter IBS e riconciliazione;
+- [ ] pilot su un sottoinsieme SKU;
+- [ ] cutover del writer precedente.
 
-1. consumer RabbitMQ idempotente e inbox HAPA;
-2. test end-to-end HAPA → RabbitMQ → `hapa-automation`;
-3. contratti e test producer di catalogo e ricarichi;
-4. aggregato e repository `Customer`;
-5. repository e read model dell’anagrafica prodotti;
-6. autenticazione, autorizzazione, sessioni e CSRF;
-7. CRUD autorizzato e auditato delle regole di ricarico;
-8. vertical slice prodotto Space → HAPA;
-9. vertical slice ricarico HAPA → pubblicazione marketplace;
-10. vertical slice ordine marketplace → HAPA → Space;
-11. picking, colli e richieste spedizione.
+**Gate:** HAPA riproduce il prezzo pubblicato e IBS viene aggiornato da un solo writer.
 
-## Fase 1 — Anagrafiche
+## P3 — Ordini IBS → HAPA
 
-- [ ] Definire aggregato `Customer` e policy di modifica, archiviazione, merge e anonimizzazione.
-- [ ] Implementare `CustomerRepository`.
-- [ ] Implementare query paginate clienti e ordini.
-- [ ] Definire retention e diritti dell’interessato.
+- [ ] congelare un payload IBS reale redatto;
+- [ ] import incrementale e watermark Automation;
+- [ ] `marketplace.order.observed` idempotente;
+- [ ] account + external order ID come identità;
+- [ ] cliente, identità, snapshot indirizzi e storico;
+- [ ] snapshot economici di ordine e righe;
+- [ ] revisione manuale per anomalie;
+- [ ] riconciliazione con ordini IBS esistenti.
 
-**Gate:** clienti e ordini sono gestibili tramite casi d’uso transazionali, autorizzati e auditati.
+**Gate:** lo stesso ordine non crea duplicati e i dati storici restano ricostruibili.
 
-## Fase 2 — Prodotti e ricarichi
+## P4 — Acquisto HAPA → Space
 
-- [ ] Definire aggregato o modello applicativo `Product`.
-- [ ] Implementare repository prodotto e query catalogo.
-- [ ] Applicare eventi Space con deduplica e versione sorgente.
-- [ ] Collegare prezzo e stock Space alla UI.
-- [ ] Implementare CRUD delle regole di ricarico.
-- [ ] Implementare anteprima e versionamento del prezzo finale.
-- [ ] Auditare ogni modifica commerciale.
-- [ ] Definire una eventuale policy separata di quantità pubblicabile.
+- [ ] aggregato e repository `SupplierPurchaseOrder`;
+- [ ] rimuovere le transizioni Space dal ciclo vendita;
+- [ ] comando `space.purchase_order.submit.requested`;
+- [ ] adapter Space idempotente;
+- [ ] esiti accettato, rifiutato, parziale e pronto;
+- [ ] riconciliazione dopo timeout ambiguo;
+- [ ] UI acquisti e gestione eccezioni.
 
-**Gate:** il prodotto mostra prezzo e stock Space reali; un operatore autorizzato modifica un ricarico e ottiene un prezzo finale riproducibile.
+**Gate:** vendita e acquisto hanno numeri, versioni e stati indipendenti.
 
-## Fase 3 — Sicurezza UI
+## P5 — Picking, GLS ed etichetta
 
-- [ ] Autenticazione e recupero credenziali.
-- [ ] Session cookie sicuri e rotazione sessione.
-- [ ] MFA per ruoli sensibili.
-- [ ] Autorizzazione deny-by-default.
-- [ ] CSRF su ogni azione mutativa.
-- [ ] Audit degli accessi e delle modifiche.
-- [ ] Rate limit su login e operazioni sensibili.
+- [ ] picking e quantità finali;
+- [ ] colli, pesi e dimensioni;
+- [ ] comando `shipping.shipment.create.requested`;
+- [ ] adapter GLS e ambiente di collaudo;
+- [ ] storage label con checksum e retention;
+- [ ] stampa e ristampa autorizzate dalla UI;
+- [ ] tracking e riconciliazione.
 
-**Gate:** nessun dato o comando operativo è disponibile senza identità e permesso validi.
+**Gate:** una ristampa non crea una nuova spedizione e un timeout GLS non genera duplicati.
 
-## Fase 4 — Messaggistica HAPA
+## P6 — Fulfilment IBS e chiusura
 
-- [x] Congelare il contratto canonico degli eventi ordine.
-- [x] Allineare `OrderEventOutboxMapper` a `order.changed`, `version`, `change_type` e `status` canonico.
-- [x] Gestire nel consumer esterno gli eventi ordine fuori ordine e gli alias legacy.
-- [x] Introdurre test producer/consumer del contratto ordine nei due repository.
-- [x] Documentare il deploy consumer-first e la rimozione successiva degli alias legacy.
-- [x] Definire envelope e routing key versionate nel relay HAPA.
-- [x] Definire la generazione stabile di `message_id` dal record outbox.
-- [x] Esporre `causation_id` come campo nullable dell’envelope condiviso.
-- [x] Implementare relay outbox con publisher confirm.
-- [x] Implementare lock recovery, retry esponenziale e stato dead per la consegna al broker.
-- [x] Aggiungere configurazione e secret RabbitMQ opt-in.
-- [x] Aggiungere la rete Docker condivisa esclusivamente per RabbitMQ.
-- [ ] Congelare i contratti canonici di catalogo e ricarichi.
-- [ ] Implementare i producer HAPA per `catalog.product.changed` e `pricing.rule.changed`.
-- [ ] Implementare consumer RabbitMQ con inbox idempotente HAPA.
-- [ ] Esporre metriche su outbox, consumer lag e messaggi rifiutati.
-- [ ] Eseguire un test end-to-end con RabbitMQ reale tra i due servizi.
+- [ ] comando di fulfilment IBS;
+- [ ] verifica tracking e quantità;
+- [ ] esiti e riconciliazione marketplace;
+- [ ] read model di stato complessivo;
+- [ ] chiusura ordine solo quando vendita, acquisto e spedizione sono coerenti.
 
-**Gate:** una modifica HAPA raggiunge `hapa-automation` senza perdita e un esito duplicato non produce doppie modifiche.
+## P7 — Storico cliente e operatività
 
-## Fase 5 — Catalogo end-to-end
+- [ ] casi d’uso cliente e versioni append-only;
+- [ ] merge, rettifica, anonimizzazione e retention;
+- [ ] ricerca e timeline completa;
+- [ ] export autorizzato e auditato;
+- [ ] backup/restore e prove di continuità.
 
-- [ ] Consumare evento prodotto/prezzo/stock generato dal servizio asincrono.
-- [ ] Aggiornare l’anagrafica prodotto nello stesso transaction boundary dell’inbox.
-- [ ] Ricalcolare e versionare il prezzo finale.
-- [ ] Produrre richiesta di pubblicazione offerta.
-- [ ] Applicare esito e versione remota ricevuti.
-- [ ] Gestire divergenze e dati Space scaduti.
+## P8 — Fiscalità
 
-**Gate:** una variazione Space è visibile in HAPA e una modifica ricarico produce un’offerta pubblicata e riconciliata.
+- [ ] validazione con commercialista e consulente;
+- [ ] scelta canale diretto/intermediario;
+- [ ] modello documento immutabile;
+- [ ] fattura elettronica, ricevute, scarti e conservazione;
+- [ ] corrispettivi secondo il processo approvato;
+- [ ] riconciliazione e segregazione ruoli.
 
-## Fase 6 — Ordini end-to-end
+Nessun codice fiscale operativo viene introdotto prima dei gate in [`FISCAL.md`](FISCAL.md).
 
-- [ ] Consumare ordine importato da `hapa-automation`.
-- [ ] Riconciliare cliente e identità esterne.
-- [ ] Persistire ordine e produrre eventi.
-- [ ] Applicare esiti di accettazione e invio Space.
-- [ ] Gestire revisione manuale per dati non validi.
+## Espansioni
 
-**Gate:** un ordine reale attraversa marketplace, HAPA e Space senza duplicati.
+Solo dopo la stabilizzazione IBS/Space/GLS:
 
-## Fase 7 — Magazzino e spedizioni
+1. Temu;
+2. Amazon;
+3. BRT;
+4. eventuale storefront diretto.
 
-- [ ] Dominio picking e scansioni barcode.
-- [ ] Decisioni manuali sui parziali.
-- [ ] Modello colli e pesi.
-- [ ] Richiesta spedizione tramite evento.
-- [ ] Applicazione etichetta e tracking ricevuti.
-- [ ] Restituzione fulfilment governata dal servizio asincrono.
-
-**Gate:** un ordine viene prelevato, spedito e riconciliato con il canale.
-
-## Fuori perimetro HAPA
-
-Sono tracciati esclusivamente in `hapa-automation`:
-
-- scheduler persistente;
-- cursori Space e marketplace;
-- rate limit provider;
-- worker concorrenti;
-- retry e dead letter provider;
-- adapter HTTP/FTP;
-- dashboard tecnica delle code;
-- supervisione e graceful shutdown dei worker.
+Ogni espansione riusa i contratti normalizzati e mantiene un solo writer per account e capacità.
