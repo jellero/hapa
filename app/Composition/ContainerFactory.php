@@ -13,7 +13,9 @@ use Hapa\Core\Configuration\IntegrationConfig;
 use Hapa\Core\Configuration\OutboxRelayConfig;
 use Hapa\Core\Configuration\ProxyConfig;
 use Hapa\Core\Configuration\RabbitMqConfig;
+use Hapa\Core\Configuration\RabbitMqConsumerConfig;
 use Hapa\Core\Configuration\RedisConfig;
+use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Database\ConnectionFactory;
@@ -25,8 +27,11 @@ use Hapa\Core\Http\HttpResponsePolicy;
 use Hapa\Core\Kernel;
 use Hapa\Core\KernelFactory;
 use Hapa\Core\Logging\LoggerFactory;
+use Hapa\Core\Messaging\InboxConsumerFactory;
+use Hapa\Core\Messaging\InboundMessageHandlerRegistry;
 use Hapa\Core\Messaging\MessagePublisher;
 use Hapa\Core\Messaging\RabbitMqPublisher;
+use Hapa\Core\Messaging\TransportProbeHandler;
 use Hapa\Core\Outbox\OutboxEnvelopeFactory;
 use Hapa\Core\Outbox\OutboxRelayFactory;
 use Hapa\Core\Outbox\OutboxRepository;
@@ -102,6 +107,26 @@ final readonly class ContainerFactory
             $configuration->rabbitMq->readWriteTimeout,
             $configuration->rabbitMq->heartbeat,
         ]));
+        $container->setDefinition(
+            RabbitMqConsumerConfig::class,
+            new Definition(RabbitMqConsumerConfig::class, [
+                $configuration->rabbitMqConsumer->enabled,
+                $configuration->rabbitMqConsumer->host,
+                $configuration->rabbitMqConsumer->port,
+                $configuration->rabbitMqConsumer->vhost,
+                $configuration->rabbitMqConsumer->username,
+                $configuration->rabbitMqConsumer->password,
+                $configuration->rabbitMqConsumer->exchange,
+                $configuration->rabbitMqConsumer->deadExchange,
+                $configuration->rabbitMqConsumer->queue,
+                $configuration->rabbitMqConsumer->deadQueue,
+                $configuration->rabbitMqConsumer->bindings,
+                $configuration->rabbitMqConsumer->connectTimeout,
+                $configuration->rabbitMqConsumer->readWriteTimeout,
+                $configuration->rabbitMqConsumer->heartbeat,
+                $configuration->rabbitMqConsumer->maximumAttempts,
+            ]),
+        );
         $container->setDefinition(OutboxRelayConfig::class, new Definition(OutboxRelayConfig::class, [
             $configuration->outboxRelay->workerId,
             $configuration->outboxRelay->batchSize,
@@ -137,6 +162,23 @@ final readonly class ContainerFactory
                 new Reference(OutboxEnvelopeFactory::class),
                 new Reference(Clock::class),
                 new Reference(OutboxRelayConfig::class),
+            ]);
+
+        // La inbox HAPA è idempotente e deny-by-default. I nuovi eventi
+        // automation → HAPA richiedono sempre un handler esplicito.
+        $container->register(TransportProbeHandler::class);
+        $container->setDefinition(
+            InboundMessageHandlerRegistry::class,
+            new Definition(InboundMessageHandlerRegistry::class, [[
+                new Reference(TransportProbeHandler::class),
+            ]]),
+        );
+        $container->register(InboxConsumerFactory::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(InboundMessageHandlerRegistry::class),
+                new Reference(Clock::class),
+                new Reference(RabbitMqConsumerConfig::class),
             ]);
 
         $container->register(OrderEventOutboxMapper::class);
@@ -201,6 +243,12 @@ final readonly class ContainerFactory
             ->setArguments([
                 new Reference(OutboxRelayFactory::class),
                 new Reference(RabbitMqConfig::class),
+            ])
+            ->setPublic(true);
+        $container->register(InboxConsumeCommand::class)
+            ->setArguments([
+                new Reference(InboxConsumerFactory::class),
+                new Reference(RabbitMqConsumerConfig::class),
             ])
             ->setPublic(true);
 

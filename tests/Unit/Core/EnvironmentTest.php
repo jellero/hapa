@@ -106,6 +106,26 @@ final class EnvironmentTest extends TestCase
         ConfigurationLoader::load();
     }
 
+    public function testRabbitMqConsumerIsDisabledByDefault(): void
+    {
+        $this->setEnvironment([
+            'APP_ENV' => 'testing',
+            'APP_DEBUG' => 'false',
+            'APP_URL' => 'http://localhost',
+            'APP_TIMEZONE' => 'UTC',
+            'TRUSTED_PROXIES' => '',
+            'RABBITMQ_CONSUMER_ENABLED' => 'false',
+            'RABBITMQ_CONSUMER_BINDINGS' => 'integration.transport.#',
+            'RABBITMQ_CONSUMER_MAX_ATTEMPTS' => '5',
+        ]);
+
+        $configuration = ConfigurationLoader::load()->rabbitMqConsumer;
+
+        self::assertFalse($configuration->enabled);
+        self::assertSame(['integration.transport.#'], $configuration->bindings);
+        self::assertSame(5, $configuration->maximumAttempts);
+    }
+
     public function testProductionRejectsMissingTrustedProxies(): void
     {
         $this->setEnvironment($this->productionEnvironment(['TRUSTED_PROXIES' => '']));
@@ -122,24 +142,46 @@ final class EnvironmentTest extends TestCase
         self::assertTrue($configuration->application->isProduction());
         self::assertFalse($configuration->application->debug);
         self::assertSame(['127.0.0.1', 'REMOTE_ADDR'], $configuration->proxy->trustedProxies);
+        self::assertFalse($configuration->rabbitMqConsumer->enabled);
+    }
+
+    public function testProductionRequiresStrongConsumerSecretWhenEnabled(): void
+    {
+        $this->setEnvironment($this->productionEnvironment([
+            'RABBITMQ_CONSUMER_ENABLED' => 'true',
+            'RABBITMQ_CONSUMER_USERNAME' => 'hapa-consumer',
+            'RABBITMQ_CONSUMER_PASSWORD' => 'weak',
+            'RABBITMQ_CONSUMER_BINDINGS' => 'integration.transport.#',
+        ]));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('RABBITMQ_CONSUMER_PASSWORD');
+        ConfigurationLoader::load();
     }
 
     public function testProductionReadsSecretsFromFiles(): void
     {
         $databaseSecret = $this->secretFile('database-secret-from-file');
         $redisSecret = $this->secretFile('redis-secret-from-file');
+        $consumerSecret = $this->secretFile('consumer-secret-from-file');
 
         $this->setEnvironment($this->productionEnvironment([
             'DB_PASSWORD' => '',
             'REDIS_PASSWORD' => '',
             'DB_PASSWORD_FILE' => $databaseSecret,
             'REDIS_PASSWORD_FILE' => $redisSecret,
+            'RABBITMQ_CONSUMER_ENABLED' => 'true',
+            'RABBITMQ_CONSUMER_USERNAME' => 'hapa-consumer',
+            'RABBITMQ_CONSUMER_PASSWORD' => '',
+            'RABBITMQ_CONSUMER_PASSWORD_FILE' => $consumerSecret,
+            'RABBITMQ_CONSUMER_BINDINGS' => 'integration.transport.#',
         ]));
 
         $configuration = ConfigurationLoader::load();
         self::assertTrue($configuration->application->isProduction());
         self::assertSame('database-secret-from-file', $configuration->database->password);
         self::assertSame('redis-secret-from-file', $configuration->redis->password);
+        self::assertSame('consumer-secret-from-file', $configuration->rabbitMqConsumer->password);
     }
 
     /** @param array<string, string> $overrides
@@ -157,6 +199,12 @@ final class EnvironmentTest extends TestCase
             'REDIS_PASSWORD' => 'secure-redis-password',
             'DB_PASSWORD_FILE' => '',
             'REDIS_PASSWORD_FILE' => '',
+            'RABBITMQ_ENABLED' => 'false',
+            'RABBITMQ_PASSWORD' => '',
+            'RABBITMQ_PASSWORD_FILE' => '',
+            'RABBITMQ_CONSUMER_ENABLED' => 'false',
+            'RABBITMQ_CONSUMER_PASSWORD' => '',
+            'RABBITMQ_CONSUMER_PASSWORD_FILE' => '',
         ], $overrides);
     }
 

@@ -14,7 +14,9 @@ use Hapa\Core\Configuration\IntegrationConfig;
 use Hapa\Core\Configuration\OutboxRelayConfig;
 use Hapa\Core\Configuration\ProxyConfig;
 use Hapa\Core\Configuration\RabbitMqConfig;
+use Hapa\Core\Configuration\RabbitMqConsumerConfig;
 use Hapa\Core\Configuration\RedisConfig;
+use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Kernel;
@@ -34,6 +36,7 @@ final class ContainerFactoryTest extends TestCase
         self::assertTrue($container->getDefinition(Kernel::class)->isPublic());
         self::assertTrue($container->getDefinition(SystemCheckCommand::class)->isPublic());
         self::assertTrue($container->getDefinition(OutboxRelayCommand::class)->isPublic());
+        self::assertTrue($container->getDefinition(InboxConsumeCommand::class)->isPublic());
         self::assertFalse($container->getDefinition(PriceCalculator::class)->isPublic());
         self::assertFalse($container->hasDefinition('Hapa\\Core\\Console\\AutomationRunCommand'));
     }
@@ -46,6 +49,7 @@ final class ContainerFactoryTest extends TestCase
         self::assertInstanceOf(Kernel::class, $container->get(Kernel::class));
         self::assertInstanceOf(SystemCheckCommand::class, $container->get(SystemCheckCommand::class));
         self::assertInstanceOf(OutboxRelayCommand::class, $container->get(OutboxRelayCommand::class));
+        self::assertInstanceOf(InboxConsumeCommand::class, $container->get(InboxConsumeCommand::class));
     }
 
     private function configuration(): ConfigurationSet
@@ -57,6 +61,23 @@ final class ContainerFactoryTest extends TestCase
             new ProxyConfig([]),
             new IntegrationConfig(5.0, 30.0, 2 * 1024 * 1024),
             new RabbitMqConfig(false, '127.0.0.1', 5672, '/', 'hapa', '', 'hapa.events', 5.0, 30.0, 30),
+            new RabbitMqConsumerConfig(
+                false,
+                '127.0.0.1',
+                5672,
+                '/',
+                'hapa-consumer',
+                '',
+                'hapa.events',
+                'hapa.dead',
+                'hapa.inbound.events',
+                'hapa.inbound.dead',
+                ['integration.transport.#'],
+                5.0,
+                30.0,
+                30,
+                5,
+            ),
             new OutboxRelayConfig('test-relay', 50, 300, 30, 3600),
         );
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hapa\Core\Messaging;
 
 use DateTimeImmutable;
+use Exception;
 use InvalidArgumentException;
 use JsonException;
 
@@ -26,6 +27,10 @@ final readonly class MessageEnvelope
             }
         }
 
+        if ($causationId !== null && (trim($causationId) === '' || strlen($causationId) > 200)) {
+            throw new InvalidArgumentException('Causation ID envelope non valido.');
+        }
+
         if ($schemaVersion < 1) {
             throw new InvalidArgumentException('La versione schema dell’envelope deve essere positiva.');
         }
@@ -43,7 +48,7 @@ final readonly class MessageEnvelope
             self::string($data, 'message_id'),
             self::string($data, 'event_type'),
             self::integer($data, 'schema_version'),
-            new DateTimeImmutable(self::string($data, 'occurred_at')),
+            self::dateTime($data, 'occurred_at'),
             self::string($data, 'correlation_id'),
             array_key_exists('causation_id', $data) && $data['causation_id'] !== null
                 ? self::string($data, 'causation_id')
@@ -86,5 +91,17 @@ final readonly class MessageEnvelope
         }
 
         return $value;
+    }
+    /** @param array<string, mixed> $data */
+    private static function dateTime(array $data, string $key): DateTimeImmutable
+    {
+        try {
+            return new DateTimeImmutable(self::string($data, $key));
+        } catch (Exception $exception) {
+            throw new InvalidArgumentException(
+                sprintf('%s deve essere una data valida.', $key),
+                previous: $exception,
+            );
+        }
     }
 }
