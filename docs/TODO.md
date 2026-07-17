@@ -65,15 +65,24 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 
 ## P4 — Acquisto HAPA → Space
 
-- [ ] aggregato e repository `SupplierPurchaseOrder`;
-- [ ] rimuovere le transizioni Space dal ciclo vendita;
-- [ ] comando `space.purchase_order.submit.requested`;
-- [ ] adapter Space idempotente;
-- [ ] esiti accettato, rifiutato, parziale e pronto;
-- [ ] riconciliazione dopo timeout ambiguo;
-- [ ] UI acquisti e gestione eccezioni.
+- [ ] congelare payload reali Space redatti per invio acquisto, consultazione dettaglio e avanzamento stato;
+- [ ] censire codici, descrizioni e semantica ufficiale degli stati Space, inclusi almeno preso in carico, in lavorazione, pronto e non disponibile;
+- [ ] distinguere esplicitamente stato della testata, stato delle singole righe e quantità confermata, non disponibile, pronta e residua;
+- [ ] definire un mapping versionato dagli stati Space agli stati canonici HAPA, conservando anche codice e descrizione provider originali;
+- [ ] definire la matrice delle transizioni ammesse, la monotonicità e il trattamento di eventi duplicati, tardivi o fuori ordine;
+- [ ] completare aggregato e repository `SupplierPurchaseOrder` senza riutilizzare gli stati dell’ordine di vendita;
+- [ ] rappresentare in modo esplicito le fasi accettato/preso in carico, in lavorazione, parzialmente disponibile, pronto, completato, rifiutato e non disponibile dopo la validazione del contratto Space;
+- [ ] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
+- [ ] adapter Space idempotente per invio, lettura esito e recupero dello stato corrente;
+- [ ] polling o altro meccanismo supportato da Space con checkpoint persistente e riconciliazione periodica;
+- [ ] evento `space.purchase_order.status_changed` idempotente con versione sorgente, istante osservato e dettaglio righe;
+- [ ] gestione separata di indisponibilità totale, indisponibilità parziale e sostituzioni, sempre secondo una policy commerciale esplicita;
+- [ ] riconciliazione dopo timeout ambiguo prima di qualsiasi nuovo invio;
+- [ ] audit completo di stato precedente, stato nuovo, payload redatto, causazione e decisioni manuali;
+- [ ] UI acquisti con timeline stati Space, quantità per riga, eccezioni e azioni consentite;
+- [ ] test contrattuali, test di transizione, casi fuori ordine e pilot controllato con ordini Space non produttivi.
 
-**Gate:** vendita e acquisto hanno numeri, versioni e stati indipendenti.
+**Gate:** vendita e acquisto hanno numeri, versioni e stati indipendenti; ogni stato Space è mappato in modo documentato e verificato, nessun evento può far regredire l’acquisto e una indisponibilità non chiude o modifica automaticamente la vendita senza una policy esplicita.
 
 ## P5 — Picking, GLS ed etichetta
 
