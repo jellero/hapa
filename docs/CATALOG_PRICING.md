@@ -74,6 +74,8 @@ HAPA seleziona una sola regola vincente. La precedenza è:
 
 A parità di ambito vince la priorità numerica maggiore; il codice regola risolve in modo deterministico un ulteriore pareggio.
 
+La UI esegue la stessa selezione deterministica per mostrare un’anteprima per ciascun marketplace. L’anteprima distingue il calcolo commerciale dalla pubblicabilità: approvazione prodotto, stock, stato marketplace e presenza di un account tecnico abilitato sono mostrati come gate separati. Non include ancora commissioni, regime IVA o arrotondamenti specifici del canale.
+
 ## Flusso di sincronizzazione
 
 ### Space verso HAPA
@@ -94,7 +96,7 @@ A parità di ambito vince la priorità numerica maggiore; il codice regola risol
 
 ## Interfaccia
 
-La pagina `/ui/catalog` deve consentire, dopo i gate di sicurezza:
+La pagina `/ui/catalog` consente:
 
 - ricerca e consultazione dell’anagrafica prodotti;
 - visualizzazione di prezzo e stock Space;

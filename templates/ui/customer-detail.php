@@ -24,12 +24,38 @@ $money = static fn (?int $minor, string $currency): string => $minor === null
     <div><div class="detail-title-row"><p class="eyebrow"><?= $e($eyebrow) ?></p><span class="status-badge status-badge--<?= $e($statusTone) ?>"><?= $e($customer['status']) ?></span></div><h1><?= $e($title) ?></h1><p class="page-header__description"><?= $e($description) ?></p></div>
 </header>
 
+<?php if (($customerSaved ?? false) === true): ?><div class="inline-notice inline-notice--info" role="status"><div><strong>Cliente salvato</strong><span>La nuova versione è presente nello storico e nell’audit.</span></div></div><?php endif; ?>
+<?php if (($customerError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Cliente non salvato</strong><span><?= $e($customerError) ?></span></div></div><?php endif; ?>
+
 <section class="summary-grid" aria-label="Riepilogo cliente">
     <article><span>Codice cliente</span><strong><?= $e($customer['customer_code']) ?></strong><small>Versione <?= $e((string) $customer['version']) ?></small></article>
     <article><span>Tipo</span><strong><?= $e($customer['customer_type']) ?></strong><small><?= $e($customer['locale']) ?></small></article>
     <article><span>Ordini collegati</span><strong><?= $e((string) $customer['order_count']) ?></strong><small>Storico persistito</small></article>
     <article><span>Ultimo ordine</span><strong><?= $e($date($customer['last_order_at'])) ?></strong><small>Aggiornato <?= $e($date($customer['updated_at'])) ?></small></article>
 </section>
+
+<?php if (($canManageCustomers ?? false) === true): ?>
+<details class="panel">
+    <summary><strong>Modifica profilo cliente</strong> · versione <?= $e((string) $customer['version']) ?></summary>
+    <form class="auth-form" action="/ui/customers/<?= $e(rawurlencode($customer['customer_code'])) ?>" method="post">
+        <input type="hidden" name="_csrf_token" value="<?= $e($updateCustomerCsrfToken ?? '') ?>">
+        <input type="hidden" name="version" value="<?= $e((string) $customer['version']) ?>">
+        <?php if ($customer['status'] === 'archived'): ?><input type="hidden" name="status" value="archived"><p>Stato: <span class="status-badge status-badge--neutral">archived</span></p><?php else: ?><label>Stato <select name="status" required><?php foreach (['active' => 'Attivo', 'inactive' => 'Inattivo'] as $value => $label): ?><option value="<?= $e($value) ?>"<?= $customer['status'] === $value ? ' selected' : '' ?>><?= $e($label) ?></option><?php endforeach; ?></select></label><?php endif; ?>
+        <label>Tipo <select name="customer_type" required><option value="person"<?= $customer['customer_type'] === 'person' ? ' selected' : '' ?>>Persona</option><option value="business"<?= $customer['customer_type'] === 'business' ? ' selected' : '' ?>>Azienda</option></select></label>
+        <label>Nome visualizzato <input name="display_name" value="<?= $e($customer['display_name']) ?>" maxlength="240" required></label>
+        <label>Nome <input name="first_name" value="<?= $e($customer['first_name'] ?? '') ?>" maxlength="120"></label>
+        <label>Cognome <input name="last_name" value="<?= $e($customer['last_name'] ?? '') ?>" maxlength="120"></label>
+        <label>Ragione sociale <input name="company_name" value="<?= $e($customer['company_name'] ?? '') ?>" maxlength="240"></label>
+        <label>Email <input name="email" type="email" value="<?= $e($customer['email'] ?? '') ?>" maxlength="254"></label>
+        <label>Telefono <input name="phone" value="<?= $e($customer['phone'] ?? '') ?>" maxlength="64"></label>
+        <label>Codice fiscale <input name="tax_identifier" value="<?= $e($customer['tax_identifier'] ?? '') ?>" maxlength="64"></label>
+        <label>Partita IVA <input name="vat_number" value="<?= $e($customer['vat_number'] ?? '') ?>" maxlength="32"></label>
+        <label>Locale <input name="locale" value="<?= $e($customer['locale']) ?>" maxlength="16" pattern="[a-z]{2,3}(-[A-Z]{2})?"></label>
+        <button class="button button--primary" type="submit">Salva nuova versione</button>
+    </form>
+    <?php if ($customer['status'] !== 'archived'): ?><form action="/ui/customers/<?= $e(rawurlencode($customer['customer_code'])) ?>/archive" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($archiveCustomerCsrfToken ?? '') ?>"><input type="hidden" name="version" value="<?= $e((string) $customer['version']) ?>"><button class="button button--ghost" type="submit">Archivia cliente</button></form><?php endif; ?>
+</details>
+<?php endif; ?>
 
 <nav class="tabs" aria-label="Sezioni scheda cliente"><a class="is-active" href="#profile">Profilo</a><a href="#identities">Identità esterne</a><a href="#addresses">Indirizzi</a><a href="#customer-orders">Ordini</a><a href="#customer-history">Storico</a></nav>
 

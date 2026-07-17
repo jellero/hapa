@@ -26,8 +26,10 @@ final class SensitiveDataRedactor
         'mobile',
         'recipient',
         'customer_name',
+        'display_name',
         'first_name',
         'last_name',
+        'company_name',
         'address',
         'street',
         'postal_code',
@@ -36,6 +38,8 @@ final class SensitiveDataRedactor
         'ip_address',
         'fiscal_code',
         'tax_code',
+        'tax_identifier',
+        'vat_number',
         'document_number',
     ];
 

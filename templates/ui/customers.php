@@ -18,6 +18,29 @@ $date = static function (?string $value): string {
     </div>
 </header>
 
+<?php if (($customerError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Cliente non salvato</strong><span><?= $e($customerError) ?></span></div></div><?php endif; ?>
+
+<?php if (($canManageCustomers ?? false) === true): ?>
+<details class="panel">
+    <summary><strong>Crea cliente</strong> · profilo canonico versionato</summary>
+    <form class="auth-form" action="/ui/customers" method="post">
+        <input type="hidden" name="_csrf_token" value="<?= $e($createCustomerCsrfToken ?? '') ?>">
+        <label>Codice cliente <input name="customer_code" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,63}" placeholder="Lascia vuoto per generarlo"></label>
+        <label>Tipo <select name="customer_type" required><option value="person">Persona</option><option value="business">Azienda</option></select></label>
+        <label>Nome visualizzato <input name="display_name" maxlength="240" required></label>
+        <label>Nome <input name="first_name" maxlength="120"></label>
+        <label>Cognome <input name="last_name" maxlength="120"></label>
+        <label>Ragione sociale <input name="company_name" maxlength="240"></label>
+        <label>Email <input name="email" type="email" maxlength="254"></label>
+        <label>Telefono <input name="phone" maxlength="64"></label>
+        <label>Codice fiscale <input name="tax_identifier" maxlength="64"></label>
+        <label>Partita IVA <input name="vat_number" maxlength="32"></label>
+        <label>Locale <input name="locale" value="it-IT" maxlength="16" pattern="[a-z]{2,3}(-[A-Z]{2})?"></label>
+        <button class="button button--primary" type="submit">Crea cliente</button>
+    </form>
+</details>
+<?php endif; ?>
+
 <section class="panel data-panel" aria-labelledby="customers-results-title">
     <div class="panel__header">
         <div><p class="eyebrow">Profili canonici</p><h2 id="customers-results-title">Anagrafica clienti</h2></div>

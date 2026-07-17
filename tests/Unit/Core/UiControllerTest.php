@@ -101,7 +101,7 @@ final class UiControllerTest extends TestCase
         $content = (string) $this->controller()->orders($request)->getContent();
 
         self::assertStringNotContainsString('value="not-a-real-status" selected', $content);
-        self::assertStringContainsString('<option value="Tutti gli stati">Tutti gli stati</option>', $content);
+        self::assertStringContainsString('<option value="">Tutti gli stati</option>', $content);
     }
 
     public function testItEscapesTheOrderIdentifier(): void

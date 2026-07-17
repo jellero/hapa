@@ -1,6 +1,6 @@
 # Interfaccia operativa HAPA
 
-Ultimo riesame: 16 luglio 2026.
+Ultimo riesame: 17 luglio 2026.
 
 ## Scopo
 
@@ -10,24 +10,28 @@ Non è la console tecnica di `hapa-automation` e non espone scheduler, worker, r
 
 ## Stato
 
-Implementato come presentazione:
+Implementato:
 
 - layout applicativo e autenticazione;
 - navigazione responsive;
 - design system e componenti accessibili;
 - escaping centralizzato e header di sicurezza;
-- route GET delle aree HAPA;
-- stati vuoti espliciti;
-- pagina catalogo;
-- pagina integrazioni con riferimento al servizio esterno.
+- autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
+- dashboard con metriche HAPA, inbox, outbox e audit;
+- clienti ricercabili, scheda aggregata e gestione versionata del profilo;
+- ordini ricercabili e dettaglio con righe, acquisti Space, spedizioni, label e cronologia;
+- registro spedizioni ricercabile con colli, peso, tracking e metadati label;
+- catalogo Space, revisione nuovi prodotti, CRUD ricarichi e anteprima prezzi per marketplace;
+- configurazione non segreta degli account provider;
+- audit consultabile.
 
 Ancora da collegare:
 
-- autenticazione e autorizzazione reali;
-- repository e read model;
-- azioni mutative;
-- CSRF;
-- audit delle operazioni UI.
+- gestione identità cliente, rubrica indirizzi, merge, anonimizzazione ed export;
+- workflow mutativi ordine, acquisto, picking e spedizione;
+- adapter provider, stato connessione e stampa label reale;
+- paginazione server-side per volumi elevati;
+- utenti, MFA, recupero password e preferenze amministrative complete.
 
 ## Mappa schermate
 
@@ -67,7 +71,7 @@ Deve mostrare:
 - stato delle offerte per marketplace;
 - divergenze e dati scaduti.
 
-Creazione, modifica, abilitazione/disabilitazione e ritiro delle regole di ricarico sono disponibili agli amministratori con permesso, CSRF, optimistic locking, storico versionato e audit. Anteprima prezzo e pubblicazione offerte restano successive.
+Creazione, modifica, abilitazione/disabilitazione e ritiro delle regole di ricarico sono disponibili agli amministratori con permesso, CSRF, optimistic locking, storico versionato e audit. L’anteprima calcola per ogni marketplace costo, prezzo, ricarico, regola vincente e blocchi di pubblicazione. Fee, IVA e arrotondamenti specifici del canale restano esclusi finché non sono contrattualizzati; la pubblicazione reale resta in Automation.
 
 ## Integrazioni
 

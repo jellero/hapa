@@ -72,7 +72,7 @@
                 </div>
 
                 <div class="topbar__actions">
-                    <a class="icon-button" href="/ui/automation" aria-label="Apri notifiche operative">
+                    <a class="icon-button" href="/ui/audit" aria-label="Apri audit operativo">
                         <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bell"></use></svg>
                     </a>
                     <a class="account-chip<?= $active === 'profile' ? ' is-active' : '' ?>" href="/ui/profile">

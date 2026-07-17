@@ -6,6 +6,7 @@ use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Health\ReadinessCheck;
 use Hapa\Core\Ui\AuthenticationController;
 use Hapa\Core\Ui\CatalogReviewController;
+use Hapa\Core\Ui\CustomerController;
 use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\PricingRuleController;
 use Hapa\Core\Ui\UiController;
@@ -23,6 +24,7 @@ return static function (
     ?IntegrationConfigurationController $integrationConfiguration = null,
     ?PricingRuleController $pricingRules = null,
     ?CatalogReviewController $catalogReview = null,
+    ?CustomerController $customers = null,
 ): RouteCollection {
     $routes = new RouteCollection();
     $unavailableAuthentication = static fn (): JsonResponse => new JsonResponse(
@@ -56,6 +58,15 @@ return static function (
     $reviewCatalogController = $catalogReview instanceof CatalogReviewController
         ? $catalogReview->review(...)
         : $unavailableAuthentication;
+    $createCustomerController = $customers instanceof CustomerController
+        ? $customers->create(...)
+        : $unavailableAuthentication;
+    $updateCustomerController = $customers instanceof CustomerController
+        ? $customers->update(...)
+        : $unavailableAuthentication;
+    $archiveCustomerController = $customers instanceof CustomerController
+        ? $customers->archive(...)
+        : $unavailableAuthentication;
 
     $routes->add('home', new Route(
         '/',
@@ -84,6 +95,21 @@ return static function (
     $routes->add('password_recovery', new Route('/password/recovery', ['_controller' => $ui->recovery(...), '_public' => true], methods: ['GET']));
     $routes->add('ui_dashboard', new Route('/ui', ['_controller' => $ui->dashboard(...), '_permission' => 'ui.view'], methods: ['GET']));
     $routes->add('ui_customers', new Route('/ui/customers', ['_controller' => $ui->customers(...), '_permission' => 'customers.view'], methods: ['GET']));
+    $routes->add('ui_customer_create', new Route('/ui/customers', [
+        '_controller' => $createCustomerController,
+        '_permission' => 'customers.manage',
+        '_csrf_action' => 'customer.create',
+    ], methods: ['POST']));
+    $routes->add('ui_customer_update', new Route('/ui/customers/{customerId}', [
+        '_controller' => $updateCustomerController,
+        '_permission' => 'customers.manage',
+        '_csrf_action' => 'customer.update.{customerId}',
+    ], requirements: ['customerId' => '[A-Za-z0-9._-]{3,64}'], methods: ['POST']));
+    $routes->add('ui_customer_archive', new Route('/ui/customers/{customerId}/archive', [
+        '_controller' => $archiveCustomerController,
+        '_permission' => 'customers.manage',
+        '_csrf_action' => 'customer.archive.{customerId}',
+    ], requirements: ['customerId' => '[A-Za-z0-9._-]{3,64}'], methods: ['POST']));
     $routes->add('ui_customer_detail', new Route(
         '/ui/customers/{customerId}',
         ['_controller' => $ui->customerDetail(...), '_permission' => 'customers.view'],

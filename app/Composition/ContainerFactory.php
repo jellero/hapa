@@ -53,16 +53,25 @@ use Hapa\Core\Ui\CatalogProductManagement;
 use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\CatalogOverview;
 use Hapa\Core\Ui\CustomerOverview;
+use Hapa\Core\Ui\CustomerController;
+use Hapa\Core\Ui\CustomerManagement;
+use Hapa\Core\Ui\OrderOverview;
 use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\PricingRuleController;
 use Hapa\Core\Ui\PricingRuleManagement;
+use Hapa\Core\Ui\PricingPreview;
+use Hapa\Core\Ui\ShipmentOverview;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Catalog\Application\CatalogReadModel;
 use Hapa\Modules\Catalog\Application\CatalogProductReviewService;
 use Hapa\Modules\Catalog\Application\PricingRuleService;
+use Hapa\Modules\Catalog\Application\PricingPreviewService;
 use Hapa\Modules\Customers\Application\CustomerReadModel;
+use Hapa\Modules\Customers\Application\CustomerService;
+use Hapa\Modules\Orders\Application\OrderReadModel;
+use Hapa\Modules\Shipping\Application\ShipmentReadModel;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
@@ -211,12 +220,32 @@ final readonly class ContainerFactory
 
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
+        $container->register(PricingPreviewService::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(PriceCalculator::class),
+                new Reference(Clock::class),
+            ]);
+        $container->setAlias(PricingPreview::class, PricingPreviewService::class)->setPublic(false);
         $container->register(CatalogReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->setAlias(CatalogOverview::class, CatalogReadModel::class)->setPublic(false);
         $container->register(CustomerReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->setAlias(CustomerOverview::class, CustomerReadModel::class)->setPublic(false);
+        $container->register(CustomerService::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+                new Reference(SensitiveDataRedactor::class),
+            ]);
+        $container->setAlias(CustomerManagement::class, CustomerService::class)->setPublic(false);
+        $container->register(OrderReadModel::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->setAlias(OrderOverview::class, OrderReadModel::class)->setPublic(false);
+        $container->register(ShipmentReadModel::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->setAlias(ShipmentOverview::class, ShipmentReadModel::class)->setPublic(false);
         $container->register(CatalogProductReviewService::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),
@@ -308,7 +337,13 @@ final readonly class ContainerFactory
                 new Reference(RuntimeOverview::class),
                 new Reference(PricingRuleManagement::class),
                 new Reference(CustomerOverview::class),
+                new Reference(OrderOverview::class),
+                new Reference(AuthorizationPolicy::class),
+                new Reference(PricingPreview::class),
+                new Reference(ShipmentOverview::class),
             ]);
+        $container->register(CustomerController::class)
+            ->setArguments([new Reference(CustomerManagement::class)]);
         $container->register(AuthenticationController::class)
             ->setArguments([
                 new Reference(UiController::class),
@@ -338,6 +373,7 @@ final readonly class ContainerFactory
                 new Reference(IntegrationConfigurationController::class),
                 new Reference(PricingRuleController::class),
                 new Reference(CatalogReviewController::class),
+                new Reference(CustomerController::class),
             ]);
         $container->setDefinition(Kernel::class, (new Definition())
             ->setFactory([new Reference(KernelFactory::class), 'create'])

@@ -6,6 +6,7 @@ namespace Hapa\Core\Ui;
 
 use Hapa\Core\Audit\AuditReadModel;
 use Hapa\Core\Observability\RuntimeOverview;
+use Hapa\Core\Security\AuthorizationPolicy;
 use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\WebSession;
 use Hapa\Core\Integration\IntegrationAccountConfiguration;
@@ -26,6 +27,10 @@ final readonly class UiController
         private ?RuntimeOverview $runtimeOverview = null,
         private ?PricingRuleManagement $pricingRules = null,
         private ?CustomerOverview $customerReadModel = null,
+        private ?OrderOverview $orderReadModel = null,
+        private ?AuthorizationPolicy $authorization = null,
+        private ?PricingPreview $pricingPreview = null,
+        private ?ShipmentOverview $shipmentReadModel = null,
     ) {
     }
 
@@ -95,6 +100,7 @@ final readonly class UiController
     {
         $query = trim($request->query->getString('q'));
         $status = $request->query->getString('status');
+        $session = $request->attributes->get('security_session');
 
         return $this->operational($request, 'ui/customers', 'customers', [
             'title' => 'Clienti',
@@ -103,6 +109,9 @@ final readonly class UiController
             'query' => $query,
             'selectedStatus' => in_array($status, ['active', 'inactive', 'archived'], true) ? $status : '',
             'customers' => $this->customerReadModel?->search($query, $status) ?? [],
+            'canManageCustomers' => $this->can($request, 'customers.manage'),
+            'createCustomerCsrfToken' => $session instanceof WebSession ? $session->csrfToken('customer.create') : '',
+            'customerError' => $request->query->getString('error'),
         ]);
     }
 
@@ -110,6 +119,7 @@ final readonly class UiController
     {
         $customerId = $request->attributes->getString('customerId');
         $customer = $this->customerReadModel?->detail($customerId);
+        $session = $request->attributes->get('security_session');
 
         return $this->operational($request, 'ui/customer-detail', 'customers', [
             'title' => $customer === null ? sprintf('Cliente %s', $customerId) : (string) $customer['display_name'],
@@ -117,22 +127,29 @@ final readonly class UiController
             'description' => 'Profilo canonico, contatti, identità esterne, indirizzi e ordini collegati.',
             'customerId' => $customerId,
             'customer' => $customer,
+            'canManageCustomers' => $this->can($request, 'customers.manage'),
+            'updateCustomerCsrfToken' => $session instanceof WebSession ? $session->csrfToken('customer.update.' . $customerId) : '',
+            'archiveCustomerCsrfToken' => $session instanceof WebSession ? $session->csrfToken('customer.archive.' . $customerId) : '',
+            'customerSaved' => $request->query->getBoolean('saved'),
+            'customerError' => $request->query->getString('error'),
         ]);
     }
 
     public function orders(Request $request): Response
     {
-        return $this->collection($request, 'orders', [
+        $query = trim($request->query->getString('q'));
+        $status = $request->query->getString('status');
+        $status = in_array($status, ['to_process', 'waiting_goods', 'picking', 'manual_review', 'completed', 'cancelled'], true)
+            ? $status
+            : '';
+
+        return $this->operational($request, 'ui/orders', 'orders', [
             'title' => 'Ordini',
             'eyebrow' => 'Anagrafiche e operatività',
             'description' => 'Consulta l’anagrafica ordini e controlla ogni origine lungo il flusso di fulfilment.',
-            'searchLabel' => 'Cerca per ordine, cliente, origine, SKU o tracking',
-            'filters' => ['Tutti gli stati', 'Da accettare', 'In attesa merce', 'Picking', 'Revisione manuale', 'Completati'],
-            'columns' => ['Ordine', 'Cliente', 'Origine', 'Stato', 'Righe', 'Aggiornato', 'Azioni'],
-            'emptyTitle' => 'Nessun ordine disponibile',
-            'emptyBody' => 'Il repository PostgreSQL transazionale supporta ordini marketplace e la futura origine B2C; l’elenco richiede ancora read model, autenticazione e autorizzazione.',
-            'emptyIcon' => 'orders',
-            'primaryAction' => 'Importa ordini',
+            'query' => $query,
+            'selectedStatus' => $status,
+            'orders' => $this->orderReadModel?->search($query, $status) ?? [],
         ]);
     }
 
@@ -149,6 +166,11 @@ final readonly class UiController
             $item['review_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('catalog.review.' . (string) $item['id'])
                 : '';
+        }
+        unset($item);
+        $pricePreviews = $this->pricingPreview?->forProducts($catalogItems) ?? [];
+        foreach ($catalogItems as &$item) {
+            $item['price_previews'] = $pricePreviews[(int) $item['id']] ?? [];
         }
         unset($item);
         $pricingRules = $this->pricingRules?->all() ?? [];
@@ -182,12 +204,14 @@ final readonly class UiController
     public function orderDetail(Request $request): Response
     {
         $orderId = $request->attributes->getString('orderId');
+        $order = $this->orderReadModel?->detail($orderId);
 
         return $this->operational($request, 'ui/order-detail', 'orders', [
-            'title' => sprintf('Ordine %s', $orderId),
+            'title' => sprintf('Ordine %s', $order['order_number'] ?? $orderId),
             'eyebrow' => 'Dettaglio ordine',
-            'description' => 'Vista completa di cliente, origine, righe, snapshot degli indirizzi, delivery esterne e audit.',
+            'description' => 'Vista completa di cliente, origine, righe, acquisti verso Space, spedizioni, snapshot degli indirizzi e cronologia.',
             'orderId' => $orderId,
+            'order' => $order,
         ]);
     }
 
@@ -209,17 +233,19 @@ final readonly class UiController
 
     public function shipments(Request $request): Response
     {
-        return $this->collection($request, 'shipments', [
+        $query = trim($request->query->getString('q'));
+        $status = $request->query->getString('status');
+        $status = in_array($status, ['pending', 'created', 'label_available', 'shipped', 'error', 'cancelled'], true)
+            ? $status
+            : '';
+
+        return $this->operational($request, 'ui/shipments', 'shipments', [
             'title' => 'Spedizioni',
             'eyebrow' => 'Logistica',
             'description' => 'Controlla corriere, colli, pesi, etichette, tracking e riconciliazioni per GLS e BRT (Bartolini).',
-            'searchLabel' => 'Cerca ordine, spedizione o tracking',
-            'filters' => ['Tutte le spedizioni', 'Da creare', 'Etichetta pronta', 'Spedite', 'Con errore', 'Annullate'],
-            'columns' => ['Spedizione', 'Ordine', 'Corriere', 'Colli', 'Peso', 'Stato', 'Azioni'],
-            'emptyTitle' => 'Nessuna spedizione disponibile',
-            'emptyBody' => 'Le spedizioni compariranno dopo il completamento del dominio colli e degli adapter GLS e BRT.',
-            'emptyIcon' => 'truck',
-            'primaryAction' => 'Crea spedizione',
+            'query' => $query,
+            'selectedStatus' => $status,
+            'shipments' => $this->shipmentReadModel?->search($query, $status) ?? [],
         ]);
     }
 
@@ -374,6 +400,13 @@ final readonly class UiController
         $page['clearUrl'] = $request->getPathInfo();
 
         return $this->operational($request, 'ui/collection', $active, $page);
+    }
+
+    private function can(Request $request, string $permission): bool
+    {
+        $user = $request->attributes->get('current_user');
+
+        return $user instanceof UserIdentity && $this->authorization?->allows($user, $permission) === true;
     }
 
     /** @param array<string, mixed> $page */

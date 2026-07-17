@@ -14,6 +14,7 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 - [x] diagrammi architetturali recuperati e riallineati;
 - [x] decisione HAPA system of record e Space fornitore;
 - [x] schema additivo per account marketplace, offerte fornitore, acquisti, storico cliente, colli e label.
+- [x] read model operativi per clienti e ordini con righe, acquisti Space, spedizioni, label e cronologie.
 
 ## P0 — Sicurezza, configurazione provider e messaggistica bidirezionale
 
@@ -54,7 +55,8 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 - [ ] ottenere e verificare un'utenza API dedicata con ACL per lettura ordini e, quando richiesta, modifica prodotti;
 - [ ] congelare endpoint e payload reali V2, chiarendo la differenza fra `/api/v2/product` e gli esempi `/api/product/{uuid}` presenti nella guida;
 - [x] CRUD ricarichi autorizzato, versionato, protetto da optimistic locking e auditato;
-- [ ] calcolo deterministico con costo, ricarico, fee, IVA e arrotondamento approvati;
+- [x] anteprima deterministica per marketplace con costo Space, regola di ricarico vincente, limiti e spiegazione dei blocchi di pubblicazione;
+- [ ] estendere il calcolo con fee, regime IVA e arrotondamenti approvati dai contratti reali dei canali;
 - [ ] identità prodotto remota stabile `integration_account_id + catalog_id + sku`;
 - [ ] comando `marketplace.product.upsert.requested` per anagrafica, immagini, attributi e campi approvati;
 - [ ] comando `marketplace.offer.publish.requested` per prezzo e quantità finali già decisi da HAPA;
@@ -122,6 +124,7 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discovery corrente deriva dal manuale MU.162 Rev.20 del 1 ottobre 2021: prima del codice produttivo devono essere verificati con GLS l'attivazione del servizio, il WSDL effettivo, i contratti abilitati e l'ambiente di collaudo.
 
 - [ ] configurare da UI endpoint/WSDL, ambiente, sede, cliente, contratto, password write-only, aggregazione, formato label e capacità;
+- [x] registro spedizioni in sola lettura con ricerca, filtri, cliente, ordine, colli, peso, tracking e metadati label senza esporre riferimenti privati;
 - [ ] completare picking, quantità finali, colli, peso reale e dimensioni prima di richiedere la spedizione;
 - [ ] modellare separatamente spedizione HAPA, colli HAPA, riferimenti GLS e documenti label;
 - [ ] introdurre gli stati applicativi almeno `requested`, `open`, `awaiting_close`, `closed`, `failed`, `manual_review` e `cancelled`, senza comprimere la spedizione in un singolo flag;
@@ -165,7 +168,7 @@ La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discov
 
 ## P7 — Storico cliente e operatività
 
-- [ ] casi d'uso cliente e versioni append-only;
+- [x] creazione, aggiornamento e archiviazione del profilo cliente con optimistic locking, versioni append-only e audit redatto;
 - [ ] merge, rettifica, anonimizzazione e retention;
 - [x] ricerca autorizzata e scheda aggregata con profilo, identità, indirizzi, ordini e versioni storiche;
 - [ ] paginazione completa e timeline unificata per volumi elevati;

@@ -11,6 +11,7 @@ use Hapa\Core\Security\AuthorizationPolicy;
 use Hapa\Core\Security\SessionManager;
 use Hapa\Core\Ui\AuthenticationController;
 use Hapa\Core\Ui\CatalogReviewController;
+use Hapa\Core\Ui\CustomerController;
 use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\PricingRuleController;
 use Hapa\Core\Ui\UiController;
@@ -33,6 +34,7 @@ final class KernelFactory
         private readonly IntegrationConfigurationController $integrationConfiguration,
         private readonly PricingRuleController $pricingRules,
         private readonly CatalogReviewController $catalogReview,
+        private readonly CustomerController $customers,
     ) {
     }
 
@@ -56,6 +58,7 @@ final class KernelFactory
             $this->integrationConfiguration,
             $this->pricingRules,
             $this->catalogReview,
+            $this->customers,
         );
         if (!$routes instanceof RouteCollection) {
             throw new RuntimeException('La route factory deve restituire RouteCollection.');

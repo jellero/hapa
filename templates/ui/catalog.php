@@ -100,6 +100,7 @@ $formatAge = static function (?int $seconds): string {
         <span>Space sincronizza prezzo e stock del prodotto; HAPA conserva il dato e permette agli operatori di gestire dall’interfaccia le regole di ricarico e il prezzo finale.</span>
     </div>
 </div>
+<div class="inline-notice inline-notice--warning" role="note"><div><strong>Perimetro dell’anteprima</strong><span>Il prezzo calcolato applica il ricarico al costo Space. Commissioni del canale, regime IVA e arrotondamenti imposti dal marketplace saranno inclusi solo dopo aver validato i rispettivi contratti ufficiali.</span></div></div>
 
 <section class="metric-grid" aria-label="Stato anagrafica prodotti">
     <article class="metric-card metric-card--info">
@@ -137,12 +138,12 @@ $formatAge = static function (?int $seconds): string {
             <article class="workstream-item">
                 <span class="workstream-item__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span>
                 <div class="workstream-item__copy"><strong>1. Aggiorna il prodotto</strong><span>hapa-automation acquisisce da Space e HAPA applica SKU, prezzo, stock e versione sorgente</span></div>
-                <span class="status-badge status-badge--neutral">Da collegare</span>
+                <span class="status-badge status-badge--info">Ricezione pronta</span>
             </article>
             <article class="workstream-item">
                 <span class="workstream-item__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#settings"></use></svg></span>
                 <div class="workstream-item__copy"><strong>2. Gestisci il ricarico</strong><span>L’operatore configura in HAPA la regola commerciale e verifica il prezzo finale</span></div>
-                <span class="status-badge status-badge--success">Motore pronto</span>
+                <span class="status-badge status-badge--success">Anteprima pronta</span>
             </article>
             <article class="workstream-item">
                 <span class="workstream-item__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#integration"></use></svg></span>
@@ -180,10 +181,10 @@ $formatAge = static function (?int $seconds): string {
     </form>
     <div class="table-scroll">
         <table class="data-table">
-            <thead><tr><th scope="col">SKU</th><th scope="col">Prodotto</th><th scope="col">Costo Space</th><th scope="col">Disponibilità</th><th scope="col">Versione</th><th scope="col">Revisione</th><th scope="col">Età dato</th><th scope="col">Offerte</th><th scope="col">Azioni</th></tr></thead>
+            <thead><tr><th scope="col">SKU</th><th scope="col">Prodotto</th><th scope="col">Costo Space</th><th scope="col">Disponibilità</th><th scope="col">Versione</th><th scope="col">Revisione</th><th scope="col">Età dato</th><th scope="col">Anteprima canali</th><th scope="col">Offerte</th><th scope="col">Azioni</th></tr></thead>
             <tbody>
             <?php if (($catalogItems ?? []) === []): ?>
-                <tr><td colspan="9"><div class="empty-state"><span class="empty-state__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span><h3>Nessun prodotto trovato</h3><p>Il catalogo si popola con le osservazioni versionate ricevute da Space tramite hapa-automation.</p></div></td></tr>
+                <tr><td colspan="10"><div class="empty-state"><span class="empty-state__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span><h3>Nessun prodotto trovato</h3><p>Il catalogo si popola con le osservazioni versionate ricevute da Space tramite hapa-automation.</p></div></td></tr>
             <?php else: ?>
                 <?php foreach ($catalogItems as $item): ?>
                     <?php $statusTone = $item['onboarding_status'] === 'approved' ? 'success' : ($item['onboarding_status'] === 'rejected' ? 'danger' : 'warning'); ?>
@@ -195,6 +196,7 @@ $formatAge = static function (?int $seconds): string {
                         <td><code><?= $e($item['source_version'] ?? '—') ?></code></td>
                         <td><span class="status-badge status-badge--<?= $e($statusTone) ?>"><?= $e($item['onboarding_status']) ?></span></td>
                         <td><?= $e($formatAge($item['age_seconds'])) ?></td>
+                        <td><?php if (($item['price_previews'] ?? []) === []): ?>—<?php else: ?><details><summary><?= $e((string) count($item['price_previews'])) ?> canali</summary><?php foreach ($item['price_previews'] as $preview): ?><div class="workstream-item__copy"><strong><?= $e($preview['marketplace_name']) ?>: <?= $e($formatMoney($preview['selling_price_minor'], $preview['currency'])) ?></strong><small>Costo <?= $e($formatMoney($preview['base_price_minor'], $preview['currency'])) ?> · ricarico <?= $e($formatMoney($preview['markup_minor'], $preview['currency'])) ?> · regola <?= $e($preview['applied_rule_code'] ?? 'nessuna') ?></small><span class="status-badge status-badge--<?= $preview['publishable'] ? 'success' : 'warning' ?>"><?= $e($preview['publishable'] ? 'pubblicabile' : implode(', ', $preview['blockers'])) ?></span><?php if ($preview['error'] !== null): ?><small><?= $e($preview['error']) ?></small><?php endif; ?></div><?php endforeach; ?></details><?php endif; ?></td>
                         <td><?= $e((string) $item['marketplace_offer_count']) ?></td>
                         <td><?php if (($currentUser?->role ?? '') === 'administrator' && $item['onboarding_status'] === 'pending_review'): ?><form action="/ui/catalog/items/<?= $e((string) $item['id']) ?>/review" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($item['review_csrf_token']) ?>"><input type="hidden" name="version" value="<?= $e((string) $item['version']) ?>"><button class="button button--secondary" name="decision" value="approved" type="submit">Approva</button><button class="button button--ghost" name="decision" value="rejected" type="submit">Rifiuta</button></form><?php else: ?>—<?php endif; ?></td>
                     </tr>

@@ -6,15 +6,16 @@ Ultimo riesame: 17 luglio 2026.
 
 HAPA mantiene un’anagrafica cliente canonica e gli ordini di vendita indipendenti dal singolo canale. IBS è il canale corrente; Temu e Amazon sono pianificati. L’acquisto verso Space è un aggregato distinto dalla vendita e non deve essere rappresentato tramite lo stesso stato ordine.
 
-Lo stato corrente è **parziale**:
+Lo stato corrente è **operativo in lettura e nella gestione del profilo cliente**, mentre import e workflow esterni restano vincolati ai rispettivi adapter:
 
 - schema PostgreSQL, vincoli e indici implementati;
 - value object e tipi di dominio iniziali implementati;
 - aggregato ordine, righe, transizioni ed eventi di dominio implementati e coperti da test;
-- elenco e dettaglio clienti collegati a query PostgreSQL autorizzate; la presentazione ordini è ancora priva del read model operativo;
+- elenco e dettaglio clienti e ordini collegati a query PostgreSQL autorizzate;
 - repository PostgreSQL dell’aggregato ordine, optimistic locking e scrittura outbox atomica implementati;
-- read model cliente con ricerca, identità esterne, indirizzi, ordini e storico implementato; repository mutativo e CRUD non ancora implementati;
-- storico append-only del profilo cliente e acquisti Space distinti introdotti a livello schema; lo storico cliente è consultabile, mentre i casi d’uso mutativi restano da implementare;
+- read model ordine con ricerca per numero, cliente, SKU, EAN e tracking, filtri operativi e dettaglio di righe, acquisti Space, colli, etichette, tentativi legacy e transizioni;
+- creazione, aggiornamento e archiviazione del profilo cliente implementati con permesso dedicato, CSRF, optimistic locking, storico append-only e audit redatto;
+- gestione mutativa di identità esterne, rubrica indirizzi, merge, anonimizzazione ed export ancora da implementare;
 - e-commerce B2C completo pianificato.
 
 ## Cliente canonico
@@ -43,7 +44,7 @@ Le sorgenti prioritarie sono IBS, Temu, Amazon e il futuro `b2c_ecommerce`. Altr
 
 La cancellazione del cliente rimuove le identità collegate. L’eventuale merge di clienti sarà un caso d’uso dedicato, transazionale e auditato; non viene effettuato da trigger o vincoli impliciti.
 
-`customer_history` conserva versioni append-only del profilo normalizzato. La tabella non sostituisce l’audit di sicurezza: rende ricostruibile l’evoluzione dell’anagrafica, mentre l’audit conserva attore, motivazione e contesto operativo.
+`customer_history` conserva versioni append-only del profilo normalizzato. La tabella non sostituisce l’audit di sicurezza: rende ricostruibile l’evoluzione dell’anagrafica, mentre l’audit conserva attore, motivazione e contesto operativo con i campi personali redatti. La rimozione amministrativa è rappresentata come archiviazione; non distrugge lo storico commerciale.
 
 ## Indirizzi e snapshot storici
 
@@ -106,6 +107,8 @@ L’identificativo ordine esterno resta univoco per marketplace; per il futuro B
 - storico PostgreSQL con una sola transizione per versione ordine.
 
 `PostgresOrderRepository` ricostituisce aggregato, righe, indirizzi e transizioni. Il salvataggio usa un controllo versione atomico durante l’`UPDATE`; ordine, righe, nuove transizioni ed eventi outbox vengono confermati o annullati nello stesso transaction boundary. Gli eventi restano nell’aggregato in caso di rollback e vengono rimossi soltanto dopo il commit. Il `Clock` condiviso è disponibile nel container e verrà usato dai casi d’uso che orchestrano le decisioni di dominio.
+
+`OrderReadModel` alimenta `/ui/orders` e `/ui/orders/{order_number}` senza spostare ownership in Automation. La vista compone vendita, cliente, account marketplace, acquisti fornitore, spedizioni, colli, metadati label e cronologia. Dei tentativi legacy espone soltanto metadati operativi; request, response e messaggi liberi non vengono mostrati.
 
 ## Confine del futuro e-commerce B2C
 
