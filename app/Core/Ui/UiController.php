@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Ui;
 
+use Hapa\Core\Security\UserIdentity;
+use Hapa\Core\Security\WebSession;
+use Hapa\Core\Integration\IntegrationAccountConfiguration;
+use Hapa\Core\Integration\IntegrationAccountRepository;
 use Hapa\Core\View\ViewRenderer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,17 +17,30 @@ final readonly class UiController
     public function __construct(
         private ViewRenderer $views,
         private string $environment,
+        private ?CatalogOverview $catalogReadModel = null,
+        private ?IntegrationAccountRepository $integrationAccounts = null,
+        private ?IntegrationAccountConfiguration $integrationConfiguration = null,
     ) {
     }
 
     public function login(Request $request): Response
     {
+        $session = $request->attributes->get('security_session');
+        $next = $request->query->getString('next', $request->request->getString('next', '/ui'));
+        if (!str_starts_with($next, '/ui') || str_starts_with($next, '//')) {
+            $next = '/ui';
+        }
+
         return $this->views->render('auth/login', [
             'title' => 'Accedi',
             'description' => 'Accedi al centro operativo HAPA.',
             'environment' => $this->environment,
             'correlationId' => $request->attributes->getString('correlation_id'),
-        ], 'layouts/auth');
+            'csrfToken' => $session instanceof WebSession ? $session->csrfToken('login') : '',
+            'next' => $next,
+            'email' => $request->attributes->getString('login_email'),
+            'error' => $request->attributes->getString('login_error'),
+        ], 'layouts/auth', $request->attributes->getInt('login_status', Response::HTTP_OK));
     }
 
     public function recovery(Request $request): Response
@@ -105,10 +122,19 @@ final readonly class UiController
 
     public function catalog(Request $request): Response
     {
+        $query = trim($request->query->getString('q'));
+        $catalog = $this->catalogReadModel?->search($query) ?? [
+            'items' => [],
+            'metrics' => ['total' => 0, 'pending_review' => 0, 'active' => 0, 'stale' => 0],
+        ];
+
         return $this->operational($request, 'ui/catalog', 'catalog', [
             'title' => 'Anagrafica prodotti, prezzi e stock',
             'eyebrow' => 'Catalogo commerciale',
             'description' => 'Consulta prezzo e stock sincronizzati da Space e gestisci da interfaccia le regole di ricarico applicate alle offerte.',
+            'query' => $query,
+            'catalogItems' => $catalog['items'],
+            'catalogMetrics' => $catalog['metrics'],
         ]);
     }
 
@@ -158,6 +184,18 @@ final readonly class UiController
 
     public function integrations(Request $request): Response
     {
+        $session = $request->attributes->get('security_session');
+        $accounts = $this->integrationAccounts?->all() ?? [];
+        foreach ($accounts as &$account) {
+            $account['update_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.update.' . (string) $account['id'])
+                : '';
+            $account['retire_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.retire.' . (string) $account['id'])
+                : '';
+        }
+        unset($account);
+
         return $this->operational($request, 'ui/integrations', 'integrations', [
             'title' => 'Integrazioni',
             'eyebrow' => 'Ecosistema',
@@ -173,6 +211,11 @@ final readonly class UiController
                 ['name' => 'GLS', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
                 ['name' => 'BRT (Bartolini)', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'brt', 'status' => 'Contratto pronto', 'tone' => 'info'],
             ],
+            'configuredAccounts' => $accounts,
+            'availableCapabilities' => $this->integrationConfiguration?->availableCapabilities() ?? [],
+            'createIntegrationCsrfToken' => $session instanceof WebSession ? $session->csrfToken('integration.create') : '',
+            'saved' => $request->query->getBoolean('saved'),
+            'configurationError' => $request->query->getString('error'),
         ]);
     }
 
@@ -295,11 +338,16 @@ final readonly class UiController
     /** @param array<string, mixed> $page */
     private function operational(Request $request, string $template, string $active, array $page): Response
     {
+        $currentUser = $request->attributes->get('current_user');
+        $session = $request->attributes->get('security_session');
+
         return $this->views->render($template, array_replace($page, [
             'active' => $active,
             'navigation' => $this->navigation(),
             'environment' => $this->environment,
             'correlationId' => $request->attributes->getString('correlation_id'),
+            'currentUser' => $currentUser instanceof UserIdentity ? $currentUser : null,
+            'logoutCsrfToken' => $session instanceof WebSession ? $session->csrfToken('logout') : '',
         ]));
     }
 

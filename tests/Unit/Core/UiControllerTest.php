@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class UiControllerTest extends TestCase
 {
-    public function testItRendersTheLoginInterfaceWithoutAnActiveCredentialForm(): void
+    public function testItRendersTheActiveCredentialForm(): void
     {
         $response = $this->controller()->login($this->request('/login'));
 
@@ -21,7 +21,8 @@ final class UiControllerTest extends TestCase
         self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
         self::assertSame('no-store, private', $response->headers->get('Cache-Control'));
         self::assertStringContainsString('<h2>Accedi a HAPA</h2>', (string) $response->getContent());
-        self::assertStringContainsString('<fieldset disabled>', (string) $response->getContent());
+        self::assertStringContainsString('action="/login" method="post"', (string) $response->getContent());
+        self::assertStringNotContainsString('<fieldset disabled>', (string) $response->getContent());
     }
 
     public function testItRendersEveryHapaOperationalArea(): void
@@ -45,7 +46,7 @@ final class UiControllerTest extends TestCase
         foreach ($responses as $response) {
             self::assertSame(Response::HTTP_OK, $response->getStatusCode());
             self::assertStringContainsString('data-ui-shell', (string) $response->getContent());
-            self::assertStringContainsString('Interfaccia pronta, dati non ancora collegati', (string) $response->getContent());
+            self::assertStringContainsString('Sessione protetta attiva', (string) $response->getContent());
         }
     }
 

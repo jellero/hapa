@@ -10,6 +10,7 @@ use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
+use Hapa\Core\Console\UserCreateCommand;
 use RuntimeException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Dotenv\Dotenv;
@@ -84,6 +85,16 @@ final readonly class Bootstrap
         $command = $this->container->get(InboxConsumeCommand::class);
         if (!$command instanceof InboxConsumeCommand) {
             throw new RuntimeException('Il container non ha prodotto il comando inbox:consume.');
+        }
+
+        return $command;
+    }
+
+    public function userCreateCommand(): UserCreateCommand
+    {
+        $command = $this->container->get(UserCreateCommand::class);
+        if (!$command instanceof UserCreateCommand) {
+            throw new RuntimeException('Il container non ha prodotto il comando security:user:create.');
         }
 
         return $command;

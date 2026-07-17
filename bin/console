@@ -16,6 +16,7 @@ $application = new Application('HAPA', '0.8.0');
 $application->add($bootstrap->systemCheckCommand());
 $application->add($bootstrap->outboxRelayCommand());
 $application->add($bootstrap->inboxConsumeCommand());
+$application->add($bootstrap->userCreateCommand());
 $spaceCatalogConsumer = $bootstrap->container()->get(SpaceCatalogConsumeCommand::class);
 if (!$spaceCatalogConsumer instanceof SpaceCatalogConsumeCommand) {
     throw new RuntimeException('Il container non ha prodotto il consumer catalogo Space.');

@@ -17,18 +17,18 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 
 ## P0 — Sicurezza, configurazione provider e messaggistica bidirezionale
 
-- [ ] unire e distribuire il consumer HAPA con inbox idempotente;
-- [ ] autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
-- [ ] audit delle azioni commerciali e degli accessi sensibili;
-- [ ] metriche su inbox, outbox, dead letter e consumer lag;
+- [x] unire e distribuire il consumer HAPA con inbox idempotente;
+- [x] autenticazione, sessioni, autorizzazione deny-by-default e CSRF;
+- [x] audit di accessi, logout e configurazione provider; le future azioni commerciali dovranno usare lo stesso registro;
+- [x] metriche JSON su inbox, outbox, dead state e lag nel runtime Automation; resta da esporre la vista aggregata autorizzata in HAPA;
 - [ ] contratti v2 producer/consumer nei due repository;
-- [ ] storage sicuro per etichette e documenti;
-- [ ] CRUD amministrativo per account Space, SellRapido, GLS e provider futuri;
-- [ ] configurazione da UI di ambiente, endpoint, account, cataloghi, contratti, capacità, mapping, frequenze e batch;
+- [x] storage privato locale per etichette e documenti con riferimenti opachi, checksum e scrittura atomica;
+- [x] CRUD amministrativo versionato dei dati non segreti per account Space, SellRapido, GLS e provider futuri;
+- [x] configurazione da UI di ambiente, endpoint, account, cataloghi, contratti, capacità, mapping, frequenze e batch;
 - [ ] campi credenziale write-only, mascherati e delegati allo storage cifrato di Automation senza persistenza in HAPA;
 - [ ] azioni UI separate per test connessione, rotazione/revoca, abilitazione e disabilitazione per capacità;
 - [ ] mostrare stato connessione, ultima verifica, scadenza token, checkpoint ed errore redatto senza esporre segreti;
-- [ ] versionare e auditare ogni modifica di configurazione e ogni attivazione produzione.
+- [x] versionare e auditare ogni modifica della configurazione non segreta; l’attivazione produzione resta bloccata fino al gate Automation.
 
 Il confine completo è in [`PROVIDER_CONFIGURATION.md`](PROVIDER_CONFIGURATION.md).
 
@@ -41,7 +41,7 @@ Il confine completo è in [`PROVIDER_CONFIGURATION.md`](PROVIDER_CONFIGURATION.m
 - [x] separare prodotto da offerta Space per tutte le nuove osservazioni;
 - [x] creare prodotti nuovi inattivi con revisione manuale e deduplica;
 - [ ] backfill e riconciliazione dei campi Space legacy;
-- [ ] mostrare costo, disponibilità, versione ed età del dato;
+- [x] mostrare costo, disponibilità, versione ed età del dato;
 - [ ] pilot read-only su Space.
 
 **Gate:** una variazione Space aggiorna HAPA una sola volta, non regredisce con eventi fuori ordine e un prodotto nuovo non viene pubblicato prima dell'approvazione.

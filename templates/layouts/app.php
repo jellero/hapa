@@ -52,7 +52,7 @@
                     <span class="environment-pill__dot" aria-hidden="true"></span>
                     <span>Ambiente <?= $e($environment) ?></span>
                 </div>
-                <p>Interfaccia operativa v0.7</p>
+                <p>Interfaccia operativa v0.8</p>
             </div>
         </aside>
 
@@ -78,19 +78,25 @@
                     <a class="account-chip<?= $active === 'profile' ? ' is-active' : '' ?>" href="/ui/profile">
                         <span class="account-chip__avatar" aria-hidden="true">OP</span>
                         <span class="account-chip__copy">
-                            <strong>Anteprima operatore</strong>
-                            <small>Sessione non attiva</small>
+                            <strong><?= $e($currentUser?->displayName ?? 'Operatore') ?></strong>
+                            <small><?= $e($currentUser?->role ?? 'sessione attiva') ?></small>
                         </span>
                         <svg class="icon icon--small" aria-hidden="true"><use href="/assets/icons.svg#chevron-down"></use></svg>
                     </a>
+                    <form action="/logout" method="post">
+                        <input type="hidden" name="_csrf_token" value="<?= $e($logoutCsrfToken ?? '') ?>">
+                        <button class="icon-button" type="submit" aria-label="Esci da HAPA">
+                            <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg>
+                        </button>
+                    </form>
                 </div>
             </header>
 
             <div class="preview-banner" role="status" data-preview-banner>
                 <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#shield"></use></svg>
                 <div>
-                    <strong>Interfaccia pronta, dati non ancora collegati</strong>
-                    <span>Le schermate non espongono dati reali né azioni mutative finché autenticazione, autorizzazione e read model non saranno collegati.</span>
+                    <strong>Sessione protetta attiva</strong>
+                    <span>Le funzioni disponibili dipendono dal ruolo; le azioni mutative richiedono CSRF e vengono registrate nell’audit.</span>
                 </div>
                 <button class="icon-button icon-button--compact" type="button" aria-label="Nascondi avviso" data-banner-dismiss>
                     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg>

@@ -1,3 +1,24 @@
+<?php
+$formatMoney = static fn (?int $minor, ?string $currency): string => $minor === null
+    ? '—'
+    : number_format($minor / 100, 2, ',', '.') . ' ' . ($currency ?? 'EUR');
+$formatAge = static function (?int $seconds): string {
+    if ($seconds === null) {
+        return 'Mai sincronizzato';
+    }
+    if ($seconds < 60) {
+        return 'Meno di un minuto fa';
+    }
+    if ($seconds < 3600) {
+        return sprintf('%d min fa', intdiv($seconds, 60));
+    }
+    if ($seconds < 86400) {
+        return sprintf('%d h fa', intdiv($seconds, 3600));
+    }
+
+    return sprintf('%d g fa', intdiv($seconds, 86400));
+};
+?>
 <header class="page-header">
     <div>
         <p class="eyebrow"><?= $e($eyebrow) ?></p>
@@ -23,23 +44,23 @@
 <section class="metric-grid" aria-label="Stato anagrafica prodotti">
     <article class="metric-card metric-card--info">
         <div class="metric-card__top"><span>Prezzo Space</span><span class="metric-card__signal" aria-hidden="true"></span></div>
-        <strong>Dato sorgente</strong>
-        <p>Importo in unità minori, valuta, versione e data di sincronizzazione.</p>
+        <strong><?= $e((string) ($catalogMetrics['total'] ?? 0)) ?></strong>
+        <p>Prodotti censiti nell’anagrafica HAPA.</p>
     </article>
     <article class="metric-card metric-card--info">
         <div class="metric-card__top"><span>Stock Space</span><span class="metric-card__signal" aria-hidden="true"></span></div>
-        <strong>Dato sorgente</strong>
-        <p>Quantità disponibile associata al prodotto e aggiornata tramite eventi versionati.</p>
+        <strong><?= $e((string) ($catalogMetrics['active'] ?? 0)) ?></strong>
+        <p>Prodotti attivi con disponibilità Space consultabile.</p>
     </article>
     <article class="metric-card metric-card--success">
         <div class="metric-card__top"><span>Regole di ricarico</span><span class="metric-card__signal" aria-hidden="true"></span></div>
-        <strong>Gestione HAPA</strong>
-        <p>Percentuale, importo o prezzo fisso con ambito, priorità e soglie.</p>
+        <strong><?= $e((string) ($catalogMetrics['pending_review'] ?? 0)) ?></strong>
+        <p>Nuovi prodotti in attesa di revisione commerciale.</p>
     </article>
     <article class="metric-card metric-card--warning">
         <div class="metric-card__top"><span>Pubblicazione</span><span class="metric-card__signal" aria-hidden="true"></span></div>
-        <strong>Servizio esterno</strong>
-        <p>hapa-automation pubblicherà le offerte tramite RabbitMQ e adapter provider.</p>
+        <strong><?= $e((string) ($catalogMetrics['stale'] ?? 0)) ?></strong>
+        <p>Dati mai osservati o più vecchi di 24 ore.</p>
     </article>
 </section>
 
@@ -88,12 +109,37 @@
             <p class="eyebrow">Anagrafica prodotti</p>
             <h2 id="catalog-items-title">Prodotti, prezzo e stock sincronizzati</h2>
         </div>
-        <span class="status-badge status-badge--neutral">Read model da collegare</span>
+        <span class="status-badge status-badge--success">Read model collegato</span>
     </div>
+    <form class="data-toolbar" method="get" action="/ui/catalog">
+        <label class="search-field">
+            <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg>
+            <input type="search" name="q" value="<?= $e($query ?? '') ?>" placeholder="Cerca SKU, EAN o nome prodotto">
+        </label>
+        <button class="button button--secondary" type="submit">Cerca</button>
+    </form>
     <div class="table-scroll">
         <table class="data-table">
-            <thead><tr><th scope="col">SKU</th><th scope="col">Prodotto</th><th scope="col">Prezzo Space</th><th scope="col">Stock Space</th><th scope="col">Regola ricarico</th><th scope="col">Prezzo finale</th><th scope="col">Sincronizzato</th><th scope="col">Offerte</th></tr></thead>
-            <tbody><tr><td colspan="8"><div class="empty-state"><span class="empty-state__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span><h3>Nessun prodotto sincronizzato</h3><p>I prodotti compariranno dopo il collegamento del consumer RabbitMQ, del repository e del read model autorizzato.</p></div></td></tr></tbody>
+            <thead><tr><th scope="col">SKU</th><th scope="col">Prodotto</th><th scope="col">Costo Space</th><th scope="col">Disponibilità</th><th scope="col">Versione</th><th scope="col">Revisione</th><th scope="col">Età dato</th><th scope="col">Offerte</th></tr></thead>
+            <tbody>
+            <?php if (($catalogItems ?? []) === []): ?>
+                <tr><td colspan="8"><div class="empty-state"><span class="empty-state__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span><h3>Nessun prodotto trovato</h3><p>Il catalogo si popola con le osservazioni versionate ricevute da Space tramite hapa-automation.</p></div></td></tr>
+            <?php else: ?>
+                <?php foreach ($catalogItems as $item): ?>
+                    <?php $statusTone = $item['onboarding_status'] === 'approved' ? 'success' : ($item['onboarding_status'] === 'rejected' ? 'danger' : 'warning'); ?>
+                    <tr>
+                        <td><strong><?= $e($item['sku']) ?></strong><?php if ($item['ean'] !== null): ?><small><?= $e($item['ean']) ?></small><?php endif; ?></td>
+                        <td><?= $e($item['name'] ?? 'Senza nome') ?></td>
+                        <td><?= $e($formatMoney($item['purchase_cost_minor'], $item['currency'])) ?></td>
+                        <td><?= $e($item['available_quantity'] === null ? '—' : (string) $item['available_quantity']) ?></td>
+                        <td><code><?= $e($item['source_version'] ?? '—') ?></code></td>
+                        <td><span class="status-badge status-badge--<?= $e($statusTone) ?>"><?= $e($item['onboarding_status']) ?></span></td>
+                        <td><?= $e($formatAge($item['age_seconds'])) ?></td>
+                        <td><?= $e((string) $item['marketplace_offer_count']) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            </tbody>
         </table>
     </div>
 </section>

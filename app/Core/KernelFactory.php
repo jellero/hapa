@@ -7,6 +7,10 @@ namespace Hapa\Core;
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Health\ReadinessCheck;
 use Hapa\Core\Http\HttpResponsePolicy;
+use Hapa\Core\Security\AuthorizationPolicy;
+use Hapa\Core\Security\SessionManager;
+use Hapa\Core\Ui\AuthenticationController;
+use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\UiController;
 use Closure;
 use Psr\Log\LoggerInterface;
@@ -21,6 +25,10 @@ final class KernelFactory
         private readonly ApplicationConfig $application,
         private readonly LoggerInterface $logger,
         private readonly HttpResponsePolicy $responsePolicy,
+        private readonly AuthenticationController $authentication,
+        private readonly SessionManager $sessions,
+        private readonly AuthorizationPolicy $authorization,
+        private readonly IntegrationConfigurationController $integrationConfiguration,
     ) {
     }
 
@@ -36,7 +44,13 @@ final class KernelFactory
             throw new RuntimeException('config/routes.php deve restituire una Closure.');
         }
 
-        $routes = $routeFactory($this->ui, $this->readiness, $this->application);
+        $routes = $routeFactory(
+            $this->ui,
+            $this->readiness,
+            $this->application,
+            $this->authentication,
+            $this->integrationConfiguration,
+        );
         if (!$routes instanceof RouteCollection) {
             throw new RuntimeException('La route factory deve restituire RouteCollection.');
         }
@@ -46,6 +60,8 @@ final class KernelFactory
             $this->logger,
             $this->application->debug,
             $this->responsePolicy,
+            $this->sessions,
+            $this->authorization,
         );
     }
 }

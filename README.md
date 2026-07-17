@@ -24,7 +24,7 @@ flowchart LR
     Automation -.-> BRT["BRT · futuro"]
 ```
 
-La configurazione non segreta degli account è gestita da HAPA. Credenziali e token sono modificabili dall'interfaccia tramite campi write-only, ma vengono conservati soltanto da Automation e non transitano su RabbitMQ.
+La configurazione non segreta degli account è gestita da HAPA. L'interfaccia corrente rifiuta credenziali e token; i futuri campi write-only saranno abilitati soltanto insieme al canale amministrativo autenticato e allo storage cifrato di Automation. I segreti non transiteranno su RabbitMQ.
 
 ## Proprietà dei dati
 
@@ -74,7 +74,7 @@ Il flusso completo è in [`docs/BUSINESS_FLOWS.md`](docs/BUSINESS_FLOWS.md).
 
 ## Configurazione provider
 
-Endpoint, ambienti, account, cataloghi, contratti, capacità, frequenze e mapping devono essere modificabili da interfaccia amministrativa. Password, client secret e token sono write-only e restano nel secret store di Automation. Il disegno completo è in [`docs/PROVIDER_CONFIGURATION.md`](docs/PROVIDER_CONFIGURATION.md).
+Endpoint, ambienti, account, cataloghi, contratti, capacità, frequenze e mapping sono configurabili dall'interfaccia amministrativa con validazione, versionamento e audit. Password, client secret e token saranno write-only e resteranno nel secret store di Automation; fino a quel gate HAPA li rifiuta. Il disegno completo è in [`docs/PROVIDER_CONFIGURATION.md`](docs/PROVIDER_CONFIGURATION.md).
 
 ## Architettura
 

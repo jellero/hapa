@@ -12,7 +12,7 @@ final readonly class InboxConsumerFactory
 {
     public function __construct(
         private ConnectionFactory $connections,
-        private InboundMessageHandlerRegistry $handlers,
+        private InboundMessageHandlerRegistryFactory $handlerRegistries,
         private Clock $clock,
         private RabbitMqConsumerConfig $configuration,
     ) {
@@ -26,7 +26,7 @@ final readonly class InboxConsumerFactory
             $pdo,
             new RabbitMqReceiver($this->configuration),
             new PostgresInboxRepository($pdo),
-            $this->handlers,
+            $this->handlerRegistries->create($pdo),
             $this->clock,
             $this->configuration,
         );

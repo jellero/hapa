@@ -3,5 +3,5 @@
 declare(strict_types=1);
 
 return [
-    'minimum_version' => 20260717130000,
+    'minimum_version' => 20260717170000,
 ];

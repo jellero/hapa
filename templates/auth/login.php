@@ -7,21 +7,22 @@
     <p>Usa le credenziali del tuo account operativo.</p>
 </div>
 
-<div class="inline-notice inline-notice--info" role="status">
-    <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg>
-    <div>
-        <strong>Autenticazione in preparazione</strong>
-        <span>Il modulo utenti non è ancora collegato: il form è visibile per la verifica dell’interfaccia ma non accetta credenziali.</span>
+<?php if (($error ?? '') !== ''): ?>
+    <div class="inline-notice inline-notice--warning" role="alert">
+        <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#warning"></use></svg>
+        <div><strong>Accesso non riuscito</strong><span><?= $e($error) ?></span></div>
     </div>
-</div>
+<?php endif; ?>
 
-<form class="auth-form" aria-label="Accesso" novalidate>
-    <fieldset disabled>
+<form class="auth-form" action="/login" method="post" aria-label="Accesso">
+    <input type="hidden" name="_csrf_token" value="<?= $e($csrfToken ?? '') ?>">
+    <input type="hidden" name="next" value="<?= $e($next ?? '/ui') ?>">
+    <fieldset>
         <div class="field">
             <label for="email">Email di lavoro</label>
             <div class="input-shell">
                 <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mail"></use></svg>
-                <input id="email" name="email" type="email" autocomplete="username" placeholder="nome@azienda.it">
+                <input id="email" name="email" type="email" autocomplete="username" placeholder="nome@azienda.it" value="<?= $e($email ?? '') ?>" required maxlength="254">
             </div>
         </div>
 
@@ -32,7 +33,7 @@
             </div>
             <div class="input-shell">
                 <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#key"></use></svg>
-                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Inserisci la password" data-password-input>
+                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Inserisci la password" data-password-input required>
                 <button class="input-action" type="button" aria-label="Mostra password" data-password-toggle>
                     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#eye"></use></svg>
                 </button>

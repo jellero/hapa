@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Composition;
 
+use Hapa\Core\Audit\AuditLogger;
 use Hapa\Core\Clock\Clock;
 use Hapa\Core\Clock\SystemClock;
 use Hapa\Core\Configuration\ApplicationConfig;
@@ -18,27 +19,38 @@ use Hapa\Core\Configuration\RedisConfig;
 use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
+use Hapa\Core\Console\UserCreateCommand;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Database\PdoTransactionManager;
 use Hapa\Core\Database\SchemaManifest;
 use Hapa\Core\Database\TransactionManager;
 use Hapa\Core\Health\ReadinessCheck;
 use Hapa\Core\Http\HttpResponsePolicy;
+use Hapa\Core\Integration\IntegrationAccountConfiguration;
+use Hapa\Core\Integration\IntegrationAccountRepository;
 use Hapa\Core\Kernel;
 use Hapa\Core\KernelFactory;
 use Hapa\Core\Logging\LoggerFactory;
+use Hapa\Core\Logging\SensitiveDataRedactor;
 use Hapa\Core\Messaging\InboxConsumerFactory;
-use Hapa\Core\Messaging\InboundMessageHandlerRegistry;
+use Hapa\Core\Messaging\InboundMessageHandlerRegistryFactory;
 use Hapa\Core\Messaging\MessagePublisher;
 use Hapa\Core\Messaging\RabbitMqPublisher;
-use Hapa\Core\Messaging\TransportProbeHandler;
 use Hapa\Core\Outbox\OutboxEnvelopeFactory;
 use Hapa\Core\Outbox\OutboxRelayFactory;
 use Hapa\Core\Outbox\OutboxRepository;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
+use Hapa\Core\Security\AuthorizationPolicy;
+use Hapa\Core\Security\CredentialAuthenticator;
+use Hapa\Core\Security\SessionManager;
+use Hapa\Core\Security\UserRepository;
+use Hapa\Core\Ui\AuthenticationController;
+use Hapa\Core\Ui\CatalogOverview;
+use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
+use Hapa\Modules\Catalog\Application\CatalogReadModel;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
@@ -166,23 +178,24 @@ final readonly class ContainerFactory
 
         // La inbox HAPA è idempotente e deny-by-default. I nuovi eventi
         // automation → HAPA richiedono sempre un handler esplicito.
-        $container->register(TransportProbeHandler::class);
-        $container->setDefinition(
-            InboundMessageHandlerRegistry::class,
-            new Definition(InboundMessageHandlerRegistry::class, [[
-                new Reference(TransportProbeHandler::class),
-            ]]),
-        );
+        $container->register(HapaInboundMessageHandlerRegistryFactory::class);
+        $container->setAlias(
+            InboundMessageHandlerRegistryFactory::class,
+            HapaInboundMessageHandlerRegistryFactory::class,
+        )->setPublic(false);
         $container->register(InboxConsumerFactory::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),
-                new Reference(InboundMessageHandlerRegistry::class),
+                new Reference(InboundMessageHandlerRegistryFactory::class),
                 new Reference(Clock::class),
                 new Reference(RabbitMqConsumerConfig::class),
             ]);
 
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
+        $container->register(CatalogReadModel::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->setAlias(CatalogOverview::class, CatalogReadModel::class)->setPublic(false);
         $container->register(SpaceCatalogObservationHandler::class)
             ->setArguments([
                 new Reference(PDO::class),
@@ -219,10 +232,53 @@ final readonly class ContainerFactory
         $container->register(HttpResponsePolicy::class);
         $container->register(ViewRenderer::class)
             ->setArguments([$basePath . '/templates']);
+        $container->register(SensitiveDataRedactor::class);
+        $container->register(UserRepository::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->register(CredentialAuthenticator::class)
+            ->setArguments([
+                new Reference(UserRepository::class),
+                new Reference(Clock::class),
+            ]);
+        $container->register(SessionManager::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+                $configuration->application->isProduction()
+                    || str_starts_with($configuration->application->appUrl, 'https://'),
+            ]);
+        $container->register(AuthorizationPolicy::class);
+        $container->register(AuditLogger::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+                new Reference(SensitiveDataRedactor::class),
+            ]);
+        $container->register(IntegrationAccountConfiguration::class);
+        $container->register(IntegrationAccountRepository::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+            ]);
         $container->register(UiController::class)
             ->setArguments([
                 new Reference(ViewRenderer::class),
                 $configuration->application->name,
+                new Reference(CatalogOverview::class),
+                new Reference(IntegrationAccountRepository::class),
+                new Reference(IntegrationAccountConfiguration::class),
+            ]);
+        $container->register(AuthenticationController::class)
+            ->setArguments([
+                new Reference(UiController::class),
+                new Reference(CredentialAuthenticator::class),
+                new Reference(SessionManager::class),
+                new Reference(AuditLogger::class),
+            ]);
+        $container->register(IntegrationConfigurationController::class)
+            ->setArguments([
+                new Reference(IntegrationAccountConfiguration::class),
+                new Reference(IntegrationAccountRepository::class),
             ]);
         $container->register(KernelFactory::class)
             ->setArguments([
@@ -231,6 +287,10 @@ final readonly class ContainerFactory
                 new Reference(ApplicationConfig::class),
                 new Reference(LoggerInterface::class),
                 new Reference(HttpResponsePolicy::class),
+                new Reference(AuthenticationController::class),
+                new Reference(SessionManager::class),
+                new Reference(AuthorizationPolicy::class),
+                new Reference(IntegrationConfigurationController::class),
             ]);
         $container->setDefinition(Kernel::class, (new Definition())
             ->setFactory([new Reference(KernelFactory::class), 'create'])
@@ -249,6 +309,12 @@ final readonly class ContainerFactory
             ->setArguments([
                 new Reference(InboxConsumerFactory::class),
                 new Reference(RabbitMqConsumerConfig::class),
+            ])
+            ->setPublic(true);
+        $container->register(UserCreateCommand::class)
+            ->setArguments([
+                new Reference(UserRepository::class),
+                new Reference(Clock::class),
             ])
             ->setPublic(true);
 

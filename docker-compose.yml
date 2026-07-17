@@ -33,7 +33,7 @@ x-app-environment: &app-environment
   RABBITMQ_CONSUMER_DEAD_EXCHANGE: ${RABBITMQ_CONSUMER_DEAD_EXCHANGE:-hapa.dead}
   RABBITMQ_CONSUMER_QUEUE: ${RABBITMQ_CONSUMER_QUEUE:-hapa.inbound.events}
   RABBITMQ_CONSUMER_DEAD_QUEUE: ${RABBITMQ_CONSUMER_DEAD_QUEUE:-hapa.inbound.dead}
-  RABBITMQ_CONSUMER_BINDINGS: ${RABBITMQ_CONSUMER_BINDINGS:-integration.transport.#}
+  RABBITMQ_CONSUMER_BINDINGS: ${RABBITMQ_CONSUMER_BINDINGS:-integration.transport.#,space.catalog.item.observed}
   RABBITMQ_CONSUMER_CONNECT_TIMEOUT: ${RABBITMQ_CONSUMER_CONNECT_TIMEOUT:-5.0}
   RABBITMQ_CONSUMER_READ_WRITE_TIMEOUT: ${RABBITMQ_CONSUMER_READ_WRITE_TIMEOUT:-30.0}
   RABBITMQ_CONSUMER_HEARTBEAT: ${RABBITMQ_CONSUMER_HEARTBEAT:-30}
@@ -72,8 +72,10 @@ services:
 
   outbox-relay:
     build: *php-build
-    environment: *app-environment
-    command: ["php", "bin/console", "outbox:relay"]
+    environment:
+      <<: *app-environment
+      RABBITMQ_ENABLED: "true"
+    command: ["php", "bin/console", "outbox:relay", "--watch"]
     volumes:
       - ./:/var/www/html
     depends_on:
@@ -84,8 +86,10 @@ services:
 
   inbox-consumer:
     build: *php-build
-    environment: *app-environment
-    command: ["php", "bin/console", "inbox:consume"]
+    environment:
+      <<: *app-environment
+      RABBITMQ_CONSUMER_ENABLED: "true"
+    command: ["php", "bin/console", "inbox:consume", "--watch"]
     volumes:
       - ./:/var/www/html
     depends_on:
@@ -93,18 +97,7 @@ services:
         condition: service_healthy
     networks: [backend, messaging]
     profiles: [messaging]
-
-  space-catalog-consumer:
-    build: *php-build
-    environment: *app-environment
-    command: ["php", "bin/console", "space:catalog:consume"]
-    volumes:
-      - ./:/var/www/html
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks: [backend, messaging]
-    profiles: [messaging]
+    restart: unless-stopped
 
   nginx:
     build:
@@ -119,7 +112,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health/live || exit 1"]
       interval: 15s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   postgres:

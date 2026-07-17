@@ -3,18 +3,17 @@
 declare(strict_types=1);
 
 use Hapa\Core\Configuration\EnvironmentReader;
-use RuntimeException;
 
 require_once __DIR__ . '/vendor/autoload.php';
 
 $selectedEnvironment = strtolower(EnvironmentReader::value('APP_ENV', 'development'));
 if (!in_array($selectedEnvironment, ['development', 'testing', 'production'], true)) {
-    throw new RuntimeException(sprintf('Ambiente Phinx non valido: %s', $selectedEnvironment));
+    throw new \RuntimeException(sprintf('Ambiente Phinx non valido: %s', $selectedEnvironment));
 }
 
 $password = EnvironmentReader::secret('DB_PASSWORD', '');
 if ($selectedEnvironment === 'production' && strlen($password) < 16) {
-    throw new RuntimeException('DB_PASSWORD deve essere configurata esplicitamente in produzione.');
+    throw new \RuntimeException('DB_PASSWORD deve essere configurata esplicitamente in produzione.');
 }
 
 $connection = static fn (string $defaultDatabase): array => [

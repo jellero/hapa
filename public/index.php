@@ -11,9 +11,17 @@ use Symfony\Component\HttpFoundation\Response;
 $basePath = dirname(__DIR__);
 require $basePath . '/vendor/autoload.php';
 
+$request = Request::createFromGlobals();
+if ($request->isMethod('GET') && $request->getPathInfo() === '/health/live') {
+    $correlationId = bin2hex(random_bytes(16));
+    $response = new JsonResponse(['status' => 'ok', 'correlation_id' => $correlationId]);
+    (new HttpResponsePolicy())->apply($response, $correlationId)->send();
+
+    return;
+}
+
 try {
     $bootstrap = Bootstrap::initialize($basePath);
-    $request = Request::createFromGlobals();
     $response = $bootstrap->kernel()->handle($request);
 } catch (Throwable $exception) {
     $failureId = bin2hex(random_bytes(8));

@@ -63,7 +63,7 @@ final class ConfigurationLoader
             EnvironmentReader::value('RABBITMQ_CONSUMER_DEAD_EXCHANGE', 'hapa.dead'),
             EnvironmentReader::value('RABBITMQ_CONSUMER_QUEUE', 'hapa.inbound.events'),
             EnvironmentReader::value('RABBITMQ_CONSUMER_DEAD_QUEUE', 'hapa.inbound.dead'),
-            self::list('RABBITMQ_CONSUMER_BINDINGS', 'integration.transport.#'),
+            self::list('RABBITMQ_CONSUMER_BINDINGS', 'integration.transport.#,space.catalog.item.observed'),
             self::decimal('RABBITMQ_CONSUMER_CONNECT_TIMEOUT', '5.0'),
             self::decimal('RABBITMQ_CONSUMER_READ_WRITE_TIMEOUT', '30.0'),
             self::integer('RABBITMQ_CONSUMER_HEARTBEAT', '30'),

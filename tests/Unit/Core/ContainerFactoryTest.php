@@ -20,6 +20,7 @@ use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Kernel;
+use Hapa\Core\Messaging\InboundMessageHandlerRegistryFactory;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use PHPUnit\Framework\TestCase;
 
@@ -39,6 +40,7 @@ final class ContainerFactoryTest extends TestCase
         self::assertTrue($container->getDefinition(InboxConsumeCommand::class)->isPublic());
         self::assertFalse($container->getDefinition(PriceCalculator::class)->isPublic());
         self::assertFalse($container->hasDefinition('Hapa\\Core\\Console\\AutomationRunCommand'));
+        self::assertTrue($container->hasAlias(InboundMessageHandlerRegistryFactory::class));
     }
 
     public function testTheContainerCompilesAndBuildsHttpAndCliEntryPoints(): void
@@ -48,8 +50,15 @@ final class ContainerFactoryTest extends TestCase
         self::assertTrue($container->isCompiled());
         self::assertInstanceOf(Kernel::class, $container->get(Kernel::class));
         self::assertInstanceOf(SystemCheckCommand::class, $container->get(SystemCheckCommand::class));
-        self::assertInstanceOf(OutboxRelayCommand::class, $container->get(OutboxRelayCommand::class));
-        self::assertInstanceOf(InboxConsumeCommand::class, $container->get(InboxConsumeCommand::class));
+        $relay = $container->get(OutboxRelayCommand::class);
+        self::assertInstanceOf(OutboxRelayCommand::class, $relay);
+        self::assertTrue($relay->getDefinition()->hasOption('watch'));
+        self::assertTrue($relay->getDefinition()->hasOption('poll-seconds'));
+
+        $consumer = $container->get(InboxConsumeCommand::class);
+        self::assertInstanceOf(InboxConsumeCommand::class, $consumer);
+        self::assertTrue($consumer->getDefinition()->hasOption('watch'));
+        self::assertTrue($consumer->getDefinition()->hasOption('poll-seconds'));
     }
 
     private function configuration(): ConfigurationSet

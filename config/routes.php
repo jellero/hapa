@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Health\ReadinessCheck;
+use Hapa\Core\Ui\AuthenticationController;
+use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\UiController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,8 +17,29 @@ return static function (
     UiController $ui,
     ReadinessCheck $readiness,
     ApplicationConfig $application,
+    ?AuthenticationController $authentication = null,
+    ?IntegrationConfigurationController $integrationConfiguration = null,
 ): RouteCollection {
     $routes = new RouteCollection();
+    $unavailableAuthentication = static fn (): JsonResponse => new JsonResponse(
+        ['error' => 'Autenticazione non configurata'],
+        Response::HTTP_SERVICE_UNAVAILABLE,
+    );
+    $loginController = $authentication instanceof AuthenticationController
+        ? $authentication->login(...)
+        : $unavailableAuthentication;
+    $logoutController = $authentication instanceof AuthenticationController
+        ? $authentication->logout(...)
+        : $unavailableAuthentication;
+    $createIntegrationController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->create(...)
+        : $unavailableAuthentication;
+    $updateIntegrationController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->update(...)
+        : $unavailableAuthentication;
+    $retireIntegrationController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->retire(...)
+        : $unavailableAuthentication;
 
     $routes->add('home', new Route(
         '/',
@@ -26,38 +49,64 @@ return static function (
             'interface' => '/ui',
             'automation_service' => 'jellero/hapa-automation',
             'correlation_id' => $request->attributes->getString('correlation_id'),
-        ])],
+        ]), '_public' => true],
         methods: ['GET'],
     ));
 
-    $routes->add('login', new Route('/login', ['_controller' => $ui->login(...)], methods: ['GET']));
-    $routes->add('password_recovery', new Route('/password/recovery', ['_controller' => $ui->recovery(...)], methods: ['GET']));
-    $routes->add('ui_dashboard', new Route('/ui', ['_controller' => $ui->dashboard(...)], methods: ['GET']));
-    $routes->add('ui_customers', new Route('/ui/customers', ['_controller' => $ui->customers(...)], methods: ['GET']));
+    $routes->add('login', new Route('/login', ['_controller' => $ui->login(...), '_public' => true, '_session' => true], methods: ['GET']));
+    $routes->add('login_submit', new Route('/login', [
+        '_controller' => $loginController,
+        '_public' => true,
+        '_session' => true,
+        '_csrf_action' => 'login',
+    ], methods: ['POST']));
+    $routes->add('logout', new Route('/logout', [
+        '_controller' => $logoutController,
+        '_permission' => 'profile.view',
+        '_csrf_action' => 'logout',
+    ], methods: ['POST']));
+    $routes->add('password_recovery', new Route('/password/recovery', ['_controller' => $ui->recovery(...), '_public' => true], methods: ['GET']));
+    $routes->add('ui_dashboard', new Route('/ui', ['_controller' => $ui->dashboard(...), '_permission' => 'ui.view'], methods: ['GET']));
+    $routes->add('ui_customers', new Route('/ui/customers', ['_controller' => $ui->customers(...), '_permission' => 'customers.view'], methods: ['GET']));
     $routes->add('ui_customer_detail', new Route(
         '/ui/customers/{customerId}',
-        ['_controller' => $ui->customerDetail(...)],
+        ['_controller' => $ui->customerDetail(...), '_permission' => 'customers.view'],
         requirements: ['customerId' => '[A-Za-z0-9._-]{3,64}'],
         methods: ['GET'],
     ));
-    $routes->add('ui_orders', new Route('/ui/orders', ['_controller' => $ui->orders(...)], methods: ['GET']));
-    $routes->add('ui_catalog', new Route('/ui/catalog', ['_controller' => $ui->catalog(...)], methods: ['GET']));
+    $routes->add('ui_orders', new Route('/ui/orders', ['_controller' => $ui->orders(...), '_permission' => 'orders.view'], methods: ['GET']));
+    $routes->add('ui_catalog', new Route('/ui/catalog', ['_controller' => $ui->catalog(...), '_permission' => 'catalog.view'], methods: ['GET']));
     $routes->add('ui_order_detail', new Route(
         '/ui/orders/{orderId}',
-        ['_controller' => $ui->orderDetail(...)],
+        ['_controller' => $ui->orderDetail(...), '_permission' => 'orders.view'],
         requirements: ['orderId' => '[^/]{1,160}'],
         methods: ['GET'],
     ));
-    $routes->add('ui_picking', new Route('/ui/picking', ['_controller' => $ui->picking(...)], methods: ['GET']));
-    $routes->add('ui_shipments', new Route('/ui/shipments', ['_controller' => $ui->shipments(...)], methods: ['GET']));
-    $routes->add('ui_integrations', new Route('/ui/integrations', ['_controller' => $ui->integrations(...)], methods: ['GET']));
-    $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...)], methods: ['GET']));
-    $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...)], methods: ['GET']));
-    $routes->add('ui_settings', new Route('/ui/settings', ['_controller' => $ui->settings(...)], methods: ['GET']));
-    $routes->add('ui_profile', new Route('/ui/profile', ['_controller' => $ui->profile(...)], methods: ['GET']));
+    $routes->add('ui_picking', new Route('/ui/picking', ['_controller' => $ui->picking(...), '_permission' => 'orders.view'], methods: ['GET']));
+    $routes->add('ui_shipments', new Route('/ui/shipments', ['_controller' => $ui->shipments(...), '_permission' => 'shipping.view'], methods: ['GET']));
+    $routes->add('ui_integrations', new Route('/ui/integrations', ['_controller' => $ui->integrations(...), '_permission' => 'integrations.view'], methods: ['GET']));
+    $routes->add('ui_integration_create', new Route('/ui/integrations', [
+        '_controller' => $createIntegrationController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.create',
+    ], methods: ['POST']));
+    $routes->add('ui_integration_update', new Route('/ui/integrations/{accountId}', [
+        '_controller' => $updateIntegrationController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.update.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_retire', new Route('/ui/integrations/{accountId}/retire', [
+        '_controller' => $retireIntegrationController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.retire.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...), '_permission' => 'users.manage'], methods: ['GET']));
+    $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...), '_permission' => 'audit.view'], methods: ['GET']));
+    $routes->add('ui_settings', new Route('/ui/settings', ['_controller' => $ui->settings(...), '_permission' => 'settings.manage'], methods: ['GET']));
+    $routes->add('ui_profile', new Route('/ui/profile', ['_controller' => $ui->profile(...), '_permission' => 'profile.view'], methods: ['GET']));
     $routes->add('ui_not_found', new Route(
         '/ui/{path}',
-        ['_controller' => $ui->notFound(...)],
+        ['_controller' => $ui->notFound(...), '_permission' => 'ui.view'],
         requirements: ['path' => '.+'],
         methods: ['GET'],
     ));
@@ -67,7 +116,7 @@ return static function (
         ['_controller' => static fn (Request $request): JsonResponse => new JsonResponse([
             'status' => 'ok',
             'correlation_id' => $request->attributes->getString('correlation_id'),
-        ])],
+        ]), '_public' => true],
         methods: ['GET'],
     ));
 
@@ -88,7 +137,7 @@ return static function (
                 $payload,
                 $result['ready'] ? Response::HTTP_OK : Response::HTTP_SERVICE_UNAVAILABLE,
             );
-        }],
+        }, '_public' => true],
         methods: ['GET'],
     ));
 

@@ -40,30 +40,28 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/{path}', $routes->get('ui_not_found')?->getPath());
     }
 
-    public function testTheKernelServesTheProductRegistryPage(): void
+    public function testTheKernelProtectsTheProductRegistryPage(): void
     {
         $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
         $response = $kernel->handle(Request::create('/ui/catalog'));
 
-        self::assertSame(200, $response->getStatusCode());
-        self::assertStringContainsString('Da Space all’offerta marketplace', (string) $response->getContent());
-        self::assertStringContainsString('Nuova regola di ricarico', (string) $response->getContent());
-        self::assertStringContainsString('Stock Space', (string) $response->getContent());
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame('/login?next=%2Fui%2Fcatalog', $response->headers->get('Location'));
     }
 
-    public function testTheRemovedAutomationPathReturnsNotFound(): void
+    public function testTheRemovedAutomationPathDoesNotBypassAuthentication(): void
     {
         $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
         $response = $kernel->handle(Request::create('/ui/automation'));
 
-        self::assertSame(404, $response->getStatusCode());
-        self::assertStringContainsString('Pagina non trovata', (string) $response->getContent());
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame('/login?next=%2Fui%2Fautomation', $response->headers->get('Location'));
     }
 
-    public function testTheKernelServesTheDashboardWithSecurityHeaders(): void
+    public function testTheKernelServesTheLoginWithSecurityHeaders(): void
     {
         $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
-        $response = $kernel->handle(Request::create('/ui'));
+        $response = $kernel->handle(Request::create('/login'));
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
@@ -71,28 +69,24 @@ final class UiRoutesTest extends TestCase
         self::assertStringContainsString('Centro operativo', (string) $response->getContent());
     }
 
-    public function testTheKernelServesCustomerMasterDataPages(): void
+    public function testTheKernelProtectsCustomerMasterDataPages(): void
     {
         $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
 
         $collection = $kernel->handle(Request::create('/ui/customers'));
-        self::assertSame(200, $collection->getStatusCode());
-        self::assertStringContainsString('Nessun cliente disponibile', (string) $collection->getContent());
+        self::assertSame(303, $collection->getStatusCode());
 
         $detail = $kernel->handle(Request::create('/ui/customers/CUST-0001'));
-        self::assertSame(200, $detail->getStatusCode());
-        self::assertStringContainsString('Cliente CUST-0001', (string) $detail->getContent());
-        self::assertStringContainsString('Identità esterne', (string) $detail->getContent());
+        self::assertSame(303, $detail->getStatusCode());
     }
 
-    public function testTheKernelServesTheBrandedNotFoundPageForNestedUiPaths(): void
+    public function testNestedUiPathsRemainProtected(): void
     {
         $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
         $response = $kernel->handle(Request::create('/ui/not/a/real/page'));
 
-        self::assertSame(404, $response->getStatusCode());
-        self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
-        self::assertStringContainsString('Pagina non trovata', (string) $response->getContent());
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame('/login?next=%2Fui%2Fnot%2Fa%2Freal%2Fpage', $response->headers->get('Location'));
     }
 
     private function routes(): RouteCollection

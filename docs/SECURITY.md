@@ -205,7 +205,7 @@ La configurazione production impone:
 - log strutturati con redazione;
 - nessuna credenziale provider nei container HAPA.
 
-Il Compose HAPA non avvia RabbitMQ, scheduler o worker provider. Il broker appartiene allo stack `hapa-automation`; soltanto il servizio one-shot `outbox-relay` entra nella rete esterna `hapa-messaging`. PostgreSQL e Redis non sono collegati a tale rete.
+Il Compose HAPA non avvia RabbitMQ, scheduler o worker provider. Il broker appartiene allo stack `hapa-automation`; soltanto i servizi continui `outbox-relay` e `inbox-consumer` entrano nella rete esterna `hapa-messaging`. PostgreSQL e Redis non sono collegati a tale rete.
 
 ## Logging, audit e osservabilità
 
