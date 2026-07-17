@@ -32,24 +32,37 @@ final class CatalogSynchronizationSchemaTest extends TestCase
         }
     }
 
-    public function testProductRegistryStoresSpacePriceAndStock(): void
+    public function testSupplierOfferStoresSpaceCostAndAvailability(): void
     {
         $suffix = bin2hex(random_bytes(6));
         $statement = $this->pdo->prepare(<<<'SQL'
-INSERT INTO catalog_items (
-    sku, currency, space_price_minor, space_available_quantity, safety_stock
-) VALUES (
-    :sku, 'EUR', 1999, 5, 3
-) RETURNING space_price_minor, space_available_quantity, sellable_quantity
+WITH product AS (
+    INSERT INTO catalog_items (sku, currency, safety_stock)
+    VALUES (:sku, 'EUR', 3)
+    RETURNING id
+), supplier AS (
+    SELECT id FROM suppliers WHERE code = 'space'
+)
+INSERT INTO supplier_catalog_items (
+    supplier_id, catalog_item_id, external_item_id, purchase_cost_minor,
+    currency, available_quantity, source_version, observed_at
+)
+SELECT supplier.id, product.id, :external_item_id, 1999,
+       'EUR', 5, :source_version, NOW()
+FROM supplier, product
+RETURNING purchase_cost_minor, available_quantity
 SQL);
-        $statement->execute(['sku' => 'SKU-' . $suffix]);
-        /** @var array{space_price_minor: int|string, space_available_quantity: int|string, sellable_quantity: int|string}|false $item */
+        $statement->execute([
+            'sku' => 'SKU-' . $suffix,
+            'external_item_id' => 'SPACE-' . $suffix,
+            'source_version' => 'version-' . $suffix,
+        ]);
+        /** @var array{purchase_cost_minor: int|string, available_quantity: int|string}|false $item */
         $item = $statement->fetch();
 
         self::assertIsArray($item);
-        self::assertSame(1999, (int) $item['space_price_minor']);
-        self::assertSame(5, (int) $item['space_available_quantity']);
-        self::assertSame(2, (int) $item['sellable_quantity']);
+        self::assertSame(1999, (int) $item['purchase_cost_minor']);
+        self::assertSame(5, (int) $item['available_quantity']);
     }
 
     public function testPricingRuleScopeMustMatchItsTargets(): void

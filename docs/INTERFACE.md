@@ -59,7 +59,7 @@ Deve mostrare:
 
 - SKU e identificativi commerciali;
 - identificativo Space;
-- prezzo base Space;
+- costo di acquisto e disponibilità Space;
 - stock Space;
 - versione e data di sincronizzazione;
 - regola di ricarico applicata;

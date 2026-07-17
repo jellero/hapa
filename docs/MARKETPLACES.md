@@ -1,12 +1,12 @@
 # Strategia integrazioni marketplace
 
-Ultimo riesame: 16 luglio 2026.
+Ultimo riesame: 17 luglio 2026.
 
 ## 1. Scopo e stato
 
 Questo documento definisce il modello applicativo HAPA per canali, connettori e account marketplace. L’esecuzione tecnica degli adapter appartiene al repository autonomo `jellero/hapa-automation`.
 
-Nessun marketplace è operativo. Ogni integrazione resta pianificata finché non supera discovery, test di contratto, sandbox, sicurezza e collaudo end-to-end.
+IBS è il canale commercialmente attivo di HAPA. L’attuale codebase non contiene ancora un adapter IBS reale verificato end-to-end: la migrazione del flusso esistente verso questa architettura deve quindi avvenire come pilot controllato. Temu e Amazon sono i prossimi canali pianificati.
 
 La distinzione fondamentale è:
 
@@ -14,7 +14,7 @@ La distinzione fondamentale è:
 - **connettore**: il percorso tecnico usato per comunicare con il canale;
 - **account venditore**: la singola configurazione autorizzata, con perimetro e policy propri.
 
-SellRapido è un connettore aggregatore, non un canale. Amazon, eMAG, Temu e IBS sono canali. Per uno stesso account e canale può essere attivo un solo writer per capacità.
+SellRapido, se usato, è un connettore aggregatore, non un canale. Amazon, Temu e IBS sono canali. Per uno stesso account e canale può essere attivo un solo writer per capacità.
 
 ## 2. Ownership
 
@@ -43,11 +43,10 @@ HAPA non importa codice adapter, non include il Compose del servizio e non acced
 
 | Elemento | Ruolo applicativo | Esecuzione futura | Stato |
 |---|---|---|---|
-| SellRapido | connettore aggregatore | adapter in `hapa-automation` | pianificato |
-| Amazon | canale di vendita | adapter diretto o aggregatore verificato | pianificato |
-| eMAG | canale di vendita | adapter diretto o aggregatore verificato | pianificato |
-| Temu | canale di vendita | percorso partner formalmente supportato | pianificato |
-| IBS | canale di vendita | SellRapido o adapter diretto verificato | pianificato |
+| IBS | canale di vendita corrente | adapter diretto o connettore esistente da verificare | business attivo, integrazione HAPA da migrare |
+| Temu | prossimo canale | percorso partner formalmente supportato | pianificato |
+| Amazon | prossimo canale | adapter diretto o aggregatore verificato | pianificato |
+| SellRapido | eventuale connettore aggregatore | adapter in `hapa-automation` | da confermare per account/capacità |
 
 La scelta del percorso avviene per singolo account e capacità. Non vengono mantenuti due import o due publisher concorrenti sulla stessa coppia account-canale.
 
@@ -56,8 +55,8 @@ La scelta del percorso avviene per singolo account e capacità. Non vengono mant
 Codici applicativi iniziali:
 
 ```text
-channel:   amazon | emag | temu | ibs
-connector: sellrapido | amazon | emag | temu
+channel:   ibs | temu | amazon
+connector: ibs | temu | amazon | sellrapido
 ```
 
 L’identità esterna di un ordine comprende almeno:
@@ -93,7 +92,7 @@ Ordini:
 
 ```text
 hapa-automation importa dal provider
-  -> marketplace.order.received
+  -> marketplace.order.observed
   -> HAPA persiste ordine e cliente
   -> HAPA produce eventuali comandi
   -> hapa-automation esegue accettazione/invio/tracking
@@ -110,7 +109,7 @@ HAPA calcola e versiona l’offerta
   -> HAPA applica stato e versione remota
 ```
 
-I nomi definitivi, routing key e payload devono essere congelati in test di contratto condivisi prima dell’implementazione.
+I comandi contengono prezzo e quantità già decisi da HAPA. Automation non riceve le regole di ricarico e non ricalcola il prezzo. Routing key e payload devono essere congelati in test di contratto condivisi prima dell’attivazione.
 
 ## 7. Gate di discovery
 
@@ -161,9 +160,10 @@ L’invio di tracking e fulfilment continua sul percorso proprietario dell’ord
 
 ## 10. Stato verificato
 
+- IBS è il canale business attivo, ma l’adapter reale non è ancora presente in questa codebase;
 - i tipi canale/connettore e i contratti iniziali sono presenti in HAPA;
 - `hapa-automation` dispone della foundation RabbitMQ e PostgreSQL;
 - i job provider sono disabilitati;
 - non esistono adapter reali né account sandbox configurati;
 - relay/consumer HAPA e test di contratto congiunti sono ancora mancanti;
-- nessun flusso marketplace deve essere descritto come operativo.
+- nessun adapter di questa codebase deve essere descritto come operativo prima del pilot IBS e della riconciliazione con il flusso oggi in uso.

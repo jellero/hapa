@@ -41,7 +41,8 @@ final readonly class OutboxRelay
         foreach ($messages as $message) {
             try {
                 $this->publisher->publish(
-                    $message->eventType,
+                    $message->exchangeName,
+                    $message->routingKey ?? $message->eventType,
                     $this->envelopes->create($message),
                 );
                 $this->repository->complete($message, $this->clock->now());

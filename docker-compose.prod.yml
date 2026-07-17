@@ -90,6 +90,29 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
+  space-catalog-consumer:
+    image: hapa-php:${IMAGE_TAG:?Set IMAGE_TAG}
+    environment: *app-environment
+    command: ["php", "bin/console", "space:catalog:consume"]
+    secrets: [db_password, redis_password, rabbitmq_password]
+    user: www-data
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=32m
+    volumes:
+      - app_storage:/var/www/html/storage
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [backend, messaging]
+    profiles: [messaging]
+    restart: unless-stopped
+    stop_grace_period: 20s
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+
   migration:
     image: hapa-migration:${IMAGE_TAG:?Set IMAGE_TAG}
     build:

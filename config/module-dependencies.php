@@ -9,6 +9,7 @@ return [
     'Gls' => ['Shipping'],
     'Marketplace' => ['Catalog'],
     'Orders' => [],
+    'Procurement' => [],
     'Shipping' => [],
     'Space' => ['Catalog'],
 ];

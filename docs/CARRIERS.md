@@ -1,6 +1,6 @@
 # Corrieri e spedizioni
 
-Ultimo riesame: 16 luglio 2026.
+Ultimo riesame: 17 luglio 2026.
 
 Questo documento definisce il confine applicativo HAPA per spedizioni, GLS e BRT. L’esecuzione degli adapter corriere appartiene al repository autonomo `jellero/hapa-automation`.
 
@@ -11,12 +11,13 @@ Questo documento definisce il confine applicativo HAPA per spedizioni, GLS e BRT
 | contratto normalizzato Shipping | HAPA | implementato come DTO e porta applicativa |
 | decisione di predisporre la spedizione | HAPA | pianificata |
 | persistenza applicativa di colli, tracking e stato | HAPA | parziale |
-| adapter GLS | `hapa-automation` | non implementato |
+| flusso GLS | business HAPA | richiesto per l’operatività corrente |
+| adapter GLS nella nuova codebase | `hapa-automation` | non implementato e da migrare/collaudare |
 | adapter BRT | `hapa-automation` | non implementato |
 | creazione label e riconciliazione provider | `hapa-automation` | non implementata |
 | applicazione dell’esito in HAPA | HAPA | non implementata |
 
-La presenza di GLS e BRT nei contratti o nell’interfaccia non dichiara operativa alcuna integrazione.
+GLS è il primo corriere del flusso HAPA; BRT è futuro. La presenza di un processo GLS esterno già usato dall’azienda non rende automaticamente operativo l’adapter di questa codebase: la migrazione richiede sandbox, riconciliazione e pilot.
 
 ## Ownership
 
@@ -71,6 +72,8 @@ operatore o caso d’uso HAPA
 ```
 
 Controller e route non chiamano direttamente i provider. HAPA non persiste tentativi tecnici o segreti corriere; conserva soltanto lo stato applicativo necessario al dominio e all’operatore.
+
+Il binario dell’etichetta non transita nei messaggi o nei log. L’esito contiene un riferimento controllato, formato e checksum; HAPA autorizza stampa e ristampa senza creare una seconda spedizione.
 
 ## Idempotenza
 

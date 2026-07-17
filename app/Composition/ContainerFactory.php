@@ -37,6 +37,9 @@ use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
+use Hapa\Modules\Space\Application\SpaceCatalogConsumeCommand;
+use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
+use Hapa\Modules\Space\Infrastructure\Messaging\RabbitMqSpaceCatalogConsumer;
 use PDO;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -138,6 +141,20 @@ final readonly class ContainerFactory
 
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
+        $container->register(SpaceCatalogObservationHandler::class)
+            ->setArguments([
+                new Reference(PDO::class),
+                new Reference(TransactionManager::class),
+            ]);
+        $container->register(RabbitMqSpaceCatalogConsumer::class)
+            ->setArguments([new Reference(RabbitMqConfig::class)]);
+        $container->register(SpaceCatalogConsumeCommand::class)
+            ->setArguments([
+                new Reference(RabbitMqSpaceCatalogConsumer::class),
+                new Reference(SpaceCatalogObservationHandler::class),
+                new Reference(RabbitMqConfig::class),
+            ])
+            ->setPublic(true);
         $container->register(PostgresOrderRepository::class)
             ->setArguments([
                 new Reference(PDO::class),

@@ -26,6 +26,8 @@ final readonly class ClaimedOutboxMessage
         public string $lockToken,
         public DateTimeImmutable $availableAt,
         public DateTimeImmutable $createdAt,
+        public string $exchangeName = 'hapa.events',
+        public ?string $routingKey = null,
     ) {
     }
 }

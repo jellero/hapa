@@ -17,6 +17,9 @@ final readonly class SpaceCatalogItem
         public int $availableQuantity,
         public string $sourceVersion,
         public DateTimeImmutable $observedAt,
+        public ?string $ean = null,
+        public ?string $name = null,
+        public ?string $description = null,
     ) {
         if (
             trim($sku) !== $sku || $sku === '' || strlen($sku) > 160
@@ -31,6 +34,22 @@ final readonly class SpaceCatalogItem
 
         if (trim($sourceVersion) !== $sourceVersion || $sourceVersion === '' || strlen($sourceVersion) > 160) {
             throw new InvalidArgumentException('La versione sorgente Space è obbligatoria.');
+        }
+
+        foreach (['EAN' => $ean, 'nome' => $name, 'descrizione' => $description] as $field => $value) {
+            if ($value !== null && (trim($value) !== $value || $value === '')) {
+                throw new InvalidArgumentException(sprintf('Il campo %s Space non è valido.', $field));
+            }
+        }
+
+        if ($ean !== null && strlen($ean) > 32) {
+            throw new InvalidArgumentException('EAN Space troppo lungo.');
+        }
+        if ($name !== null && strlen($name) > 255) {
+            throw new InvalidArgumentException('Nome prodotto Space troppo lungo.');
+        }
+        if ($description !== null && strlen($description) > 10000) {
+            throw new InvalidArgumentException('Descrizione prodotto Space troppo lunga.');
         }
     }
 }

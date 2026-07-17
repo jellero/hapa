@@ -2,17 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Hapa\Core\Messaging;
+namespace Hapa\Modules\Space\Infrastructure\Messaging;
 
 use Hapa\Core\Configuration\RabbitMqConfig;
+use Hapa\Core\Messaging\MessageEnvelope;
+use InvalidArgumentException;
+use JsonException;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
-use PhpAmqpLib\Message\AMQPMessage;
-use RuntimeException;
+use PhpAmqpLib\Wire\AMQPTable;
 use Throwable;
 
-final class RabbitMqPublisher implements MessagePublisher
+final class RabbitMqSpaceCatalogConsumer
 {
+    private const EXCHANGE = 'hapa.events';
+    private const DEAD_EXCHANGE = 'hapa.dead';
+    private const QUEUE = 'hapa.space-catalog.observations';
+    private const ROUTING_KEY = 'space.catalog.item.observed';
+
     private ?AMQPStreamConnection $connection = null;
     private ?AMQPChannel $channel = null;
 
@@ -20,42 +27,27 @@ final class RabbitMqPublisher implements MessagePublisher
     {
     }
 
-    public function publish(string $exchangeName, string $routingKey, MessageEnvelope $message): void
+    /** @param callable(MessageEnvelope): void $consumer */
+    public function consumeOne(callable $consumer): bool
     {
-        if (!$this->configuration->enabled) {
-            throw new RuntimeException('Il relay RabbitMQ è disabilitato.');
-        }
-
-        if (!in_array($exchangeName, ['hapa.events', 'hapa.commands'], true)) {
-            throw new RuntimeException('Exchange RabbitMQ non supportato.');
-        }
-
-        if (trim($routingKey) === '') {
-            throw new RuntimeException('La routing key RabbitMQ è obbligatoria.');
-        }
-
         $channel = $this->channel();
-        $channel->exchange_declare($exchangeName, 'topic', false, true, false);
-        $body = $message->toJson();
-        $amqpMessage = new AMQPMessage($body, [
-            'content_type' => 'application/json',
-            'content_encoding' => 'utf-8',
-            'delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT,
-            'message_id' => $message->messageId,
-            'correlation_id' => $message->correlationId,
-            'timestamp' => $message->occurredAt->getTimestamp(),
-            'type' => $message->eventType,
-            'app_id' => 'hapa',
-        ]);
+        $message = $channel->basic_get(self::QUEUE, false);
+        if ($message === null) {
+            return false;
+        }
 
-        $channel->basic_publish(
-            $amqpMessage,
-            $exchangeName,
-            $routingKey,
-            false,
-            false,
-        );
-        $channel->wait_for_pending_acks_returns($this->configuration->readWriteTimeout);
+        try {
+            $consumer(MessageEnvelope::fromJson($message->getBody()));
+            $channel->basic_ack($message->getDeliveryTag());
+        } catch (InvalidArgumentException | JsonException $exception) {
+            $channel->basic_reject($message->getDeliveryTag(), false);
+            throw $exception;
+        } catch (Throwable $exception) {
+            $channel->basic_nack($message->getDeliveryTag(), false, true);
+            throw $exception;
+        }
+
+        return true;
     }
 
     public function close(): void
@@ -106,7 +98,18 @@ final class RabbitMqPublisher implements MessagePublisher
             $this->configuration->heartbeat,
         );
         $this->channel = $this->connection->channel();
-        $this->channel->confirm_select();
+        $this->channel->exchange_declare(self::EXCHANGE, 'topic', false, true, false);
+        $this->channel->exchange_declare(self::DEAD_EXCHANGE, 'topic', false, true, false);
+        $this->channel->queue_declare(
+            self::QUEUE,
+            false,
+            true,
+            false,
+            false,
+            false,
+            new AMQPTable(['x-dead-letter-exchange' => self::DEAD_EXCHANGE]),
+        );
+        $this->channel->queue_bind(self::QUEUE, self::EXCHANGE, self::ROUTING_KEY);
 
         return $this->channel;
     }

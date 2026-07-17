@@ -73,13 +73,13 @@ final class OrderTransactionalOutboxTest extends TestCase
         $repository->save($loaded, 1);
 
         $statement = $this->pdo->prepare(<<<'SQL'
-SELECT event_type, schema_version, correlation_id, status, payload::text AS payload
+SELECT event_type, exchange_name, routing_key, schema_version, correlation_id, status, payload::text AS payload
 FROM outbox_messages
 WHERE aggregate_id = :order_number
 ORDER BY id
 SQL);
         $statement->execute(['order_number' => (string) $number]);
-        /** @var list<array{event_type: string, schema_version: int|string, correlation_id: string, status: string, payload: string}> $messages */
+        /** @var list<array{event_type: string, exchange_name: string, routing_key: string, schema_version: int|string, correlation_id: string, status: string, payload: string}> $messages */
         $messages = $statement->fetchAll();
 
         self::assertCount(2, $messages);
@@ -87,6 +87,8 @@ SQL);
         self::assertSame('pending', $messages[1]['status']);
         self::assertSame('order.changed', $messages[0]['event_type']);
         self::assertSame('order.changed', $messages[1]['event_type']);
+        self::assertSame('hapa.events', $messages[0]['exchange_name']);
+        self::assertSame('order.changed', $messages[0]['routing_key']);
         self::assertSame(1, (int) $messages[0]['schema_version']);
         self::assertNotSame('', $messages[0]['correlation_id']);
 
