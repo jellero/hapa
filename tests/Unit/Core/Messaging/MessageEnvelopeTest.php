@@ -63,4 +63,20 @@ final class MessageEnvelopeTest extends TestCase
             'payload' => ['probe_id' => 'probe-1'],
         ], JSON_THROW_ON_ERROR));
     }
+
+    public function testItRejectsAnInvalidOccurredAtAsAnInvalidEnvelope(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('occurred_at deve essere una data valida.');
+
+        MessageEnvelope::fromJson(json_encode([
+            'message_id' => 'message-1',
+            'event_type' => 'integration.transport.probe',
+            'schema_version' => 1,
+            'occurred_at' => 'not-a-date',
+            'correlation_id' => 'correlation-1',
+            'causation_id' => null,
+            'payload' => ['probe_id' => 'probe-1'],
+        ], JSON_THROW_ON_ERROR));
+    }
 }
