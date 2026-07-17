@@ -65,24 +65,35 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 
 ## P4 — Acquisto HAPA → Space
 
-- [ ] congelare payload reali Space redatti per invio acquisto, consultazione dettaglio e avanzamento stato;
-- [ ] censire codici, descrizioni e semantica ufficiale degli stati Space, inclusi almeno preso in carico, in lavorazione, pronto e non disponibile;
-- [ ] distinguere esplicitamente stato della testata, stato delle singole righe e quantità confermata, non disponibile, pronta e residua;
-- [ ] definire un mapping versionato dagli stati Space agli stati canonici HAPA, conservando anche codice e descrizione provider originali;
-- [ ] definire la matrice delle transizioni ammesse, la monotonicità e il trattamento di eventi duplicati, tardivi o fuori ordine;
-- [ ] completare aggregato e repository `SupplierPurchaseOrder` senza riutilizzare gli stati dell’ordine di vendita;
-- [ ] rappresentare in modo esplicito le fasi accettato/preso in carico, in lavorazione, parzialmente disponibile, pronto, completato, rifiutato e non disponibile dopo la validazione del contratto Space;
-- [ ] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
-- [ ] adapter Space idempotente per invio, lettura esito e recupero dello stato corrente;
-- [ ] polling o altro meccanismo supportato da Space con checkpoint persistente e riconciliazione periodica;
-- [ ] evento `space.purchase_order.status_changed` idempotente con versione sorgente, istante osservato e dettaglio righe;
-- [ ] gestione separata di indisponibilità totale, indisponibilità parziale e sostituzioni, sempre secondo una policy commerciale esplicita;
-- [ ] riconciliazione dopo timeout ambiguo prima di qualsiasi nuovo invio;
-- [ ] audit completo di stato precedente, stato nuovo, payload redatto, causazione e decisioni manuali;
-- [ ] UI acquisti con timeline stati Space, quantità per riga, eccezioni e azioni consentite;
-- [ ] test contrattuali, test di transizione, casi fuori ordine e pilot controllato con ordini Space non produttivi.
+L'integrazione avviene tramite una nuova API PHP sviluppata nel sistema Space. L'API è l'unico componente autorizzato a leggere e scrivere il database Space esistente; HAPA Automation non accede direttamente a PostgreSQL Space.
 
-**Gate:** vendita e acquisto hanno numeri, versioni e stati indipendenti; ogni stato Space è mappato in modo documentato e verificato, nessun evento può far regredire l’acquisto e una indisponibilità non chiude o modifica automaticamente la vendita senza una policy esplicita.
+La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`. L'API Space inserisce gli ordini in tale modello e restituisce a HAPA Automation identificativi, quantità e stati letti dal database corrente.
+
+- [ ] definire e versionare il contratto HTTP dell'API PHP Space per creazione ordine, lettura dettaglio e consultazione avanzamento;
+- [ ] implementare autenticazione servizio-servizio, autorizzazione, TLS, rate limit, audit e rotazione credenziali dell'API Space;
+- [ ] definire una chiave di idempotenza per impedire inserimenti duplicati in `ordini_articoli` quando HAPA Automation ritenta la creazione;
+- [ ] definire la risposta di creazione con almeno identificativo ordine Space, identificativi delle righe e correlazione con ordine e righe HAPA;
+- [ ] documentare quali tabelle e procedure Space devono essere usate per creare correttamente testata e righe, senza bypassare trigger o invarianti esistenti;
+- [ ] congelare payload reali redatti dell'API Space per creazione ordine, lettura dettaglio e avanzamento stato;
+- [ ] censire valori e semantica effettiva dei campi `stato_os`, `stato_bo`, `stato_sh`, `stato_de`, `stato_arc_sh`, `stato_arc_de` e `closing_order`;
+- [ ] chiarire quali campi rappresentano preso in carico, in lavorazione, pronto, non disponibile, spedito, archiviato o altre condizioni operative;
+- [ ] distinguere stato della testata, stato delle singole righe, quantità ordinata, disponibile, evasa, spedita e residua;
+- [ ] conservare nella risposta API sia i valori grezzi Space sia lo stato normalizzato e la versione del mapping applicato;
+- [ ] definire un mapping versionato dai valori del database Space agli stati canonici HAPA, senza dedurlo dai soli nomi delle colonne;
+- [ ] definire la matrice delle transizioni ammesse e il trattamento di risposte duplicate, tardive, regressive o incoerenti;
+- [ ] completare aggregato e repository `SupplierPurchaseOrder` senza riutilizzare gli stati dell'ordine di vendita;
+- [ ] rappresentare in modo esplicito le fasi richiesto, preso in carico, in lavorazione, parzialmente disponibile, pronto, completato, rifiutato e non disponibile dopo la validazione delle regole Space;
+- [ ] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
+- [ ] adapter HAPA Automation idempotente che chiama l'API Space per inserire l'ordine e recuperarne lo stato;
+- [ ] polling dell'API Space con checkpoint persistente, frequenza controllata e riconciliazione periodica;
+- [ ] evento `space.purchase_order.status_changed` idempotente con versione sorgente, istante osservato, valori grezzi e dettaglio righe;
+- [ ] gestione separata di indisponibilità totale, indisponibilità parziale e sostituzioni, sempre secondo una policy commerciale HAPA esplicita;
+- [ ] riconciliazione tramite API dopo timeout ambiguo prima di qualsiasi nuovo inserimento dell'ordine;
+- [ ] audit completo di richiesta, risposta redatta, stato precedente, stato nuovo, causazione e decisioni manuali;
+- [ ] UI acquisti con timeline degli stati Space, quantità per riga, eccezioni e azioni consentite;
+- [ ] test contrattuali tra HAPA Automation e API Space, test di idempotenza inserimento, test delle transizioni e pilot controllato.
+
+**Gate:** HAPA Automation non accede direttamente al database Space; ogni creazione è idempotente; ordine e righe Space sono correlati stabilmente con HAPA; ogni combinazione di stato usata è documentata e verificata; una risposta regressiva non modifica l'acquisto; una indisponibilità non chiude o modifica automaticamente la vendita senza una policy esplicita.
 
 ## P5 — Picking, GLS ed etichetta
 
@@ -106,7 +117,7 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 
 ## P7 — Storico cliente e operatività
 
-- [ ] casi d’uso cliente e versioni append-only;
+- [ ] casi d'uso cliente e versioni append-only;
 - [ ] merge, rettifica, anonimizzazione e retention;
 - [ ] ricerca e timeline completa;
 - [ ] export autorizzato e auditato;
