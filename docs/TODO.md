@@ -97,15 +97,32 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 
 ## P5 — Picking, GLS ed etichetta
 
-- [ ] picking e quantità finali;
-- [ ] colli, pesi e dimensioni;
-- [ ] comando `shipping.shipment.create.requested`;
-- [ ] adapter GLS e ambiente di collaudo;
-- [ ] storage label con checksum e retention;
-- [ ] stampa e ristampa autorizzate dalla UI;
-- [ ] tracking e riconciliazione.
+La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discovery corrente deriva dal manuale MU.162 Rev.20 del 1 ottobre 2021: prima del codice produttivo devono essere verificati con GLS l'attivazione del servizio, il WSDL effettivo, i contratti abilitati e l'ambiente di collaudo.
 
-**Gate:** una ristampa non crea una nuova spedizione e un timeout GLS non genera duplicati.
+- [ ] completare picking, quantità finali, colli, peso reale e dimensioni prima di richiedere la spedizione;
+- [ ] modellare separatamente spedizione HAPA, colli HAPA, riferimenti GLS e documenti label;
+- [ ] introdurre gli stati applicativi almeno `requested`, `open`, `awaiting_close`, `closed`, `failed`, `manual_review` e `cancelled`, senza comprimere la spedizione in un singolo flag;
+- [ ] comando `shipping.shipment.create.requested` con versione, destinatario, servizio, colli, peso, contrassegno eventuale e idempotency key;
+- [ ] adapter Automation GLS basato su `AddParcel`, che registra la spedizione in stato GLS aperto/in attesa di chiusura e restituisce tracking, progressivi collo e informazioni label;
+- [ ] evento `shipping.shipment.opened` distinto dalla chiusura: la presenza del tracking non implica ancora affidamento consolidato alla rete GLS;
+- [ ] comando `shipping.shipment.close.requested` separato, eseguito preferibilmente con `CloseWorkDayByShipmentNumber` sui numeri di spedizione già ottenuti;
+- [ ] evento `shipping.shipment.closed` soltanto dopo esito GLS `OK` e riconciliazione dello stato chiuso;
+- [ ] rappresentare ogni collo con un `ContatoreProgressivo` GLS univoco e non nullo, conservandone la correlazione stabile con `shipment_package` HAPA;
+- [ ] usare `Bda` e/o `RiferimentoCliente` come riferimenti applicativi controllati, senza considerarli da soli una garanzia di idempotenza provider;
+- [ ] definire e collaudare la configurazione di aggregazione GLS, preferendo destinatario + BDA o altra regola concordata che eviti accorpamenti accidentali;
+- [ ] supportare il multicollo come un elemento `Parcel` per ciascun collo, verificando aggregazione, numerazione progressiva e limite massimo previsto dal contratto;
+- [ ] scegliere la strategia label PDF/ZPL: ritorno immediato da `AddParcel` oppure recupero tecnico mediante `GetPdf`/`GetZpl` senza ricreare la spedizione;
+- [ ] salvare label, formato, checksum, riferimento GLS, progressivo collo, data di generazione e retention in storage sicuro; nessun binario transita su RabbitMQ o nei log;
+- [ ] consentire stampa e ristampa autorizzate dalla UI recuperando il documento esistente o rigenerandolo dal progressivo, senza una nuova `AddParcel`;
+- [ ] implementare riconciliazione con `ListSpedPeriod`/`ListSpedPeriodByStato` e stati GLS `in attesa di chiusura`/`chiuso` prima di ripetere una chiamata con esito ambiguo;
+- [ ] classificare errori di autenticazione/configurazione, validazione dati, instradamento `GLS CHECK`, indisponibilità tecnica ed esito ambiguo con retry policy differenti;
+- [ ] validare prima della chiamata almeno indirizzo, località, CAP, provincia, peso > 0, numero colli, contrassegno, assicurazione e servizi accessori;
+- [ ] trattare `DeleteSped` come cancellazione del record Label Service, non come garanzia di fermare una spedizione già chiusa e inoltrata nel circuito GLS;
+- [ ] mantenere `PickUpRequest`, `DeletePickUp` e `ReleaseShipmentStock` come capacità separate dalla creazione/chiusura spedizione, da attivare solo con casi d'uso e autorizzazioni dedicati;
+- [ ] auditare richiesta redatta, risposta redatta, numero spedizione, stato precedente/nuovo, progressivi collo, tentativi, errori e decisioni manuali;
+- [ ] test contrattuali SOAP/XML, fixture di risposte reali redatte, test multicollo, timeout dopo `AddParcel`, timeout dopo chiusura, ristampa e pilot controllato GLS.
+
+**Gate:** una richiesta logica non crea più spedizioni GLS; `open` e `closed` restano distinti; un timeout viene riconciliato prima del retry; ogni collo mantiene il proprio progressivo e la propria label; una ristampa non crea una nuova spedizione; la chiusura HAPA avviene soltanto dopo conferma GLS verificata.
 
 ## P6 — Fulfilment IBS e chiusura
 
