@@ -293,6 +293,9 @@ final readonly class UiController
             $account['orders_import_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('integration.orders.import.' . (string) $account['id'])
                 : '';
+            $account['catalog_sync_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.catalog.sync.' . (string) $account['id'])
+                : '';
             $account['secret_fields'] = $this->providerSecretFields?->forProvider((string) $account['provider_code']) ?? [];
         }
         unset($account);

@@ -104,6 +104,9 @@
                     <?php if ($account['provider_code'] === 'sellrapido' && in_array($account['desired_status'], ['pilot', 'active'], true) && $account['connection_test_status'] === 'passed' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/orders/import" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['orders_import_csrf_token']) ?>"><button class="button button--primary" type="submit">Importa ordini ora</button></form>
                     <?php endif; ?>
+                    <?php if ($account['provider_code'] === 'space' && in_array('catalog.read', $account['capabilities'], true) && in_array($account['desired_status'], ['pilot', 'active'], true) && $account['connection_test_status'] === 'passed' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/catalog/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['catalog_sync_csrf_token']) ?>"><button class="button button--primary" type="submit">Leggi ora costo e disponibilità da Space</button></form>
+                    <?php endif; ?>
                 </div>
                 <?php if ($account['desired_status'] !== 'retired'): ?>
                 <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>/secrets" method="post" autocomplete="off">

@@ -5,6 +5,9 @@ Ultimo riesame: 17 luglio 2026.
 ## Catalogo Space → HAPA → SellRapido → IBS
 
 1. Il job Automation legge una pagina incrementale da Space.
+   La sorgente reale è `GET /api/v1/catalog-items`: Space calcola il costo tramite
+   `prezzo_vendita` sul listino del cliente HAPA e legge la disponibilità da
+   `album.onstock`; il cursore per ID consente anche il backfill completo.
 2. L'adapter valida il payload e pubblica `space.catalog.item.observed`.
 3. HAPA deduplica per `message_id` e per fornitore + ID esterno + versione sorgente.
 4. Il matching usa nell'ordine ID Space già collegato, EAN univoco e SKU.

@@ -20,4 +20,7 @@ interface ProviderConfigurationGateway
 
     /** @return array<string, mixed> */
     public function importOrders(string $account): array;
+
+    /** @return array<string, mixed> */
+    public function synchronizeCatalog(string $account): array;
 }

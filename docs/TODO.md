@@ -43,7 +43,7 @@ Il confine completo è in [`PROVIDER_CONFIGURATION.md`](PROVIDER_CONFIGURATION.m
 - [x] implementare consumer RabbitMQ e caso d'uso HAPA;
 - [x] separare prodotto da offerta Space per tutte le nuove osservazioni;
 - [x] creare prodotti nuovi inattivi con deduplica e revisione manuale approva/rifiuta da UI;
-- [ ] backfill e riconciliazione dei campi Space legacy;
+- [x] backfill paginato dei campi Space legacy tramite API PHP, con costo da listino HAPA, `album.onstock`, cursore e deduplica;
 - [x] mostrare costo, disponibilità, versione ed età del dato;
 - [ ] pilot read-only su Space.
 

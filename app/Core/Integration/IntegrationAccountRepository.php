@@ -224,6 +224,23 @@ SQL);
         $this->audit($id, 'integration.orders_imported_manually', $encoded, $actor, $correlationId, $now);
     }
 
+    /** @param array<string, mixed> $result @throws JsonException */
+    public function recordManualCatalogSync(int $id, array $result, UserIdentity $actor, string $correlationId): void
+    {
+        if (($result['status'] ?? null) !== 'completed' || !is_int($result['published'] ?? null)) {
+            throw new RuntimeException('Esito sincronizzazione catalogo Space non valido.');
+        }
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $encoded = json_encode([
+            'status' => 'completed',
+            'observed' => $result['observed'] ?? 0,
+            'published' => $result['published'],
+            'duplicates' => $result['duplicates'] ?? 0,
+            'pages' => $result['pages'] ?? 0,
+        ], JSON_THROW_ON_ERROR);
+        $this->audit($id, 'integration.space_catalog_synchronized_manually', $encoded, $actor, $correlationId, $now);
+    }
+
     /** @throws JsonException */
     public function changeDesiredStatus(int $id, int $expectedVersion, string $target, UserIdentity $actor, string $correlationId): void
     {

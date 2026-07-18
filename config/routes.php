@@ -69,6 +69,9 @@ return static function (
     $importIntegrationOrdersController = $integrationConfiguration instanceof IntegrationConfigurationController
         ? $integrationConfiguration->importOrders(...)
         : $unavailableAuthentication;
+    $synchronizeIntegrationCatalogController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->synchronizeCatalog(...)
+        : $unavailableAuthentication;
     $createPricingController = $pricingRules instanceof PricingRuleController
         ? $pricingRules->create(...)
         : $unavailableAuthentication;
@@ -227,6 +230,11 @@ return static function (
         '_controller' => $importIntegrationOrdersController,
         '_permission' => 'integrations.manage',
         '_csrf_action' => 'integration.orders.import.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_catalog_sync', new Route('/ui/integrations/{accountId}/catalog/sync', [
+        '_controller' => $synchronizeIntegrationCatalogController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.catalog.sync.{accountId}',
     ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
     $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...), '_permission' => 'users.manage'], methods: ['GET']));
     $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...), '_permission' => 'audit.view'], methods: ['GET']));

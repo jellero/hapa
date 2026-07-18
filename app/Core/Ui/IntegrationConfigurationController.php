@@ -224,6 +224,29 @@ final readonly class IntegrationConfigurationController
         }
     }
 
+    public function synchronizeCatalog(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            if ($account['provider_code'] !== 'space'
+                || !in_array($account['desired_status'], ['pilot', 'active'], true)
+                || !in_array('catalog.read', $account['capabilities'], true)) {
+                throw new RuntimeException('La sincronizzazione manuale richiede un account Space pilot o attivo con catalog.read.');
+            }
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $result = $this->configurationGateway->synchronizeCatalog((string) $account['code']);
+            $this->accounts->recordManualCatalogSync((int) $account['id'], $result, $actor, $correlationId);
+
+            return new RedirectResponse(
+                '/ui/integrations?catalog_synchronized=1&published=' . (int) ($result['published'] ?? 0),
+                Response::HTTP_SEE_OTHER,
+            );
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
     /** @return array<string, mixed> @throws JsonException */
     private function configuration(Request $request): array
     {

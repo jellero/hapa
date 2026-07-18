@@ -75,6 +75,11 @@ final readonly class AutomationSecretClient implements ProviderSecretGateway, Pr
         return $this->request('POST', $account, 'orders/import');
     }
 
+    public function synchronizeCatalog(string $account): array
+    {
+        return $this->request('POST', $account, 'catalog/sync');
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>

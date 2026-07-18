@@ -40,6 +40,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/integrations', $routes->get('ui_integrations')?->getPath());
         self::assertSame('/ui/integrations/{accountId}/connection-test', $routes->get('ui_integration_connection_test')?->getPath());
         self::assertSame('/ui/integrations/{accountId}/orders/import', $routes->get('ui_integration_orders_import')?->getPath());
+        self::assertSame('/ui/integrations/{accountId}/catalog/sync', $routes->get('ui_integration_catalog_sync')?->getPath());
         self::assertSame('/ui/users', $routes->get('ui_users')?->getPath());
         self::assertSame('/ui/audit', $routes->get('ui_audit')?->getPath());
         self::assertSame('/ui/settings', $routes->get('ui_settings')?->getPath());
