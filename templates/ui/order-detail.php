@@ -91,9 +91,9 @@ $address = static function (?array $value): string {
             <div class="panel__header"><div><p class="eyebrow">Approvvigionamento</p><h2 id="purchases-title">Acquisti verso Space</h2></div></div>
             <?php if ($order['purchases'] === []): ?><div class="empty-state empty-state--compact"><div><h3>Nessun acquisto collegato</h3><p>La richiesta di acquisto a Space non è ancora stata creata.</p></div></div><?php else: ?>
             <div class="table-scroll"><table class="data-table data-table--compact"><thead><tr><th>Acquisto</th><th>Fornitore</th><th>Stato</th><th>Righe</th><th>Totale</th><th>Aggiornato</th></tr></thead><tbody><?php foreach ($order['purchases'] as $purchase): ?><tr>
-                <td><strong><?= $e($purchase['purchase_number']) ?></strong><small><?= $e($purchase['external_purchase_id'] ?? 'Non inviato') ?> · v<?= $e((string) $purchase['version']) ?></small></td>
+                <td><strong><?= $e($purchase['purchase_number']) ?></strong><small><?= $e($purchase['external_purchase_id'] ?? 'Non inviato') ?> · v<?= $e((string) $purchase['version']) ?><?= $purchase['auto_generated'] ? ' · automatico' : '' ?></small></td>
                 <td><?= $e($purchase['supplier_name']) ?><small><?= $e($purchase['supplier_code']) ?></small></td>
-                <td><span class="status-badge status-badge--<?= $e($tone($purchase['status'])) ?>"><?= $e($purchase['status']) ?></span></td>
+                <td><span class="status-badge status-badge--<?= $e($tone($purchase['status'])) ?>"><?= $e($purchase['status']) ?></span><?php if ($purchase['last_error'] !== null): ?><small><?= $e($purchase['last_error']) ?></small><?php elseif ($purchase['integration_account_code'] !== null): ?><small><?= $e($purchase['integration_account_code']) ?></small><?php endif; ?></td>
                 <td><?= $e((string) $purchase['line_count']) ?></td><td><?= $e($money($purchase['grand_total_minor'], $purchase['currency'])) ?></td><td><?= $e($date($purchase['updated_at'])) ?></td>
             </tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
         </section>

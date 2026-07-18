@@ -28,7 +28,11 @@ final class IntegrationAccountConfiguration
             'status_parameter', 'maximum_pages_per_run', 'initial_lookback_days',
             'request_timeout_seconds', 'maximum_response_bytes',
         ],
-        'space' => ['base_url', 'timeout_seconds', 'poll_interval_seconds', 'overlap_seconds', 'state_mapping_version'],
+        'space' => [
+            'base_url', 'health_path', 'purchase_orders_path', 'credential_header',
+            'request_timeout_seconds', 'maximum_response_bytes', 'timeout_seconds',
+            'poll_interval_seconds', 'overlap_seconds', 'state_mapping_version',
+        ],
         'gls' => [
             'endpoint', 'wsdl_url', 'branch_code', 'customer_code', 'contract_code',
             'aggregation_rule', 'label_format', 'close_strategy', 'timeout_seconds',

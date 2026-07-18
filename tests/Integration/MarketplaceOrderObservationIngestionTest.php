@@ -6,13 +6,19 @@ namespace Hapa\Tests\Integration;
 
 use DateTimeImmutable;
 use Hapa\Core\Configuration\ConfigurationLoader;
+use Hapa\Core\Clock\SystemClock;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Database\PdoTransactionManager;
 use Hapa\Core\Messaging\MessageEnvelope;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
+use Hapa\Core\Outbox\ProviderCommandFactory;
+use Hapa\Core\Outbox\ProviderCommandPayloadValidator;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\MarketplaceOrderObservationHandler;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
+use Hapa\Modules\Procurement\Application\AutomaticSpacePurchaseGenerator;
+use Hapa\Modules\Procurement\Application\SpacePurchaseOrderResultHandler;
+use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Throwable;
@@ -29,14 +35,20 @@ final class MarketplaceOrderObservationIngestionTest extends TestCase
             $this->pdo = (new ConnectionFactory(ConfigurationLoader::load()->database))->create();
             $this->pdo->beginTransaction();
             $transactions = new PdoTransactionManager($this->pdo);
+            $outbox = new PostgresOutboxRepository($this->pdo);
             $this->handler = new MarketplaceOrderObservationHandler(
                 $this->pdo,
                 $transactions,
                 new PostgresOrderRepository(
                     $this->pdo,
                     $transactions,
-                    new PostgresOutboxRepository($this->pdo),
+                    $outbox,
                     new OrderEventOutboxMapper(),
+                ),
+                new AutomaticSpacePurchaseGenerator(
+                    $this->pdo,
+                    $outbox,
+                    new ProviderCommandFactory(new ProviderCommandPayloadValidator(), new SystemClock()),
                 ),
             );
             $this->accountCode = 'sellrapido-' . bin2hex(random_bytes(5));
@@ -146,6 +158,105 @@ SQL);
         self::assertSame(2200, (int) $order['tax_rate_basis_points']);
     }
 
+    public function testItAutomaticallyCreatesOneIdempotentSpacePurchaseAndCommand(): void
+    {
+        $suffix = bin2hex(random_bytes(5));
+        $sku = 'SKU-' . $suffix;
+        $ean = '1234567890123';
+        $spaceAccount = 'space-' . $suffix;
+        $this->enableSpacePurchases($spaceAccount);
+        (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
+            new MessageEnvelope(
+                'space-item-' . $suffix,
+                'space.catalog.item.observed',
+                1,
+                new DateTimeImmutable('2026-07-18T06:00:00Z'),
+                'space-correlation-' . $suffix,
+                null,
+                [
+                    'supplier' => 'space',
+                    'external_item_id' => 'SPACE-' . $suffix,
+                    'supplier_sku' => $sku,
+                    'ean' => $ean,
+                    'name' => 'Prodotto acquistabile',
+                    'description' => null,
+                    'purchase_cost_minor' => 250,
+                    'currency' => 'EUR',
+                    'available_quantity' => 12,
+                    'source_version' => 'space-v1-' . $suffix,
+                    'observed_at' => '2026-07-18T06:00:00Z',
+                ],
+            ),
+        );
+
+        $created = $this->handler->handle($this->message($suffix, 'v1', '2026-07-18T08:00:00Z'));
+        self::assertNotNull($created->orderId);
+
+        $purchase = $this->pdo->prepare(<<<'SQL'
+SELECT purchase.*, account.code AS account_code, line.supplier_sku,
+       line.quantity, line.unit_cost_minor
+FROM supplier_purchase_orders purchase
+JOIN integration_accounts account ON account.id = purchase.integration_account_id
+JOIN supplier_purchase_order_lines line ON line.purchase_order_id = purchase.id
+WHERE purchase.order_id = :order_id AND purchase.auto_generated
+SQL);
+        $purchase->execute(['order_id' => $created->orderId]);
+        $row = $purchase->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($row);
+        self::assertSame('requested', $row['status']);
+        self::assertSame($spaceAccount, $row['account_code']);
+        self::assertSame($sku, $row['supplier_sku']);
+        self::assertSame(1, (int) $row['quantity']);
+        self::assertSame(250, (int) $row['unit_cost_minor']);
+        self::assertSame(250, (int) $row['grand_total_minor']);
+
+        $command = $this->pdo->prepare(<<<'SQL'
+SELECT payload::text FROM outbox_messages
+WHERE event_type = 'space.purchase_order.submit.requested'
+  AND aggregate_id = :purchase_id
+SQL);
+        $command->execute(['purchase_id' => (string) $row['id']]);
+        $payload = json_decode((string) $command->fetchColumn(), true, 32, JSON_THROW_ON_ERROR);
+        self::assertSame($spaceAccount, $payload['integration_account_code']);
+        self::assertSame($sku, $payload['lines'][0]['sku']);
+        self::assertSame(1, $payload['lines'][0]['quantity']);
+        self::assertSame('hapa.commands', $this->value(
+            "SELECT exchange_name FROM outbox_messages WHERE aggregate_id = '" . (int) $row['id'] . "' AND event_type = 'space.purchase_order.submit.requested'",
+        ));
+
+        (new SpacePurchaseOrderResultHandler($this->pdo))->handle(new MessageEnvelope(
+            'space-accepted-' . $suffix,
+            'space.purchase_order.accepted',
+            1,
+            new DateTimeImmutable('2026-07-18T08:01:00Z'),
+            'correlation-' . $suffix,
+            'message-' . $suffix,
+            [
+                'purchase_order_id' => (string) $row['id'],
+                'purchase_order_version' => (int) $row['version'],
+                'external_purchase_id' => 'SPACE-ORDER-' . $suffix,
+                'provider_status' => 'accepted',
+                'observed_at' => '2026-07-18T08:01:00Z',
+            ],
+        ));
+        self::assertSame('accepted', $this->value(
+            'SELECT status FROM supplier_purchase_orders WHERE id = ' . (int) $row['id'],
+        ));
+
+        $this->handler->handle($this->message(
+            $suffix . '-updated',
+            'v2',
+            '2026-07-18T09:00:00Z',
+            ['provider_order_id' => 'provider-' . $suffix, 'external_order_id' => 'IBS-' . $suffix],
+        ));
+        self::assertSame(1, (int) $this->value(
+            'SELECT COUNT(*) FROM supplier_purchase_orders WHERE order_id = ' . (int) $created->orderId . ' AND auto_generated',
+        ));
+        self::assertSame(1, (int) $this->value(
+            "SELECT COUNT(*) FROM outbox_messages WHERE aggregate_id = '" . (int) $row['id'] . "' AND event_type = 'space.purchase_order.submit.requested'",
+        ));
+    }
+
     /** @param array<string, mixed> $overrides */
     private function message(
         string $suffix,
@@ -243,5 +354,37 @@ SQL);
         $statement->execute(['value' => $value]);
 
         return (int) $statement->fetchColumn();
+    }
+
+    private function enableSpacePurchases(string $accountCode): void
+    {
+        $statement = $this->pdo->prepare(<<<'SQL'
+INSERT INTO integration_accounts (
+    provider_code, code, display_name, environment, desired_status,
+    configuration_version, secret_status, secret_version,
+    connection_test_status, created_at, updated_at,
+    automation_configuration_version
+) VALUES (
+    'space', :code, 'Space acquisti test', 'sandbox', 'pilot',
+    1, 'configured', 1, 'passed', NOW(), NOW(), 1
+)
+RETURNING id
+SQL);
+        $statement->execute(['code' => $accountCode]);
+        $accountId = $statement->fetchColumn();
+        self::assertNotFalse($accountId);
+        $capability = $this->pdo->prepare(<<<'SQL'
+INSERT INTO integration_account_capabilities (integration_account_id, capability, enabled)
+VALUES (:id, 'purchase_orders.write', TRUE)
+SQL);
+        $capability->execute(['id' => (int) $accountId]);
+    }
+
+    private function value(string $sql): mixed
+    {
+        $statement = $this->pdo->query($sql);
+        self::assertNotFalse($statement);
+
+        return $statement->fetchColumn();
     }
 }

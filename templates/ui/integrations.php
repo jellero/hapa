@@ -33,7 +33,7 @@
     <div class="inline-notice inline-notice--info" role="status"><div><strong>Stato tecnico aggiornato</strong><span>Versioni e stato credenziali sono stati riletti direttamente da Automation.</span></div></div>
 <?php endif; ?>
 <?php if (($connectionTested ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Connessione SellRapido verificata</strong><span>Credenziali, token e lettura ordini sono operativi.</span></div></div>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Connessione provider verificata</strong><span>Credenziali ed endpoint configurati risultano raggiungibili.</span></div></div>
 <?php endif; ?>
 <?php if (($ordersImported ?? false) === true): ?>
     <div class="inline-notice inline-notice--info" role="status"><div><strong>Import SellRapido completato</strong><span><?= $e((string) ($ordersPublished ?? 0)) ?> osservazioni ordine pubblicate verso HAPA.</span></div></div>
@@ -98,8 +98,8 @@
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/configuration/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['sync_configuration_csrf_token']) ?>"><button class="button button--secondary" type="submit">Sincronizza configurazione</button></form>
                     <?php endif; ?>
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/status/refresh" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['refresh_status_csrf_token']) ?>"><button class="button button--ghost" type="submit">Aggiorna stato tecnico</button></form>
-                    <?php if ($account['provider_code'] === 'sellrapido' && $account['secret_status'] === 'configured' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
-                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/connection-test" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['connection_test_csrf_token']) ?>"><button class="button button--secondary" type="submit">Verifica connessione SellRapido</button></form>
+                    <?php if (in_array($account['provider_code'], ['sellrapido', 'space'], true) && $account['secret_status'] === 'configured' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/connection-test" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['connection_test_csrf_token']) ?>"><button class="button button--secondary" type="submit">Verifica connessione <?= $e($account['provider_code'] === 'space' ? 'Space' : 'SellRapido') ?></button></form>
                     <?php endif; ?>
                     <?php if ($account['provider_code'] === 'sellrapido' && in_array($account['desired_status'], ['pilot', 'active'], true) && $account['connection_test_status'] === 'passed' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/orders/import" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['orders_import_csrf_token']) ?>"><button class="button button--primary" type="submit">Importa ordini ora</button></form>

@@ -209,12 +209,14 @@ SELECT purchase.id, purchase.purchase_number, purchase.external_purchase_id,
        purchase.status, purchase.currency, purchase.subtotal_minor,
        purchase.tax_total_minor, purchase.grand_total_minor, purchase.version,
        purchase.submitted_at, purchase.accepted_at, purchase.completed_at,
-       purchase.created_at, purchase.updated_at,
+       purchase.created_at, purchase.updated_at, purchase.auto_generated,
+       purchase.last_error, account.code AS integration_account_code,
        supplier.code AS supplier_code, supplier.name AS supplier_name,
        (SELECT COUNT(*) FROM supplier_purchase_order_lines line
          WHERE line.purchase_order_id = purchase.id) AS line_count
 FROM supplier_purchase_orders purchase
 JOIN suppliers supplier ON supplier.id = purchase.supplier_id
+LEFT JOIN integration_accounts account ON account.id = purchase.integration_account_id
 WHERE purchase.order_id = :order_id
 ORDER BY purchase.created_at DESC, purchase.id DESC
 SQL);
@@ -224,6 +226,7 @@ SQL);
             $row['id'] = (int) $row['id'];
             $row['version'] = (int) $row['version'];
             $row['line_count'] = (int) $row['line_count'];
+            $row['auto_generated'] = (bool) $row['auto_generated'];
             foreach (['subtotal_minor', 'tax_total_minor', 'grand_total_minor'] as $field) {
                 $row[$field] = self::nullableInt($row[$field]);
             }

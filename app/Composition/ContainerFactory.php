@@ -80,6 +80,8 @@ use Hapa\Modules\Shipping\Application\ShipmentReadModel;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
+use Hapa\Modules\Procurement\Application\AutomaticSpacePurchaseGenerator;
+use Hapa\Modules\Procurement\Contract\AutomaticPurchaseGenerator as AutomaticPurchaseGeneratorContract;
 use Hapa\Modules\Space\Application\SpaceCatalogConsumeCommand;
 use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
 use Hapa\Modules\Space\Infrastructure\Messaging\RabbitMqSpaceCatalogConsumer;
@@ -291,6 +293,13 @@ final readonly class ContainerFactory
                 new Reference(OrderEventOutboxMapper::class),
             ]);
         $container->setAlias(OrderRepository::class, PostgresOrderRepository::class)->setPublic(false);
+        $container->register(AutomaticSpacePurchaseGenerator::class)
+            ->setArguments([
+                new Reference(PDO::class),
+                new Reference(OutboxRepository::class),
+                new Reference(ProviderCommandFactory::class),
+            ]);
+        $container->setAlias(AutomaticPurchaseGeneratorContract::class, AutomaticSpacePurchaseGenerator::class)->setPublic(false);
 
         $container->register(ReadinessCheck::class)
             ->setArguments([

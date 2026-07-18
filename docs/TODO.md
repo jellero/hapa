@@ -113,13 +113,16 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 - [ ] completare aggregato e repository `SupplierPurchaseOrder` senza riutilizzare gli stati dell'ordine di vendita;
 - [ ] rappresentare in modo esplicito le fasi richiesto, preso in carico, in lavorazione, parzialmente disponibile, pronto, completato, rifiutato e non disponibile dopo la validazione delle regole Space;
 - [x] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
-- [ ] adapter HAPA Automation idempotente che chiama l'API Space per inserire l'ordine e recuperarne lo stato;
+- [x] generazione automatica e idempotente dell'acquisto Space da un ordine marketplace, con matching SKU/EAN, costi osservati, disponibilità e fallback `manual_review`;
+- [x] adapter HAPA Automation idempotente che chiama l'API Space per inserire l'ordine e acquisisce l'esito iniziale;
 - [ ] polling dell'API Space con checkpoint persistente, frequenza controllata e riconciliazione periodica;
-- [ ] evento `space.purchase_order.status_changed` idempotente con versione sorgente, istante osservato, valori grezzi e dettaglio righe;
+- [x] eventi iniziali `space.purchase_order.accepted` / `rejected` applicati idempotentemente in HAPA;
+- [ ] evento di polling `space.purchase_order.status_changed` con versione sorgente, valori grezzi e dettaglio righe;
 - [ ] gestione separata di indisponibilità totale, indisponibilità parziale e sostituzioni, sempre secondo una policy commerciale HAPA esplicita;
 - [ ] riconciliazione tramite API dopo timeout ambiguo prima di qualsiasi nuovo inserimento dell'ordine;
 - [ ] audit completo di richiesta, risposta redatta, stato precedente, stato nuovo, causazione e decisioni manuali;
-- [ ] UI acquisti con timeline degli stati Space, quantità per riga, eccezioni e azioni consentite;
+- [x] UI ordine con acquisto automatico, account tecnico, stato ed errore operativo;
+- [ ] timeline completa degli stati Space, quantità per riga, eccezioni e azioni consentite;
 - [ ] test contrattuali tra HAPA Automation e API Space, test di idempotenza inserimento, test delle transizioni e pilot controllato.
 
 **Gate:** HAPA Automation non accede direttamente al database Space; ogni creazione è idempotente; ordine e righe Space sono correlati stabilmente con HAPA; ogni combinazione di stato usata è documentata e verificata; una risposta regressiva non modifica l'acquisto; una indisponibilità non chiude o modifica automaticamente la vendita senza una policy esplicita.

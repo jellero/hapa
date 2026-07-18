@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Hapa\Core\Database\TransactionManager;
 use Hapa\Core\Messaging\MessageEnvelope;
 use Hapa\Modules\Marketplace\Contract\MarketplaceOrderObservation;
+use Hapa\Modules\Procurement\Contract\AutomaticPurchaseGenerator;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Domain\Order;
 use Hapa\Modules\Orders\Domain\OrderAddress;
@@ -24,6 +25,7 @@ final readonly class MarketplaceOrderObservationHandler
         private PDO $pdo,
         private TransactionManager $transactions,
         private OrderRepository $orders,
+        private AutomaticPurchaseGenerator $spacePurchases,
     ) {
     }
 
@@ -70,6 +72,8 @@ final readonly class MarketplaceOrderObservationHandler
             $this->updateOrder($orderId, $customerId, $observation);
             $outcome = 'updated';
         }
+
+        $this->spacePurchases->generate($orderId, $observation->correlationId);
 
         return $this->finish($observationId, $orderId, 'applied', $outcome);
     }
@@ -370,8 +374,6 @@ SQL);
 
     private function replaceLineSnapshots(int $orderId, MarketplaceOrderObservation $observation): void
     {
-        $delete = $this->pdo->prepare('DELETE FROM order_lines WHERE order_id = :order_id');
-        $delete->execute(['order_id' => $orderId]);
         $insert = $this->pdo->prepare(<<<'SQL'
 INSERT INTO order_lines (
     order_id, line_number, sku, external_line_id, ean, quantity_ordered,
@@ -383,6 +385,16 @@ INSERT INTO order_lines (
     0, 0, 0, :description_snapshot, :unit_price_minor, :tax_rate_basis_points,
     0, :line_total_minor, :created_at, :updated_at
 )
+ON CONFLICT (order_id, line_number) DO UPDATE SET
+    sku = EXCLUDED.sku,
+    external_line_id = EXCLUDED.external_line_id,
+    ean = EXCLUDED.ean,
+    quantity_ordered = EXCLUDED.quantity_ordered,
+    description_snapshot = EXCLUDED.description_snapshot,
+    unit_price_minor = EXCLUDED.unit_price_minor,
+    tax_rate_basis_points = EXCLUDED.tax_rate_basis_points,
+    line_total_minor = EXCLUDED.line_total_minor,
+    updated_at = EXCLUDED.updated_at
 SQL);
         foreach ($observation->rows as $index => $row) {
             $insert->execute([

@@ -103,11 +103,14 @@ La modifica di contratto, sede o regola di aggregazione richiede un nuovo test e
 Impostazioni non segrete minime:
 
 - URL dell'API PHP Space e ambiente;
+- path health check e path creazione acquisti;
+- nome dell'header per la chiave applicativa, timeout e limite risposta;
 - timeout, polling e overlap;
 - mapping versione degli stati;
 - capacità catalogo, creazione acquisto e lettura stato.
 
 I segreti dell'API Space sono write-only e rimangono in Automation.
+Il test connessione Space è disponibile dalla stessa scheda account. Solo un account `pilot` o `active`, sincronizzato, con segreti configurati, test superato e capacità `purchase_orders.write` può ricevere acquisti automatici.
 
 ## Sicurezza e audit
 

@@ -54,8 +54,23 @@ final class ProviderCommandPayloadValidator
     {
         self::string($payload, 'purchase_order_id');
         self::positiveInteger($payload, 'purchase_order_version');
-        if (self::list($payload, 'lines') === []) {
+        $lines = self::list($payload, 'lines');
+        if ($lines === []) {
             throw new InvalidArgumentException('L’acquisto Space deve contenere almeno una riga.');
+        }
+        foreach ($lines as $line) {
+            if (!is_array($line) || array_is_list($line)) {
+                throw new InvalidArgumentException('Riga acquisto Space non valida.');
+            }
+            self::string($line, 'sku');
+            self::positiveInteger($line, 'quantity');
+            if (array_key_exists('expected_unit_cost_minor', $line)) {
+                self::nonNegativeInteger($line, 'expected_unit_cost_minor');
+            }
+            if (array_key_exists('currency', $line)
+                && preg_match('/^[A-Z]{3}$/D', self::string($line, 'currency')) !== 1) {
+                throw new InvalidArgumentException('Valuta riga acquisto Space non valida.');
+            }
         }
     }
 
