@@ -115,6 +115,20 @@ docker compose exec php vendor/bin/phinx migrate -e development
 docker compose exec php php bin/console system:check
 ```
 
+Per creare il primo amministratore locale senza inserire la password nella riga di comando:
+
+```bash
+export HAPA_INITIAL_ADMIN_PASSWORD='una-password-locale-di-almeno-14-caratteri'
+docker compose exec -e HAPA_INITIAL_ADMIN_PASSWORD php php bin/console security:user:create \
+  --email=admin@hapa.local \
+  --name='Amministratore HAPA' \
+  --role=administrator \
+  --password-env=HAPA_INITIAL_ADMIN_PASSWORD
+unset HAPA_INITIAL_ADMIN_PASSWORD
+```
+
+L'interfaccia locale è disponibile su `http://localhost:8080/login`. Il comando va eseguito soltanto se l'utente non esiste già.
+
 Il runtime asincrono viene avviato dal repository `hapa-automation`.
 
 ## Qualità

@@ -1,6 +1,6 @@
 # Roadmap HAPA
 
-Ultimo riesame: 17 luglio 2026.
+Ultimo riesame: 18 luglio 2026.
 
 La roadmap segue vertical slice di business. HAPA decide e conserva lo stato commerciale; Automation esegue le integrazioni. Nessun job provider viene abilitato globalmente prima del pilot della singola capacità.
 
@@ -10,7 +10,7 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 - [x] dominio ordine e outbox transazionale;
 - [x] modelli iniziali cliente, prodotto, ricarico e spedizione;
 - [x] runtime Automation fisicamente separato;
-- [x] RabbitMQ e contratto ordine v1 verificati HAPA → Automation;
+- [x] RabbitMQ verificato end-to-end in entrambe le direzioni: prodotto Space Automation → HAPA e ordine HAPA → Automation;
 - [x] diagrammi architetturali recuperati e riallineati;
 - [x] decisione HAPA system of record e Space fornitore;
 - [x] schema additivo per account marketplace, offerte fornitore, acquisti, storico cliente, colli e label.

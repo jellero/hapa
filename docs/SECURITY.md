@@ -78,7 +78,7 @@ Un messaggio verso `hapa-automation` contiene soltanto i dati necessari all’op
 
 ## Autenticazione e sessione
 
-Il pannello HAPA userà un contesto di autenticazione basato su sessione.
+Il pannello HAPA usa un contesto di autenticazione basato su sessione, autorizzazione deny-by-default e token CSRF per le mutazioni.
 
 Requisiti:
 
@@ -94,7 +94,7 @@ Requisiti:
 - throttling per account e rete sorgente;
 - audit di login, dinieghi e modifiche privilegiate.
 
-Le schermate correnti restano presentazionali e non devono ricevere credenziali finché questi gate non sono implementati.
+Login, sessioni server-side, ruoli, CSRF, audit degli accessi e hashing Argon2id sono implementati. Recupero password completo, MFA, reautenticazione per operazioni ad alto impatto e throttling distribuito restano gate prima dell'esposizione pubblica del pannello.
 
 ## Autorizzazione e CSRF
 
@@ -107,7 +107,7 @@ L’autorizzazione segue deny-by-default:
 - reautenticazione per operazioni ad alto impatto;
 - audit di ricarichi, ordini, spedizioni, utenti e configurazioni.
 
-La gestione tecnica di retry, dead letter e credenziali provider non viene esposta nella UI HAPA. Un eventuale collegamento operativo con `hapa-automation` deve essere in sola lettura o protetto da un contratto amministrativo separato.
+Retry, dead letter e payload tecnici provider non vengono esposti nella UI HAPA. La configurazione provider usa invece un contratto amministrativo separato e autenticato verso `hapa-automation`: i valori non segreti sono versionati e sincronizzati, mentre password, token e chiavi API sono campi write-only inoltrati direttamente allo storage cifrato di Automation. HAPA conserva soltanto stato redatto, versione e date tecniche.
 
 ## Validazione degli input
 
