@@ -14,6 +14,7 @@ use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\CustomerController;
 use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\PricingRuleController;
+use Hapa\Core\Ui\SpacePurchaseController;
 use Hapa\Core\Ui\UiController;
 use Closure;
 use Psr\Log\LoggerInterface;
@@ -35,6 +36,7 @@ final class KernelFactory
         private readonly PricingRuleController $pricingRules,
         private readonly CatalogReviewController $catalogReview,
         private readonly CustomerController $customers,
+        private readonly SpacePurchaseController $spacePurchases,
     ) {
     }
 
@@ -59,6 +61,7 @@ final class KernelFactory
             $this->pricingRules,
             $this->catalogReview,
             $this->customers,
+            $this->spacePurchases,
         );
         if (!$routes instanceof RouteCollection) {
             throw new RuntimeException('La route factory deve restituire RouteCollection.');

@@ -66,6 +66,8 @@ use Hapa\Core\Ui\PricingRuleController;
 use Hapa\Core\Ui\PricingRuleManagement;
 use Hapa\Core\Ui\PricingPreview;
 use Hapa\Core\Ui\ShipmentOverview;
+use Hapa\Core\Ui\SpacePurchaseController;
+use Hapa\Core\Ui\SpacePurchaseManagement;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
@@ -81,6 +83,8 @@ use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\OrderRepository;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
 use Hapa\Modules\Procurement\Application\AutomaticSpacePurchaseGenerator;
+use Hapa\Modules\Procurement\Application\SpacePurchaseBackfillCommand;
+use Hapa\Modules\Procurement\Application\SpacePurchaseGenerationService;
 use Hapa\Modules\Procurement\Contract\AutomaticPurchaseGenerator as AutomaticPurchaseGeneratorContract;
 use Hapa\Modules\Space\Application\SpaceCatalogConsumeCommand;
 use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
@@ -300,6 +304,12 @@ final readonly class ContainerFactory
                 new Reference(ProviderCommandFactory::class),
             ]);
         $container->setAlias(AutomaticPurchaseGeneratorContract::class, AutomaticSpacePurchaseGenerator::class)->setPublic(false);
+        $container->register(SpacePurchaseGenerationService::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(ProviderCommandFactory::class),
+            ]);
+        $container->setAlias(SpacePurchaseManagement::class, SpacePurchaseGenerationService::class)->setPublic(false);
 
         $container->register(ReadinessCheck::class)
             ->setArguments([
@@ -384,7 +394,10 @@ final readonly class ContainerFactory
                 new Reference(ProviderSecretGateway::class),
                 new Reference(ProviderSecretFields::class),
                 new Reference(ProviderConfigurationGateway::class),
+                new Reference(SpacePurchaseManagement::class),
             ]);
+        $container->register(SpacePurchaseController::class)
+            ->setArguments([new Reference(SpacePurchaseManagement::class)]);
         $container->register(PricingRuleController::class)
             ->setArguments([new Reference(PricingRuleManagement::class)]);
         $container->register(CatalogReviewController::class)
@@ -403,6 +416,7 @@ final readonly class ContainerFactory
                 new Reference(PricingRuleController::class),
                 new Reference(CatalogReviewController::class),
                 new Reference(CustomerController::class),
+                new Reference(SpacePurchaseController::class),
             ]);
         $container->setDefinition(Kernel::class, (new Definition())
             ->setFactory([new Reference(KernelFactory::class), 'create'])
@@ -428,6 +442,9 @@ final readonly class ContainerFactory
                 new Reference(UserRepository::class),
                 new Reference(Clock::class),
             ])
+            ->setPublic(true);
+        $container->register(SpacePurchaseBackfillCommand::class)
+            ->setArguments([new Reference(SpacePurchaseManagement::class)])
             ->setPublic(true);
 
         return $container;

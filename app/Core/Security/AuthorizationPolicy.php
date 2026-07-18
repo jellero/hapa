@@ -13,6 +13,7 @@ final class AuthorizationPolicy
             'ui.view',
             'customers.view',
             'orders.view',
+            'orders.manage',
             'catalog.view',
             'shipping.view',
             'integrations.view',

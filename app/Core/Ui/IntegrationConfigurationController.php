@@ -25,6 +25,7 @@ final readonly class IntegrationConfigurationController
         private ProviderSecretGateway $secretGateway,
         private ProviderSecretFields $secretFields,
         private ProviderConfigurationGateway $configurationGateway,
+        private SpacePurchaseManagement $spacePurchases,
     ) {
     }
 
@@ -132,6 +133,9 @@ final readonly class IntegrationConfigurationController
             $correlationId = $request->attributes->getString('correlation_id');
             $status = $this->configurationGateway->apply($account, $actor->id, $correlationId);
             $this->accounts->recordAutomationConfigurationStatus((int) $account['id'], $status, $actor, $correlationId);
+            if ($account['provider_code'] === 'space') {
+                $this->spacePurchases->generateOutstanding($correlationId);
+            }
 
             return new RedirectResponse('/ui/integrations?configuration_synced=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
@@ -185,13 +189,16 @@ final readonly class IntegrationConfigurationController
     {
         try {
             $account = $this->accounts->find($request->attributes->getInt('accountId'));
-            if ($account['provider_code'] !== 'sellrapido') {
-                throw new RuntimeException('Il test operativo è disponibile per SellRapido.');
+            if (!in_array($account['provider_code'], ['sellrapido', 'space'], true)) {
+                throw new RuntimeException('Il test operativo è disponibile per SellRapido e Space.');
             }
             $actor = $this->actor($request);
             $correlationId = $request->attributes->getString('correlation_id');
             $result = $this->configurationGateway->testConnection((string) $account['code']);
             $this->accounts->recordConnectionTest((int) $account['id'], $result, $actor, $correlationId);
+            if ($account['provider_code'] === 'space') {
+                $this->spacePurchases->generateOutstanding($correlationId);
+            }
 
             return new RedirectResponse('/ui/integrations?connection_tested=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {

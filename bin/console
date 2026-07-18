@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 use Hapa\Core\Bootstrap;
+use Hapa\Modules\Procurement\Application\SpacePurchaseBackfillCommand;
 use Hapa\Modules\Space\Application\SpaceCatalogConsumeCommand;
 use Symfony\Component\Console\Application;
 
@@ -22,4 +23,9 @@ if (!$spaceCatalogConsumer instanceof SpaceCatalogConsumeCommand) {
     throw new RuntimeException('Il container non ha prodotto il consumer catalogo Space.');
 }
 $application->add($spaceCatalogConsumer);
+$spacePurchaseBackfill = $bootstrap->container()->get(SpacePurchaseBackfillCommand::class);
+if (!$spacePurchaseBackfill instanceof SpacePurchaseBackfillCommand) {
+    throw new RuntimeException('Il container non ha prodotto il backfill acquisti Space.');
+}
+$application->add($spacePurchaseBackfill);
 $application->run();

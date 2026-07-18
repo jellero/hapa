@@ -114,6 +114,7 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 - [ ] rappresentare in modo esplicito le fasi richiesto, preso in carico, in lavorazione, parzialmente disponibile, pronto, completato, rifiutato e non disponibile dopo la validazione delle regole Space;
 - [x] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
 - [x] generazione automatica e idempotente dell'acquisto Space da un ordine marketplace, con matching SKU/EAN, costi osservati, disponibilità e fallback `manual_review`;
+- [x] recupero degli ordini marketplace preesistenti quando l'account Space diventa operativo, comando CLI di backfill e riprova autorizzata dal dettaglio ordine;
 - [x] adapter HAPA Automation idempotente che chiama l'API Space per inserire l'ordine e acquisisce l'esito iniziale;
 - [ ] polling dell'API Space con checkpoint persistente, frequenza controllata e riconciliazione periodica;
 - [x] eventi iniziali `space.purchase_order.accepted` / `rejected` applicati idempotentemente in HAPA;

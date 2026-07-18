@@ -32,8 +32,9 @@ Per evitare sovrascritture, il catalogo SellRapido deve essere data-entry oppure
 7. Le anomalie di prezzo, valuta, prodotto, identità o indirizzo portano a revisione manuale.
 8. HAPA risolve ogni riga sull'offerta Space usando prima il collegamento prodotto, poi SKU fornitore, SKU HAPA ed EAN; ambiguità, costo mancante o stock insufficiente creano un acquisto in `manual_review` senza chiamate remote.
 9. Se account, credenziali, test connessione e configurazione Space sono operativi, HAPA crea un solo `supplier_purchase_order` automatico e salva atomicamente `space.purchase_order.submit.requested` nell'outbox.
-10. Automation registra l'operazione, chiama l'API PHP Space con `Idempotency-Key`, applica retry con backoff e pubblica l'esito iniziale.
-11. HAPA applica `accepted` o `rejected` all'acquisto senza modificare automaticamente lo stato della vendita.
+10. Quando una configurazione Space diventa operativa, HAPA recupera anche gli ordini marketplace già importati e gli acquisti in revisione; l'operatore può riprovare in modo autorizzato dal dettaglio ordine senza creare duplicati.
+11. Automation registra l'operazione, chiama l'API PHP Space con `Idempotency-Key`, applica retry con backoff e pubblica l'esito iniziale.
+12. HAPA applica `accepted` o `rejected` all'acquisto senza modificare automaticamente lo stato della vendita.
 
 Il cliente ha comprato da HAPA tramite il marketplace gestito da SellRapido; Space è il fornitore di HAPA. Gli ID SellRapido, marketplace, HAPA e Space rimangono distinti e correlati.
 

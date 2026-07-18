@@ -28,6 +28,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/customers/{customerId}', $routes->get('ui_customer_detail')?->getPath());
         self::assertSame('/ui/orders', $routes->get('ui_orders')?->getPath());
         self::assertSame('/ui/orders/{orderId}', $routes->get('ui_order_detail')?->getPath());
+        self::assertSame('/ui/orders/{orderId}/space-purchase', $routes->get('ui_order_space_purchase')?->getPath());
         self::assertSame('/ui/catalog', $routes->get('ui_catalog')?->getPath());
         self::assertSame('/ui/catalog/pricing-rules', $routes->get('ui_pricing_create')?->getPath());
         self::assertSame('/ui/catalog/pricing-rules/{ruleId}', $routes->get('ui_pricing_update')?->getPath());

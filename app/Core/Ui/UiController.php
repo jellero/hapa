@@ -207,6 +207,10 @@ final readonly class UiController
     {
         $orderId = $request->attributes->getString('orderId');
         $order = $this->orderReadModel?->detail($orderId);
+        $session = $request->attributes->get('security_session');
+        $user = $request->attributes->get('current_user');
+        $canManagePurchase = $user instanceof UserIdentity
+            && ($this->authorization?->allows($user, 'orders.manage') ?? false);
 
         return $this->operational($request, 'ui/order-detail', 'orders', [
             'title' => sprintf('Ordine %s', $order['order_number'] ?? $orderId),
@@ -214,6 +218,12 @@ final readonly class UiController
             'description' => 'Vista completa di cliente, origine, righe, acquisti verso Space, spedizioni, snapshot degli indirizzi e cronologia.',
             'orderId' => $orderId,
             'order' => $order,
+            'canManagePurchase' => $canManagePurchase,
+            'spacePurchaseCsrfToken' => $canManagePurchase && $session instanceof WebSession
+                ? $session->csrfToken('order.space-purchase.' . $orderId)
+                : '',
+            'purchaseGenerated' => $request->query->getBoolean('purchase_generated'),
+            'purchaseError' => $request->query->getString('purchase_error'),
         ]);
     }
 

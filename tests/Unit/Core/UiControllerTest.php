@@ -7,6 +7,8 @@ namespace Hapa\Tests\Unit\Core;
 use DateTimeImmutable;
 use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\WebSession;
+use Hapa\Core\Security\AuthorizationPolicy;
+use Hapa\Core\Ui\OrderOverview;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use PHPUnit\Framework\TestCase;
@@ -115,6 +117,64 @@ final class UiControllerTest extends TestCase
 
         self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $content);
         self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $content);
+    }
+
+    public function testItExposesTheSpacePurchaseActionOnAnImportedOrder(): void
+    {
+        $orders = new class implements OrderOverview {
+            public function search(string $query, string $status, int $limit = 100): array
+            {
+                return [];
+            }
+
+            public function detail(string $orderNumber): array
+            {
+                return [
+                    'order_number' => $orderNumber,
+                    'status' => 'imported',
+                    'customer_name' => 'Cliente test',
+                    'customer_code' => 'C-1',
+                    'marketplace_name' => 'IBS',
+                    'marketplace_account_name' => 'SellRapido IBS',
+                    'origin_reference' => 'IBS-1',
+                    'origin' => 'marketplace',
+                    'ordered_at' => '2026-07-18T10:00:00Z',
+                    'updated_at' => '2026-07-18T10:00:00Z',
+                    'grand_total_minor' => 1000,
+                    'subtotal_minor' => 1000,
+                    'shipping_total_minor' => 0,
+                    'discount_total_minor' => 0,
+                    'tax_total_minor' => 0,
+                    'currency' => 'EUR',
+                    'version' => 1,
+                    'external_order_id' => 'IBS-1',
+                    'connector_code' => 'sellrapido',
+                    'customer_email' => 'cliente@example.test',
+                    'customer_phone' => null,
+                    'lines' => [],
+                    'purchases' => [],
+                    'shipments' => [],
+                    'legacy_deliveries' => [],
+                    'shipping_address' => null,
+                    'billing_address' => null,
+                    'transitions' => [],
+                ];
+            }
+        };
+        $controller = new UiController(
+            $this->renderer(),
+            'testing',
+            orderReadModel: $orders,
+            authorization: new AuthorizationPolicy(),
+        );
+        $request = $this->request('/ui/orders/HAPA-1');
+        $request->attributes->set('orderId', 'HAPA-1');
+
+        $content = (string) $controller->orderDetail($request)->getContent();
+
+        self::assertStringContainsString('action="/ui/orders/HAPA-1/space-purchase"', $content);
+        self::assertStringContainsString('Genera acquisto Space', $content);
+        self::assertStringContainsString(hash_hmac('sha256', 'order.space-purchase.HAPA-1', 'test-session-token'), $content);
     }
 
     public function testItEscapesTheCustomerIdentifier(): void

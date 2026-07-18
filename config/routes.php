@@ -9,6 +9,7 @@ use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\CustomerController;
 use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\PricingRuleController;
+use Hapa\Core\Ui\SpacePurchaseController;
 use Hapa\Core\Ui\UiController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +26,7 @@ return static function (
     ?PricingRuleController $pricingRules = null,
     ?CatalogReviewController $catalogReview = null,
     ?CustomerController $customers = null,
+    ?SpacePurchaseController $spacePurchases = null,
 ): RouteCollection {
     $routes = new RouteCollection();
     $unavailableAuthentication = static fn (): JsonResponse => new JsonResponse(
@@ -87,6 +89,9 @@ return static function (
         : $unavailableAuthentication;
     $archiveCustomerController = $customers instanceof CustomerController
         ? $customers->archive(...)
+        : $unavailableAuthentication;
+    $generateSpacePurchaseController = $spacePurchases instanceof SpacePurchaseController
+        ? $spacePurchases->generate(...)
         : $unavailableAuthentication;
 
     $routes->add('home', new Route(
@@ -165,6 +170,11 @@ return static function (
         requirements: ['orderId' => '[^/]{1,160}'],
         methods: ['GET'],
     ));
+    $routes->add('ui_order_space_purchase', new Route('/ui/orders/{orderId}/space-purchase', [
+        '_controller' => $generateSpacePurchaseController,
+        '_permission' => 'orders.manage',
+        '_csrf_action' => 'order.space-purchase.{orderId}',
+    ], requirements: ['orderId' => '[^/]{1,160}'], methods: ['POST']));
     $routes->add('ui_picking', new Route('/ui/picking', ['_controller' => $ui->picking(...), '_permission' => 'orders.view'], methods: ['GET']));
     $routes->add('ui_shipments', new Route('/ui/shipments', ['_controller' => $ui->shipments(...), '_permission' => 'shipping.view'], methods: ['GET']));
     $routes->add('ui_integrations', new Route('/ui/integrations', ['_controller' => $ui->integrations(...), '_permission' => 'integrations.view'], methods: ['GET']));

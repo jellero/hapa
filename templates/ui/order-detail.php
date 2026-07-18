@@ -34,6 +34,14 @@ $address = static function (?array $value): string {
 
     return $parts === [] ? '—' : implode("\n", $parts);
 };
+$canGeneratePurchase = ($canManagePurchase ?? false) === true
+    && ($order ?? null) !== null
+    && ($order['status'] ?? null) !== 'cancelled'
+    && ($order['connector_code'] ?? null) !== null
+    && (($order['purchases'] ?? []) === [] || array_filter(
+        $order['purchases'],
+        static fn (array $purchase): bool => $purchase['status'] === 'manual_review',
+    ) !== []);
 ?>
 <a class="back-link" href="/ui/orders"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>Torna agli ordini</a>
 
@@ -48,6 +56,13 @@ $address = static function (?array $value): string {
         <p class="page-header__description"><?= $e($description) ?></p>
     </div>
 </header>
+
+<?php if (($purchaseGenerated ?? false) === true): ?>
+<div class="inline-notice inline-notice--success" role="status"><div><strong>Generazione acquisto Space eseguita</strong><span>Lo stato aggiornato e l’eventuale motivo di revisione sono visibili nella sezione Acquisti verso Space.</span></div></div>
+<?php endif; ?>
+<?php if (($purchaseError ?? '') !== ''): ?>
+<div class="inline-notice inline-notice--warning" role="alert"><div><strong>Acquisto Space non generato</strong><span><?= $e($purchaseError) ?></span></div></div>
+<?php endif; ?>
 
 <section class="summary-grid" aria-label="Riepilogo ordine">
     <article><span>Cliente</span><strong><?= $e($order['customer_name'] ?? 'Non collegato') ?></strong><small><?= $e($order['customer_code'] ?? 'Nessun codice cliente') ?></small></article>
@@ -88,7 +103,7 @@ $address = static function (?array $value): string {
         </section>
 
         <section class="panel" id="purchases" aria-labelledby="purchases-title">
-            <div class="panel__header"><div><p class="eyebrow">Approvvigionamento</p><h2 id="purchases-title">Acquisti verso Space</h2></div></div>
+            <div class="panel__header"><div><p class="eyebrow">Approvvigionamento</p><h2 id="purchases-title">Acquisti verso Space</h2></div><?php if ($canGeneratePurchase): ?><form action="/ui/orders/<?= $e(rawurlencode((string) $order['order_number'])) ?>/space-purchase" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($spacePurchaseCsrfToken ?? '') ?>"><button class="button button--secondary" type="submit"><?= ($order['purchases'] ?? []) === [] ? 'Genera acquisto Space' : 'Riprova acquisto Space' ?></button></form><?php endif; ?></div>
             <?php if ($order['purchases'] === []): ?><div class="empty-state empty-state--compact"><div><h3>Nessun acquisto collegato</h3><p>La richiesta di acquisto a Space non è ancora stata creata.</p></div></div><?php else: ?>
             <div class="table-scroll"><table class="data-table data-table--compact"><thead><tr><th>Acquisto</th><th>Fornitore</th><th>Stato</th><th>Righe</th><th>Totale</th><th>Aggiornato</th></tr></thead><tbody><?php foreach ($order['purchases'] as $purchase): ?><tr>
                 <td><strong><?= $e($purchase['purchase_number']) ?></strong><small><?= $e($purchase['external_purchase_id'] ?? 'Non inviato') ?> · v<?= $e((string) $purchase['version']) ?><?= $purchase['auto_generated'] ? ' · automatico' : '' ?></small></td>

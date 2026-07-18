@@ -110,7 +110,7 @@ Impostazioni non segrete minime:
 - capacità catalogo, creazione acquisto e lettura stato.
 
 I segreti dell'API Space sono write-only e rimangono in Automation.
-Il test connessione Space è disponibile dalla stessa scheda account. Solo un account `pilot` o `active`, sincronizzato, con segreti configurati, test superato e capacità `purchase_orders.write` può ricevere acquisti automatici.
+Il test connessione Space è disponibile dalla stessa scheda account e usa l'endpoint salute configurato. Solo un account `pilot` o `active`, sincronizzato, con segreti configurati, test superato e capacità `purchase_orders.write` può ricevere acquisti automatici. Al completamento del test o della sincronizzazione HAPA recupera gli ordini marketplace preesistenti ancora senza acquisto o in `manual_review`.
 
 ## Sicurezza e audit
 

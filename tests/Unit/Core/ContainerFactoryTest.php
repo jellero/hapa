@@ -23,6 +23,7 @@ use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Kernel;
 use Hapa\Core\Messaging\InboundMessageHandlerRegistryFactory;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
+use Hapa\Modules\Procurement\Application\SpacePurchaseBackfillCommand;
 use PHPUnit\Framework\TestCase;
 
 final class ContainerFactoryTest extends TestCase
@@ -39,6 +40,7 @@ final class ContainerFactoryTest extends TestCase
         self::assertTrue($container->getDefinition(SystemCheckCommand::class)->isPublic());
         self::assertTrue($container->getDefinition(OutboxRelayCommand::class)->isPublic());
         self::assertTrue($container->getDefinition(InboxConsumeCommand::class)->isPublic());
+        self::assertTrue($container->getDefinition(SpacePurchaseBackfillCommand::class)->isPublic());
         self::assertFalse($container->getDefinition(PriceCalculator::class)->isPublic());
         self::assertFalse($container->hasDefinition('Hapa\\Core\\Console\\AutomationRunCommand'));
         self::assertTrue($container->hasAlias(InboundMessageHandlerRegistryFactory::class));

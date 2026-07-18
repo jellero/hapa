@@ -17,6 +17,7 @@ use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\MarketplaceOrderObservationHandler;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
 use Hapa\Modules\Procurement\Application\AutomaticSpacePurchaseGenerator;
+use Hapa\Modules\Procurement\Application\SpacePurchaseGenerationService;
 use Hapa\Modules\Procurement\Application\SpacePurchaseOrderResultHandler;
 use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
 use PDO;
@@ -254,6 +255,57 @@ SQL);
         ));
         self::assertSame(1, (int) $this->value(
             "SELECT COUNT(*) FROM outbox_messages WHERE aggregate_id = '" . (int) $row['id'] . "' AND event_type = 'space.purchase_order.submit.requested'",
+        ));
+    }
+
+    public function testItBackfillsAnExistingOrderWhenSpaceBecomesOperational(): void
+    {
+        $suffix = bin2hex(random_bytes(5));
+        $sku = 'SKU-' . $suffix;
+        $created = $this->handler->handle($this->message($suffix, 'v1', '2026-07-18T08:00:00Z'));
+        self::assertNotNull($created->orderId);
+        self::assertSame('manual_review', $this->value(
+            'SELECT status FROM supplier_purchase_orders WHERE order_id = ' . $created->orderId,
+        ));
+
+        $this->enableSpacePurchases('space-backfill-' . $suffix);
+        (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
+            new MessageEnvelope(
+                'space-backfill-item-' . $suffix,
+                'space.catalog.item.observed',
+                1,
+                new DateTimeImmutable('2026-07-18T08:30:00Z'),
+                'space-backfill-correlation-' . $suffix,
+                null,
+                [
+                    'supplier' => 'space',
+                    'external_item_id' => 'SPACE-BACKFILL-' . $suffix,
+                    'supplier_sku' => $sku,
+                    'ean' => '1234567890123',
+                    'name' => 'Prodotto Space recuperato',
+                    'description' => null,
+                    'purchase_cost_minor' => 275,
+                    'currency' => 'EUR',
+                    'available_quantity' => 10,
+                    'source_version' => 'space-backfill-v1-' . $suffix,
+                    'observed_at' => '2026-07-18T08:30:00Z',
+                ],
+            ),
+        );
+        $service = new SpacePurchaseGenerationService(
+            new ConnectionFactory(ConfigurationLoader::load()->database),
+            new ProviderCommandFactory(new ProviderCommandPayloadValidator(), new SystemClock()),
+            $this->pdo,
+        );
+
+        $report = $service->generateOutstanding('backfill-' . $suffix, 10);
+
+        self::assertSame(['examined' => 1, 'generated' => 1, 'manual_review' => 0, 'failed' => 0], $report);
+        self::assertSame('requested', $this->value(
+            'SELECT status FROM supplier_purchase_orders WHERE order_id = ' . $created->orderId,
+        ));
+        self::assertSame(1, (int) $this->value(
+            "SELECT COUNT(*) FROM outbox_messages WHERE event_type = 'space.purchase_order.submit.requested' AND correlation_id LIKE 'backfill-" . $suffix . "%'",
         ));
     }
 
