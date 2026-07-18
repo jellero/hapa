@@ -8,7 +8,7 @@ return [
     'Customers' => [],
     'Gls' => ['Shipping'],
     'Marketplace' => ['Catalog'],
-    'Orders' => [],
+    'Orders' => ['Marketplace'],
     'Procurement' => [],
     'Shipping' => [],
     'Space' => ['Catalog'],

@@ -78,12 +78,13 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 - [ ] import JSON incrementale con `GET /api/v2/order`, filtri `modified`, `offset` e `limit`;
 - [ ] verificare con test contrattuali i nomi effettivi dei parametri, perché la guida alterna camelCase e snake_case;
 - [ ] usare un watermark su `modified` con finestra di sovrapposizione e non avanzarlo prima dell'outbox durevole;
-- [ ] `marketplace.order.observed` idempotente con `connector = sellrapido`;
-- [ ] identità tecnica `integration_account_id + head.id`, conservando anche `code`, `marketplace_code`, `channel_code` e identificativi riga;
-- [ ] mappare senza perdita gli stati SellRapido `standby`, `accepted`, `sent` e `cancelled`;
-- [ ] cliente, identità, snapshot indirizzi, dati fiscali necessari e storico;
-- [ ] snapshot economici di testata e righe, valuta, fee, spedizione e pagamento;
-- [ ] minimizzare e non conservare per default `upload_status.request_payload` e token marketplace grezzi;
+- [x] `marketplace.order.observed` idempotente con `connector = sellrapido`;
+- [x] identità tecnica `integration_account_id + head.id`, conservando anche `code`, `marketplace_code`, `channel_code` e identificativi riga;
+- [x] conservare senza perdita gli stati SellRapido `standby`, `accepted`, `sent` e `cancelled`, portando in revisione le cancellazioni tardive;
+- [x] cliente, identità, snapshot indirizzi, dati fiscali necessari e storico;
+- [x] snapshot economici di testata e righe, valuta, fee e spedizione;
+- [ ] completare lo snapshot pagamento dopo il congelamento dei campi effettivi del payload SellRapido;
+- [x] minimizzare e non conservare per default `upload_status.request_payload` e token marketplace grezzi;
 - [ ] revisione manuale per anomalie, righe senza SKU, collisioni e modifiche regressive;
 - [ ] riconciliazione iniziale con ordini SellRapido esistenti e deduplica del backfill.
 

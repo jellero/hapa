@@ -28,7 +28,7 @@ Per evitare sovrascritture, il catalogo SellRapido deve essere data-entry oppure
 3. Automation pubblica `marketplace.order.observed` con `connector = sellrapido`, account, ID tecnico, codice ordine, marketplace/channel, righe, importi e dati personali minimizzati.
 4. HAPA deduplica per account di integrazione + `head.id` e conserva separatamente il codice commerciale del marketplace.
 5. HAPA crea o riconcilia l'identità cliente.
-6. HAPA conserva snapshot di indirizzo, dati fiscali necessari e righe economiche.
+6. HAPA conserva snapshot di indirizzo, dati fiscali necessari e righe economiche. Il consumer applicativo è idempotente per account + ID provider + versione sorgente e ignora gli aggiornamenti regressivi.
 7. Le anomalie di prezzo, valuta, prodotto, identità o indirizzo portano a revisione manuale.
 8. HAPA crea un `supplier_purchase_order` distinto dalla vendita.
 9. HAPA invia `space.purchase_order.submit.requested`.
