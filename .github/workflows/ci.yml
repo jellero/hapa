@@ -105,6 +105,8 @@ jobs:
       DB_PASSWORD_FILE: /tmp/hapa-db-secret
       REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
       RABBITMQ_PASSWORD_FILE: /tmp/hapa-rabbitmq-secret
+      AUTOMATION_ADMIN_API_URL: https://automation.internal.example.test
+      AUTOMATION_ADMIN_API_TOKEN_FILE: /tmp/hapa-automation-admin-api-token
       RABBITMQ_ENABLED: "false"
       HAPA_MESSAGING_NETWORK: hapa-messaging
     steps:
@@ -115,6 +117,7 @@ jobs:
           printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
           printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
           printf '%s' 'ci-production-rabbitmq-secret' > "$RABBITMQ_PASSWORD_FILE"
+          printf '%s' 'ci-production-automation-admin-api-token' > "$AUTOMATION_ADMIN_API_TOKEN_FILE"
           docker network inspect "$HAPA_MESSAGING_NETWORK" >/dev/null 2>&1 \
             || docker network create "$HAPA_MESSAGING_NETWORK"
       - name: Validate production Compose
