@@ -268,6 +268,15 @@ final readonly class UiController
             $account['revoke_secrets_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('integration.secrets.revoke.' . (string) $account['id'])
                 : '';
+            $account['sync_configuration_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.configuration.sync.' . (string) $account['id'])
+                : '';
+            $account['refresh_status_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.status.refresh.' . (string) $account['id'])
+                : '';
+            $account['change_status_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.status.change.' . (string) $account['id'])
+                : '';
             $account['secret_fields'] = $this->providerSecretFields?->forProvider((string) $account['provider_code']) ?? [];
         }
         unset($account);
@@ -293,6 +302,8 @@ final readonly class UiController
             'saved' => $request->query->getBoolean('saved'),
             'secretsSaved' => $request->query->getBoolean('secrets_saved'),
             'secretsRevoked' => $request->query->getBoolean('secrets_revoked'),
+            'configurationSynced' => $request->query->getBoolean('configuration_synced'),
+            'statusRefreshed' => $request->query->getBoolean('status_refreshed'),
             'configurationError' => $request->query->getString('error'),
         ]);
     }

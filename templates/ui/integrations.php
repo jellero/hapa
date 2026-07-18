@@ -26,6 +26,12 @@
 <?php if (($secretsRevoked ?? false) === true): ?>
     <div class="inline-notice inline-notice--warning" role="status"><div><strong>Credenziali revocate</strong><span>Il ciphertext è stato eliminato e l’account dovrà essere riconfigurato prima dell’uso.</span></div></div>
 <?php endif; ?>
+<?php if (($configurationSynced ?? false) === true): ?>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Configurazione sincronizzata</strong><span>Automation ha applicato la stessa versione non segreta visibile in HAPA.</span></div></div>
+<?php endif; ?>
+<?php if (($statusRefreshed ?? false) === true): ?>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Stato tecnico aggiornato</strong><span>Versioni e stato credenziali sono stati riletti direttamente da Automation.</span></div></div>
+<?php endif; ?>
 
 <div class="inline-notice inline-notice--warning" role="note">
     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
@@ -61,12 +67,12 @@
         <?php foreach ($configuredAccounts as $account): ?>
             <tr>
                 <td><strong><?= $e($account['display_name']) ?></strong><small><?= $e($account['code']) ?></small></td>
-                <td><?= $e(strtoupper($account['provider_code'])) ?></td><td><?= $e($account['environment']) ?></td><td><?= $e((string) $account['configuration_version']) ?></td>
+                <td><?= $e(strtoupper($account['provider_code'])) ?></td><td><?= $e($account['environment']) ?></td><td><strong>HAPA v<?= $e((string) $account['configuration_version']) ?></strong><small>Automation v<?= $e((string) $account['automation_configuration_version']) ?></small></td>
                 <td><span class="status-badge status-badge--<?= $e($account['secret_status'] === 'configured' ? 'success' : 'warning') ?>"><?= $e($account['secret_status']) ?></span></td>
                 <td><?= $e($account['connection_test_status']) ?></td><td><?= $e($account['desired_status']) ?></td><td><?= $e(implode(', ', $account['capabilities'])) ?></td>
             </tr>
             <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
-            <tr><td colspan="8"><details><summary>Modifica configurazione v<?= $e((string) $account['configuration_version']) ?></summary>
+            <tr><td colspan="8"><details><summary>Gestisci account v<?= $e((string) $account['configuration_version']) ?></summary>
                 <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>" method="post">
                     <input type="hidden" name="_csrf_token" value="<?= $e($account['update_csrf_token']) ?>"><input type="hidden" name="configuration_version" value="<?= $e((string) $account['configuration_version']) ?>">
                     <input type="hidden" name="provider" value="<?= $e($account['provider_code']) ?>"><input type="hidden" name="code" value="<?= $e($account['code']) ?>">
@@ -77,6 +83,16 @@
                     <div class="field"><label>Descrizione</label><textarea name="description" rows="3" maxlength="1000"><?= $e($account['description'] ?? '') ?></textarea></div>
                     <button class="button button--secondary" type="submit">Salva nuova versione</button>
                 </form>
+                <div class="auth-form">
+                    <h3>Stato tecnico Automation</h3>
+                    <p>Versione applicata <?= $e((string) $account['automation_configuration_version']) ?>; ultimo allineamento <?= $e($account['automation_configured_at'] ?? 'mai') ?>.</p>
+                    <p>Ultima verifica <?= $e($account['technical_checked_at'] ?? 'mai') ?>; test connessione <?= $e($account['connection_test_status']) ?> <?= $e($account['connection_tested_at'] ?? '') ?>; scadenza token <?= $e($account['token_expires_at'] ?? 'non disponibile') ?>.</p>
+                    <?php if (($account['last_error'] ?? '') !== ''): ?><div class="inline-notice inline-notice--warning"><span><?= $e($account['last_error']) ?></span></div><?php endif; ?>
+                    <?php if ($account['automation_configuration_version'] !== $account['configuration_version']): ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/configuration/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['sync_configuration_csrf_token']) ?>"><button class="button button--secondary" type="submit">Sincronizza configurazione</button></form>
+                    <?php endif; ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/status/refresh" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['refresh_status_csrf_token']) ?>"><button class="button button--ghost" type="submit">Aggiorna stato tecnico</button></form>
+                </div>
                 <?php if ($account['desired_status'] !== 'retired'): ?>
                 <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>/secrets" method="post" autocomplete="off">
                     <input type="hidden" name="_csrf_token" value="<?= $e($account['replace_secrets_csrf_token']) ?>">
@@ -96,6 +112,12 @@
                 <?php endif; ?>
                 <?php endif; ?>
                 <?php if ($account['desired_status'] !== 'retired'): ?>
+                <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>/status" method="post">
+                    <input type="hidden" name="_csrf_token" value="<?= $e($account['change_status_csrf_token']) ?>"><input type="hidden" name="configuration_version" value="<?= $e((string) $account['configuration_version']) ?>">
+                    <div class="field"><label>Stato desiderato</label><select name="target_status"><option value="disabled">Disabilitato</option><option value="suspended">Sospeso</option><option value="pilot">Pilot</option><option value="active">Attivo</option></select><small>Pilot e attivo richiedono credenziali, test connessione superato e versione Automation allineata.</small></div>
+                    <?php if ($account['environment'] === 'production'): ?><label><input type="checkbox" name="confirm_production" value="yes"> Confermo esplicitamente l'attivazione in produzione</label><?php endif; ?>
+                    <button class="button button--secondary" type="submit">Aggiorna stato desiderato</button>
+                </form>
                 <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/retire" method="post">
                     <input type="hidden" name="_csrf_token" value="<?= $e($account['retire_csrf_token']) ?>"><input type="hidden" name="configuration_version" value="<?= $e((string) $account['configuration_version']) ?>">
                     <button class="button button--ghost" type="submit">Ritira account</button>

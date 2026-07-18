@@ -44,6 +44,8 @@ SQL);
         return array_values(array_map(static function (array $row): array {
             $row['id'] = (int) $row['id'];
             $row['configuration_version'] = (int) $row['configuration_version'];
+            $row['automation_configuration_version'] = (int) $row['automation_configuration_version'];
+            $row['secret_version'] = (int) $row['secret_version'];
             $row['capabilities'] = json_decode((string) $row['capabilities'], true, 512, JSON_THROW_ON_ERROR);
             $row['settings'] = json_decode((string) $row['settings'], true, 512, JSON_THROW_ON_ERROR);
 
@@ -68,8 +70,9 @@ SQL);
     {
         $secretStatus = $status['status'] ?? null;
         $secretVersion = $status['secret_version'] ?? null;
-        if (!is_string($secretStatus) || !in_array($secretStatus, ['configured', 'revoked'], true)
-            || !is_int($secretVersion) || $secretVersion < 1) {
+        if (!is_string($secretStatus) || !in_array($secretStatus, ['missing', 'configured', 'revoked'], true)
+            || !is_int($secretVersion) || $secretVersion < 0
+            || ($secretStatus !== 'missing' && $secretVersion < 1)) {
             throw new RuntimeException('Stato credenziali Automation non valido.');
         }
         $rotatedAt = isset($status['rotated_at']) && is_string($status['rotated_at']) ? $status['rotated_at'] : null;
@@ -82,7 +85,7 @@ UPDATE integration_accounts
 SET secret_status = :secret_status, secret_version = :secret_version,
     secret_rotated_at = :secret_rotated_at, connection_test_status = 'never',
     connection_tested_at = NULL, last_error = NULL, updated_at = :updated_at
-WHERE id = :id AND secret_version <= :secret_version
+WHERE id = :id AND (secret_version <= :secret_version OR :secret_status = 'missing')
 SQL);
             $statement->execute([
                 'id' => $id,
@@ -105,12 +108,102 @@ VALUES (:actor_id, :action, 'integration_account', :entity_id, CAST(:after_data 
 SQL);
             $audit->execute([
                 'actor_id' => $actor->id,
-                'action' => $secretStatus === 'revoked' ? 'integration.secrets_revoked' : 'integration.secrets_replaced',
+                'action' => match ($secretStatus) {
+                    'revoked' => 'integration.secrets_revoked',
+                    'configured' => 'integration.secrets_replaced',
+                    default => 'integration.secrets_status_refreshed',
+                },
                 'entity_id' => (string) $id,
                 'after_data' => $auditPayload,
                 'correlation_id' => $correlationId,
                 'created_at' => $now,
             ]);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    /** @param array<string, mixed> $status @throws JsonException */
+    public function recordAutomationConfigurationStatus(int $id, array $status, UserIdentity $actor, string $correlationId): void
+    {
+        $version = $status['configuration_version'] ?? null;
+        $appliedAt = $status['applied_at'] ?? null;
+        if (($status['status'] ?? null) !== 'applied' || !is_int($version) || $version < 1 || !is_string($appliedAt)) {
+            throw new RuntimeException('Stato configurazione Automation non valido.');
+        }
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $pdo = $this->connection();
+        $pdo->beginTransaction();
+        try {
+            $statement = $pdo->prepare(<<<'SQL'
+UPDATE integration_accounts
+SET automation_configuration_version = :version, automation_configured_at = :applied_at,
+    technical_checked_at = :checked_at, last_error = NULL
+WHERE id = :id AND configuration_version >= :version
+  AND automation_configuration_version <= :version
+SQL);
+            $statement->execute(['id' => $id, 'version' => $version, 'applied_at' => $appliedAt, 'checked_at' => $now]);
+            if ($statement->rowCount() !== 1) {
+                throw new RuntimeException('Versione Automation incompatibile con la configurazione HAPA.');
+            }
+            $encoded = json_encode(['automation_configuration_version' => $version, 'automation_configured_at' => $appliedAt], JSON_THROW_ON_ERROR);
+            $this->audit($id, 'integration.configuration_synchronized', $encoded, $actor, $correlationId, $now);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    /** @throws JsonException */
+    public function changeDesiredStatus(int $id, int $expectedVersion, string $target, UserIdentity $actor, string $correlationId): void
+    {
+        $target = strtolower(trim($target));
+        if (!in_array($target, ['disabled', 'pilot', 'active', 'suspended'], true)) {
+            throw new RuntimeException('Stato account non consentito.');
+        }
+        $pdo = $this->connection();
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $pdo->beginTransaction();
+        try {
+            $statement = $pdo->prepare('SELECT * FROM integration_accounts WHERE id = :id FOR UPDATE');
+            $statement->execute(['id' => $id]);
+            $current = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($current) || (int) $current['configuration_version'] !== $expectedVersion || $current['desired_status'] === 'retired') {
+                throw new RuntimeException('Configurazione modificata da un altro operatore o account non disponibile.');
+            }
+            $from = (string) $current['desired_status'];
+            if ($target === 'pilot' && !in_array($from, ['disabled', 'suspended'], true)) {
+                throw new RuntimeException('Il pilot può partire soltanto da disabled o suspended.');
+            }
+            if ($target === 'active' && $from !== 'pilot') {
+                throw new RuntimeException('L’attivazione completa richiede prima lo stato pilot.');
+            }
+            if (in_array($target, ['pilot', 'active'], true)) {
+                if ($current['secret_status'] !== 'configured' || $current['connection_test_status'] !== 'passed'
+                    || (int) $current['automation_configuration_version'] !== $expectedVersion) {
+                    throw new RuntimeException('Servono credenziali configurate, test connessione superato e configurazione Automation sincronizzata.');
+                }
+            }
+            $update = $pdo->prepare(<<<'SQL'
+UPDATE integration_accounts
+SET desired_status = :target, configuration_version = configuration_version + 1, updated_at = :updated_at
+WHERE id = :id AND configuration_version = :expected_version
+RETURNING configuration_version
+SQL);
+            $update->execute(['target' => $target, 'updated_at' => $now, 'id' => $id, 'expected_version' => $expectedVersion]);
+            $version = $update->fetchColumn();
+            if ($version === false) {
+                throw new RuntimeException('Transizione account concorrente.');
+            }
+            $snapshot = $this->snapshot($id);
+            $this->historyAndAudit($id, (int) $version, 'status_changed', $snapshot, $actor, $correlationId, $now);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -327,13 +420,18 @@ SQL);
             'correlation_id' => $correlationId,
             'created_at' => $now,
         ]);
+        $this->audit($id, 'integration.account_' . $action, $encoded, $actor, $correlationId, $now);
+    }
+
+    private function audit(int $id, string $action, string $encoded, UserIdentity $actor, string $correlationId, string $now): void
+    {
         $audit = $this->connection()->prepare(<<<'SQL'
 INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, after_data, correlation_id, created_at)
 VALUES (:actor_id, :action, 'integration_account', :entity_id, CAST(:after_data AS JSONB), :correlation_id, :created_at)
 SQL);
         $audit->execute([
             'actor_id' => $actor->id,
-            'action' => 'integration.account_' . $action,
+            'action' => $action,
             'entity_id' => (string) $id,
             'after_data' => $encoded,
             'correlation_id' => $correlationId,

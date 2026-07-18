@@ -52,6 +52,15 @@ return static function (
     $revokeIntegrationSecretsController = $integrationConfiguration instanceof IntegrationConfigurationController
         ? $integrationConfiguration->revokeSecrets(...)
         : $unavailableAuthentication;
+    $syncIntegrationConfigurationController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->synchronizeConfiguration(...)
+        : $unavailableAuthentication;
+    $refreshIntegrationStatusController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->refreshTechnicalStatus(...)
+        : $unavailableAuthentication;
+    $changeIntegrationStatusController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->changeStatus(...)
+        : $unavailableAuthentication;
     $createPricingController = $pricingRules instanceof PricingRuleController
         ? $pricingRules->create(...)
         : $unavailableAuthentication;
@@ -177,6 +186,21 @@ return static function (
         '_controller' => $revokeIntegrationSecretsController,
         '_permission' => 'integrations.secrets.manage',
         '_csrf_action' => 'integration.secrets.revoke.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_configuration_sync', new Route('/ui/integrations/{accountId}/configuration/sync', [
+        '_controller' => $syncIntegrationConfigurationController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.configuration.sync.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_status_refresh', new Route('/ui/integrations/{accountId}/status/refresh', [
+        '_controller' => $refreshIntegrationStatusController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.status.refresh.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_status_change', new Route('/ui/integrations/{accountId}/status', [
+        '_controller' => $changeIntegrationStatusController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.status.change.{accountId}',
     ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
     $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...), '_permission' => 'users.manage'], methods: ['GET']));
     $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...), '_permission' => 'audit.view'], methods: ['GET']));

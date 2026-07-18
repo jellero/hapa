@@ -8,6 +8,7 @@ use Hapa\Core\Integration\IntegrationAccountConfiguration;
 use Hapa\Core\Integration\IntegrationAccountRepository;
 use Hapa\Core\Integration\ProviderSecretFields;
 use Hapa\Core\Integration\ProviderSecretGateway;
+use Hapa\Core\Integration\ProviderConfigurationGateway;
 use Hapa\Core\Security\UserIdentity;
 use InvalidArgumentException;
 use JsonException;
@@ -23,6 +24,7 @@ final readonly class IntegrationConfigurationController
         private IntegrationAccountRepository $accounts,
         private ProviderSecretGateway $secretGateway,
         private ProviderSecretFields $secretFields,
+        private ProviderConfigurationGateway $configurationGateway,
     ) {
     }
 
@@ -117,6 +119,63 @@ final readonly class IntegrationConfigurationController
             $this->accounts->recordSecretStatus((int) $account['id'], $status, $actor, $correlationId);
 
             return new RedirectResponse('/ui/integrations?secrets_revoked=1', Response::HTTP_SEE_OTHER);
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
+    public function synchronizeConfiguration(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $status = $this->configurationGateway->apply($account, $actor->id, $correlationId);
+            $this->accounts->recordAutomationConfigurationStatus((int) $account['id'], $status, $actor, $correlationId);
+
+            return new RedirectResponse('/ui/integrations?configuration_synced=1', Response::HTTP_SEE_OTHER);
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
+    public function refreshTechnicalStatus(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $secretStatus = $this->secretGateway->status((string) $account['code']);
+            $this->accounts->recordSecretStatus((int) $account['id'], $secretStatus, $actor, $correlationId);
+            $configurationStatus = $this->configurationGateway->configurationStatus((string) $account['code']);
+            if (($configurationStatus['status'] ?? null) === 'applied') {
+                $this->accounts->recordAutomationConfigurationStatus((int) $account['id'], $configurationStatus, $actor, $correlationId);
+            }
+
+            return new RedirectResponse('/ui/integrations?status_refreshed=1', Response::HTTP_SEE_OTHER);
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
+    public function changeStatus(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            $target = $request->request->getString('target_status');
+            if ($account['environment'] === 'production' && in_array($target, ['pilot', 'active'], true)
+                && $request->request->getString('confirm_production') !== 'yes') {
+                throw new RuntimeException('L’attivazione in produzione richiede conferma esplicita.');
+            }
+            $this->accounts->changeDesiredStatus(
+                (int) $account['id'],
+                $request->request->getInt('configuration_version'),
+                $target,
+                $this->actor($request),
+                $request->attributes->getString('correlation_id'),
+            );
+
+            return new RedirectResponse('/ui/integrations?saved=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
             return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }

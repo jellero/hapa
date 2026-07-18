@@ -56,6 +56,8 @@ La UI espone campi specifici per Space, SellRapido, GLS, BRT, Amazon e Temu. Le 
 
 Ogni sostituzione incrementa `secret_version`; una sostituzione parziale mantiene gli altri campi già cifrati. Lo storico append-only registra soltanto provider, account, versione, azione e nomi dei campi, mai i valori. La revoca incrementa ancora la versione e imposta a `NULL` nonce e ciphertext. La chiave `PROVIDER_SECRET_KEY` e il token `AUTOMATION_ADMIN_API_TOKEN` devono risiedere fuori dal database e usare secret file o secret manager in produzione.
 
+La configurazione non segreta viene applicata separatamente con una versione monotona. Automation rifiuta versioni regressive e conflitti con fingerprint diverso sulla stessa versione, conserva una proiezione tecnica e uno storico append-only, e ripete in difesa la scansione delle chiavi sensibili. La UI mostra la versione HAPA e quella Automation e non consente pilot o attivazione finché credenziali, test connessione e sincronizzazione non sono tutti validi.
+
 ## SellRapido
 
 Impostazioni non segrete minime:

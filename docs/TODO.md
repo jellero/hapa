@@ -27,6 +27,8 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 - [x] CRUD amministrativo versionato dei dati non segreti per account Space, SellRapido, GLS e provider futuri;
 - [x] configurazione da UI di ambiente, endpoint, account, cataloghi, contratti, capacità, mapping, frequenze e batch;
 - [x] campi credenziale write-only, mascherati e delegati allo storage cifrato di Automation senza persistenza in HAPA;
+- [x] sincronizzazione monotona e auditata della configurazione non segreta verso la proiezione Automation;
+- [x] transizioni account separate con conferma produzione e gate su segreti, test connessione e versione Automation;
 - [ ] azioni UI separate per test connessione, rotazione/revoca, abilitazione e disabilitazione per capacità;
 - [ ] mostrare stato connessione, ultima verifica, scadenza token, checkpoint ed errore redatto senza esporre segreti;
 - [x] versionare e auditare ogni modifica della configurazione non segreta; l’attivazione produzione resta bloccata fino al gate Automation.
@@ -51,15 +53,15 @@ Il confine completo è in [`PROVIDER_CONFIGURATION.md`](PROVIDER_CONFIGURATION.m
 
 SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta proprietario di prodotto, prezzo e quantità desiderati; SellRapido distribuisce tali dati ai canali downstream.
 
-- [ ] configurare da UI account SellRapido, catalogo, UUID tecnico, marketplace/canale downstream e capacità abilitate;
+- [x] configurare da UI account SellRapido, catalogo, UUID tecnico, marketplace/canale downstream e capacità abilitate;
 - [ ] ottenere e verificare un'utenza API dedicata con ACL per lettura ordini e, quando richiesta, modifica prodotti;
 - [ ] congelare endpoint e payload reali V2, chiarendo la differenza fra `/api/v2/product` e gli esempi `/api/product/{uuid}` presenti nella guida;
 - [x] CRUD ricarichi autorizzato, versionato, protetto da optimistic locking e auditato;
 - [x] anteprima deterministica per marketplace con costo Space, regola di ricarico vincente, limiti e spiegazione dei blocchi di pubblicazione;
 - [ ] estendere il calcolo con fee, regime IVA e arrotondamenti approvati dai contratti reali dei canali;
 - [ ] identità prodotto remota stabile `integration_account_id + catalog_id + sku`;
-- [ ] comando `marketplace.product.upsert.requested` per anagrafica, immagini, attributi e campi approvati;
-- [ ] comando `marketplace.offer.publish.requested` per prezzo e quantità finali già decisi da HAPA;
+- [x] comando `marketplace.product.upsert.requested` per anagrafica, immagini, attributi e campi approvati;
+- [x] comando `marketplace.offer.publish.requested` per prezzo e quantità finali già decisi da HAPA;
 - [ ] adapter SellRapido `POST`/`PATCH` con batch massimo 1000, esiti parziali per indice e idempotenza applicativa;
 - [ ] usare cataloghi data-entry oppure configurare `fields_lock` per impedire che import esterni sovrascrivano i campi gestiti da HAPA;
 - [ ] riconciliazione mediante `GET /api/v2/product`, rispettando il limite di una richiesta ogni 120 secondi;
@@ -71,7 +73,7 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 
 ## P3 — Ordini SellRapido → HAPA
 
-- [ ] configurare stati importati, frequenza, overlap, pagina e account dalla UI;
+- [x] configurare stati importati, frequenza, overlap, pagina e account dalla UI;
 - [ ] autenticazione iniziale una sola volta, rinnovo access token e rotazione refresh token gestiti da Automation;
 - [ ] import JSON incrementale con `GET /api/v2/order`, filtri `modified`, `offset` e `limit`;
 - [ ] verificare con test contrattuali i nomi effettivi dei parametri, perché la guida alterna camelCase e snake_case;
@@ -107,7 +109,7 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 - [ ] definire la matrice delle transizioni ammesse e il trattamento di risposte duplicate, tardive, regressive o incoerenti;
 - [ ] completare aggregato e repository `SupplierPurchaseOrder` senza riutilizzare gli stati dell'ordine di vendita;
 - [ ] rappresentare in modo esplicito le fasi richiesto, preso in carico, in lavorazione, parzialmente disponibile, pronto, completato, rifiutato e non disponibile dopo la validazione delle regole Space;
-- [ ] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
+- [x] comando `space.purchase_order.submit.requested` con versione e idempotency key applicativa;
 - [ ] adapter HAPA Automation idempotente che chiama l'API Space per inserire l'ordine e recuperarne lo stato;
 - [ ] polling dell'API Space con checkpoint persistente, frequenza controllata e riconciliazione periodica;
 - [ ] evento `space.purchase_order.status_changed` idempotente con versione sorgente, istante osservato, valori grezzi e dettaglio righe;
@@ -123,15 +125,15 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 
 La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discovery corrente deriva dal manuale MU.162 Rev.20 del 1 ottobre 2021: prima del codice produttivo devono essere verificati con GLS l'attivazione del servizio, il WSDL effettivo, i contratti abilitati e l'ambiente di collaudo.
 
-- [ ] configurare da UI endpoint/WSDL, ambiente, sede, cliente, contratto, password write-only, aggregazione, formato label e capacità;
+- [x] configurare da UI endpoint/WSDL, ambiente, sede, cliente, contratto, password write-only, aggregazione, formato label e capacità;
 - [x] registro spedizioni in sola lettura con ricerca, filtri, cliente, ordine, colli, peso, tracking e metadati label senza esporre riferimenti privati;
 - [ ] completare picking, quantità finali, colli, peso reale e dimensioni prima di richiedere la spedizione;
 - [ ] modellare separatamente spedizione HAPA, colli HAPA, riferimenti GLS e documenti label;
 - [ ] introdurre gli stati applicativi almeno `requested`, `open`, `awaiting_close`, `closed`, `failed`, `manual_review` e `cancelled`, senza comprimere la spedizione in un singolo flag;
-- [ ] comando `shipping.shipment.create.requested` con versione, destinatario, servizio, colli, peso, contrassegno eventuale e idempotency key;
+- [x] comando `shipping.shipment.create.requested` con versione, destinatario, servizio, colli, peso, contrassegno eventuale e idempotency key;
 - [ ] adapter Automation GLS basato su `AddParcel`, che registra la spedizione in stato GLS aperto/in attesa di chiusura e restituisce tracking, progressivi collo e informazioni label;
 - [ ] evento `shipping.shipment.opened` distinto dalla chiusura: la presenza del tracking non implica ancora affidamento consolidato alla rete GLS;
-- [ ] comando `shipping.shipment.close.requested` separato, eseguito preferibilmente con `CloseWorkDayByShipmentNumber` sui numeri di spedizione già ottenuti;
+- [x] comando `shipping.shipment.close.requested` separato, eseguito preferibilmente con `CloseWorkDayByShipmentNumber` sui numeri di spedizione già ottenuti;
 - [ ] evento `shipping.shipment.closed` soltanto dopo esito GLS `OK` e riconciliazione dello stato chiuso;
 - [ ] rappresentare ogni collo con un `ContatoreProgressivo` GLS univoco e non nullo, conservandone la correlazione stabile con `shipment_package` HAPA;
 - [ ] usare `Bda` e/o `RiferimentoCliente` come riferimenti applicativi controllati, senza considerarli da soli una garanzia di idempotenza provider;
@@ -153,7 +155,7 @@ La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discov
 ## P6 — Fulfilment HAPA → SellRapido e chiusura
 
 - [ ] definire mapping esplicito fra stato HAPA e stati SellRapido `standby`, `accepted`, `sent`, `cancelled`;
-- [ ] comando `marketplace.fulfilment.publish.requested` con ID tecnico SellRapido, tracking, corriere e note;
+- [x] comando `marketplace.fulfilment.publish.requested` con ID tecnico SellRapido, tracking, corriere e note;
 - [ ] adapter `POST /api/v2/order/status` con aggiornamenti massivi e correlazione degli errori per `index` e `id`;
 - [ ] usare `courier_code` configurato e validare la coppia tracking/corriere prima dell'invio;
 - [ ] trattare la risposta vuota come successo/no-op e ogni elemento di errore come esito parziale da riconciliare;

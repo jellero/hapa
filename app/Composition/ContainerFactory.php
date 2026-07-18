@@ -33,6 +33,7 @@ use Hapa\Core\Integration\IntegrationAccountRepository;
 use Hapa\Core\Integration\AutomationSecretClient;
 use Hapa\Core\Integration\ProviderSecretFields;
 use Hapa\Core\Integration\ProviderSecretGateway;
+use Hapa\Core\Integration\ProviderConfigurationGateway;
 use Hapa\Core\Kernel;
 use Hapa\Core\KernelFactory;
 use Hapa\Core\Logging\LoggerFactory;
@@ -340,6 +341,7 @@ final readonly class ContainerFactory
         $container->register(AutomationSecretClient::class)
             ->setArguments([new Reference(AutomationAdminConfig::class)]);
         $container->setAlias(ProviderSecretGateway::class, AutomationSecretClient::class)->setPublic(false);
+        $container->setAlias(ProviderConfigurationGateway::class, AutomationSecretClient::class)->setPublic(false);
         $container->register(UiController::class)
             ->setArguments([
                 new Reference(ViewRenderer::class),
@@ -372,6 +374,7 @@ final readonly class ContainerFactory
                 new Reference(IntegrationAccountRepository::class),
                 new Reference(ProviderSecretGateway::class),
                 new Reference(ProviderSecretFields::class),
+                new Reference(ProviderConfigurationGateway::class),
             ]);
         $container->register(PricingRuleController::class)
             ->setArguments([new Reference(PricingRuleManagement::class)]);

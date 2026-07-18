@@ -76,6 +76,8 @@ Il flusso completo è in [`docs/BUSINESS_FLOWS.md`](docs/BUSINESS_FLOWS.md).
 
 Endpoint, ambienti, account, cataloghi, contratti, capacità, frequenze e mapping sono configurabili dall'interfaccia amministrativa con validazione, versionamento e audit. Password, client secret, chiavi API e token sono write-only e restano nel secret store cifrato di Automation; un campo vuoto non modifica il valore e la revoca elimina nonce e ciphertext. Il disegno completo è in [`docs/PROVIDER_CONFIGURATION.md`](docs/PROVIDER_CONFIGURATION.md).
 
+Ogni account mostra separatamente la versione HAPA e quella applicata da Automation. La sincronizzazione è esplicita, monotona e idempotente. Pilot e produzione restano bloccati finché configurazione, credenziali e test connessione reale non risultano tutti validi.
+
 ## Architettura
 
 I due repository hanno database, immagini, migrazioni e cicli di rilascio separati. RabbitMQ è infrastruttura di integrazione condivisa: trasporta eventi e comandi versionati, non replica i database e non trasporta credenziali.

@@ -14,4 +14,7 @@ interface ProviderSecretGateway
 
     /** @return array<string, mixed> */
     public function revoke(string $account, string $provider, string $actorId, string $correlationId): array;
+
+    /** @return array<string, mixed> */
+    public function status(string $account): array;
 }
