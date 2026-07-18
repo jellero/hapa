@@ -205,10 +205,12 @@ jobs:
           grep --quiet ':root' <<< "$css"
           grep --quiet 'synchronizeNavigation' <<< "$javascript"
 
-          status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/ui/automation")"
-          test "$status" = 404
-          status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/ui/not/a/real/page")"
-          test "$status" = 404
+          headers="$(curl --silent --dump-header - --output /dev/null "$base_url/ui/automation" | tr -d '\r')"
+          grep --fixed-strings --quiet 'HTTP/1.1 303 See Other' <<< "$headers"
+          grep --fixed-strings --ignore-case --quiet 'location: /login?next=%2Fui%2Fautomation' <<< "$headers"
+          headers="$(curl --silent --dump-header - --output /dev/null "$base_url/ui/not/a/real/page" | tr -d '\r')"
+          grep --fixed-strings --quiet 'HTTP/1.1 303 See Other' <<< "$headers"
+          grep --fixed-strings --ignore-case --quiet 'location: /login?next=%2Fui%2Fnot%2Fa%2Freal%2Fpage' <<< "$headers"
       - name: Show container diagnostics
         if: failure()
         run: |
