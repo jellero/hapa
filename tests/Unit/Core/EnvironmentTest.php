@@ -205,6 +205,9 @@ final class EnvironmentTest extends TestCase
             'RABBITMQ_CONSUMER_ENABLED' => 'false',
             'RABBITMQ_CONSUMER_PASSWORD' => '',
             'RABBITMQ_CONSUMER_PASSWORD_FILE' => '',
+            'AUTOMATION_ADMIN_API_URL' => 'https://automation.internal.example.com',
+            'AUTOMATION_ADMIN_API_TOKEN' => 'secure-automation-admin-api-token',
+            'AUTOMATION_ADMIN_API_TOKEN_FILE' => '',
         ], $overrides);
     }
 

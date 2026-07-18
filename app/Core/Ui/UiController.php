@@ -11,6 +11,7 @@ use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\WebSession;
 use Hapa\Core\Integration\IntegrationAccountConfiguration;
 use Hapa\Core\Integration\IntegrationAccountRepository;
+use Hapa\Core\Integration\ProviderSecretFields;
 use Hapa\Core\View\ViewRenderer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,6 +32,7 @@ final readonly class UiController
         private ?AuthorizationPolicy $authorization = null,
         private ?PricingPreview $pricingPreview = null,
         private ?ShipmentOverview $shipmentReadModel = null,
+        private ?ProviderSecretFields $providerSecretFields = null,
     ) {
     }
 
@@ -260,6 +262,13 @@ final readonly class UiController
             $account['retire_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('integration.retire.' . (string) $account['id'])
                 : '';
+            $account['replace_secrets_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.secrets.replace.' . (string) $account['id'])
+                : '';
+            $account['revoke_secrets_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.secrets.revoke.' . (string) $account['id'])
+                : '';
+            $account['secret_fields'] = $this->providerSecretFields?->forProvider((string) $account['provider_code']) ?? [];
         }
         unset($account);
 
@@ -282,6 +291,8 @@ final readonly class UiController
             'availableCapabilities' => $this->integrationConfiguration?->availableCapabilities() ?? [],
             'createIntegrationCsrfToken' => $session instanceof WebSession ? $session->csrfToken('integration.create') : '',
             'saved' => $request->query->getBoolean('saved'),
+            'secretsSaved' => $request->query->getBoolean('secrets_saved'),
+            'secretsRevoked' => $request->query->getBoolean('secrets_revoked'),
             'configurationError' => $request->query->getString('error'),
         ]);
     }

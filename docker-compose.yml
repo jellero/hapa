@@ -46,6 +46,9 @@ x-app-environment: &app-environment
   INTEGRATION_CONNECT_TIMEOUT: ${INTEGRATION_CONNECT_TIMEOUT:-5.0}
   INTEGRATION_REQUEST_TIMEOUT: ${INTEGRATION_REQUEST_TIMEOUT:-30.0}
   INTEGRATION_MAX_RESPONSE_BYTES: ${INTEGRATION_MAX_RESPONSE_BYTES:-2097152}
+  AUTOMATION_ADMIN_API_URL: ${AUTOMATION_ADMIN_API_URL:-http://hapa-automation-admin-api:8091}
+  AUTOMATION_ADMIN_API_TOKEN: ${AUTOMATION_ADMIN_API_TOKEN:-hapa-automation-local-admin-token-change-me}
+  AUTOMATION_ADMIN_API_TIMEOUT: ${AUTOMATION_ADMIN_API_TIMEOUT:-10.0}
   LOG_LEVEL: ${LOG_LEVEL:-debug}
 
 x-php-build: &php-build
@@ -63,7 +66,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [backend]
+    networks: [backend, messaging]
     healthcheck:
       test: ["CMD-SHELL", "php-fpm -t >/dev/null 2>&1 && test -f /var/www/html/vendor/autoload.php"]
       interval: 15s

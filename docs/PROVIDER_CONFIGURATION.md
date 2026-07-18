@@ -50,6 +50,12 @@ Per ciascun account devono essere disponibili:
 
 I segreti esistenti non vengono mai restituiti al browser. Un campo vuoto significa "non modificare"; la revoca è un'azione esplicita e separata.
 
+### Implementazione operativa
+
+La UI espone campi specifici per Space, SellRapido, GLS, BRT, Amazon e Temu. Le route di sostituzione e revoca richiedono sessione amministrativa, permesso dedicato e token CSRF. Il backend invia il payload direttamente a `hapa-automation` tramite HTTPS in produzione e bearer token letto da secret file. Automation valida i nomi campo con una allowlist per provider, cifra l'oggetto con `sodium_crypto_secretbox` e conserva nonce e ciphertext nel proprio PostgreSQL.
+
+Ogni sostituzione incrementa `secret_version`; una sostituzione parziale mantiene gli altri campi già cifrati. Lo storico append-only registra soltanto provider, account, versione, azione e nomi dei campi, mai i valori. La revoca incrementa ancora la versione e imposta a `NULL` nonce e ciphertext. La chiave `PROVIDER_SECRET_KEY` e il token `AUTOMATION_ADMIN_API_TOKEN` devono risiedere fuori dal database e usare secret file o secret manager in produzione.
+
 ## SellRapido
 
 Impostazioni non segrete minime:

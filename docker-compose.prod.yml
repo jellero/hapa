@@ -35,6 +35,9 @@ x-app-environment: &app-environment
   INTEGRATION_CONNECT_TIMEOUT: ${INTEGRATION_CONNECT_TIMEOUT:-5.0}
   INTEGRATION_REQUEST_TIMEOUT: ${INTEGRATION_REQUEST_TIMEOUT:-30.0}
   INTEGRATION_MAX_RESPONSE_BYTES: ${INTEGRATION_MAX_RESPONSE_BYTES:-2097152}
+  AUTOMATION_ADMIN_API_URL: ${AUTOMATION_ADMIN_API_URL:?Set AUTOMATION_ADMIN_API_URL}
+  AUTOMATION_ADMIN_API_TOKEN_FILE: /run/secrets/automation_admin_api_token
+  AUTOMATION_ADMIN_API_TIMEOUT: ${AUTOMATION_ADMIN_API_TIMEOUT:-10.0}
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
 x-consumer-environment: &consumer-environment
@@ -63,7 +66,7 @@ services:
       dockerfile: docker/php/Dockerfile.prod
       target: runtime
     environment: *app-environment
-    secrets: [db_password, redis_password, rabbitmq_password]
+    secrets: [db_password, redis_password, rabbitmq_password, automation_admin_api_token]
     user: www-data
     read_only: true
     tmpfs:
@@ -73,7 +76,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
-    networks: [backend]
+    networks: [backend, messaging]
     restart: unless-stopped
     stop_grace_period: 20s
     security_opt: [no-new-privileges:true]
@@ -93,7 +96,7 @@ services:
       <<: *app-environment
       RABBITMQ_ENABLED: "true"
     command: ["php", "bin/console", "outbox:relay", "--watch"]
-    secrets: [db_password, redis_password, rabbitmq_password]
+    secrets: [db_password, redis_password, rabbitmq_password, automation_admin_api_token]
     user: www-data
     read_only: true
     tmpfs:
@@ -116,7 +119,7 @@ services:
       <<: *consumer-environment
       RABBITMQ_CONSUMER_ENABLED: "true"
     command: ["php", "bin/console", "inbox:consume", "--watch"]
-    secrets: [db_password, redis_password, rabbitmq_password, rabbitmq_consumer_password]
+    secrets: [db_password, redis_password, rabbitmq_password, rabbitmq_consumer_password, automation_admin_api_token]
     user: www-data
     read_only: true
     tmpfs:
@@ -127,7 +130,6 @@ services:
       postgres: {condition: service_healthy}
     networks: [backend, messaging]
     profiles: [messaging]
-    restart: unless-stopped
     restart: unless-stopped
     stop_grace_period: 20s
     security_opt: [no-new-privileges:true]
@@ -248,3 +250,5 @@ secrets:
     file: ${RABBITMQ_PASSWORD_FILE:-./secrets/rabbitmq_password.txt}
   rabbitmq_consumer_password:
     file: ${RABBITMQ_CONSUMER_PASSWORD_FILE:-./secrets/rabbitmq_consumer_password.txt}
+  automation_admin_api_token:
+    file: ${AUTOMATION_ADMIN_API_TOKEN_FILE:-./secrets/automation_admin_api_token.txt}

@@ -8,6 +8,7 @@ use Hapa\Composition\ContainerFactory;
 use Hapa\Core\Clock\Clock;
 use Hapa\Core\Clock\SystemClock;
 use Hapa\Core\Configuration\ApplicationConfig;
+use Hapa\Core\Configuration\AutomationAdminConfig;
 use Hapa\Core\Configuration\ConfigurationSet;
 use Hapa\Core\Configuration\DatabaseConfig;
 use Hapa\Core\Configuration\IntegrationConfig;
@@ -88,6 +89,7 @@ final class ContainerFactoryTest extends TestCase
                 5,
             ),
             new OutboxRelayConfig('test-relay', 50, 300, 30, 3600),
+            new AutomationAdminConfig('http://automation.test', str_repeat('t', 32), 5.0, false),
         );
     }
 }

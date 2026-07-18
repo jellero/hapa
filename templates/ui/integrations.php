@@ -20,6 +20,12 @@
 <?php if (($configurationError ?? '') !== ''): ?>
     <div class="inline-notice inline-notice--warning" role="alert"><div><strong>Configurazione non salvata</strong><span><?= $e($configurationError) ?></span></div></div>
 <?php endif; ?>
+<?php if (($secretsSaved ?? false) === true): ?>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Credenziali aggiornate</strong><span>I valori sono stati cifrati in HAPA Automation e non possono essere riletti dall’interfaccia.</span></div></div>
+<?php endif; ?>
+<?php if (($secretsRevoked ?? false) === true): ?>
+    <div class="inline-notice inline-notice--warning" role="status"><div><strong>Credenziali revocate</strong><span>Il ciphertext è stato eliminato e l’account dovrà essere riconfigurato prima dell’uso.</span></div></div>
+<?php endif; ?>
 
 <div class="inline-notice inline-notice--warning" role="note">
     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
@@ -71,6 +77,24 @@
                     <div class="field"><label>Descrizione</label><textarea name="description" rows="3" maxlength="1000"><?= $e($account['description'] ?? '') ?></textarea></div>
                     <button class="button button--secondary" type="submit">Salva nuova versione</button>
                 </form>
+                <?php if ($account['desired_status'] !== 'retired'): ?>
+                <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>/secrets" method="post" autocomplete="off">
+                    <input type="hidden" name="_csrf_token" value="<?= $e($account['replace_secrets_csrf_token']) ?>">
+                    <h3>Credenziali API write-only</h3>
+                    <p>Compila soltanto i valori da inserire o sostituire. I campi vuoti non modificano le credenziali già cifrate.</p>
+                    <?php foreach ($account['secret_fields'] as $fieldName => $fieldLabel): ?>
+                        <div class="field"><label for="secret-<?= $e((string) $account['id']) ?>-<?= $e($fieldName) ?>"><?= $e($fieldLabel) ?></label><input id="secret-<?= $e((string) $account['id']) ?>-<?= $e($fieldName) ?>" type="password" name="secrets[<?= $e($fieldName) ?>]" maxlength="8192" autocomplete="new-password" spellcheck="false"></div>
+                    <?php endforeach; ?>
+                    <button class="button button--secondary" type="submit">Salva credenziali cifrate</button>
+                </form>
+                <?php if ($account['secret_status'] === 'configured'): ?>
+                <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/secrets/revoke" method="post">
+                    <input type="hidden" name="_csrf_token" value="<?= $e($account['revoke_secrets_csrf_token']) ?>">
+                    <label><input type="checkbox" name="confirm_revoke" value="yes" required> Confermo la revoca delle credenziali correnti</label>
+                    <button class="button button--ghost" type="submit">Revoca credenziali</button>
+                </form>
+                <?php endif; ?>
+                <?php endif; ?>
                 <?php if ($account['desired_status'] !== 'retired'): ?>
                 <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/retire" method="post">
                     <input type="hidden" name="_csrf_token" value="<?= $e($account['retire_csrf_token']) ?>"><input type="hidden" name="configuration_version" value="<?= $e((string) $account['configuration_version']) ?>">

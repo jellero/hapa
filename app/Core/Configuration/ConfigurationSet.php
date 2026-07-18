@@ -15,6 +15,7 @@ final readonly class ConfigurationSet
         public RabbitMqConfig $rabbitMq,
         public RabbitMqConsumerConfig $rabbitMqConsumer,
         public OutboxRelayConfig $outboxRelay,
+        public AutomationAdminConfig $automationAdmin,
     ) {
     }
 }

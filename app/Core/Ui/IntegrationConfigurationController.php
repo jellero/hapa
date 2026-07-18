@@ -6,9 +6,12 @@ namespace Hapa\Core\Ui;
 
 use Hapa\Core\Integration\IntegrationAccountConfiguration;
 use Hapa\Core\Integration\IntegrationAccountRepository;
+use Hapa\Core\Integration\ProviderSecretFields;
+use Hapa\Core\Integration\ProviderSecretGateway;
 use Hapa\Core\Security\UserIdentity;
 use InvalidArgumentException;
 use JsonException;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,6 +21,8 @@ final readonly class IntegrationConfigurationController
     public function __construct(
         private IntegrationAccountConfiguration $validator,
         private IntegrationAccountRepository $accounts,
+        private ProviderSecretGateway $secretGateway,
+        private ProviderSecretFields $secretFields,
     ) {
     }
 
@@ -67,6 +72,54 @@ final readonly class IntegrationConfigurationController
         );
 
         return new RedirectResponse('/ui/integrations?saved=1', Response::HTTP_SEE_OTHER);
+    }
+
+    public function replaceSecrets(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            if ($account['desired_status'] === 'retired') {
+                throw new InvalidArgumentException('L’account ritirato non può ricevere nuove credenziali.');
+            }
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $secrets = $this->secretFields->submitted((string) $account['provider_code'], $request->request->all('secrets'));
+            $status = $this->secretGateway->replace(
+                (string) $account['code'],
+                (string) $account['provider_code'],
+                $secrets,
+                $actor->id,
+                $correlationId,
+            );
+            $this->accounts->recordSecretStatus((int) $account['id'], $status, $actor, $correlationId);
+
+            return new RedirectResponse('/ui/integrations?secrets_saved=1', Response::HTTP_SEE_OTHER);
+        } catch (InvalidArgumentException | JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
+    public function revokeSecrets(Request $request): Response
+    {
+        try {
+            if ($request->request->getString('confirm_revoke') !== 'yes') {
+                throw new RuntimeException('La revoca richiede conferma esplicita.');
+            }
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $status = $this->secretGateway->revoke(
+                (string) $account['code'],
+                (string) $account['provider_code'],
+                $actor->id,
+                $correlationId,
+            );
+            $this->accounts->recordSecretStatus((int) $account['id'], $status, $actor, $correlationId);
+
+            return new RedirectResponse('/ui/integrations?secrets_revoked=1', Response::HTTP_SEE_OTHER);
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
     }
 
     /** @return array<string, mixed> @throws JsonException */

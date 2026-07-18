@@ -9,6 +9,7 @@ use Hapa\Core\Audit\AuditReadModel;
 use Hapa\Core\Clock\Clock;
 use Hapa\Core\Clock\SystemClock;
 use Hapa\Core\Configuration\ApplicationConfig;
+use Hapa\Core\Configuration\AutomationAdminConfig;
 use Hapa\Core\Configuration\ConfigurationSet;
 use Hapa\Core\Configuration\DatabaseConfig;
 use Hapa\Core\Configuration\IntegrationConfig;
@@ -29,6 +30,9 @@ use Hapa\Core\Health\ReadinessCheck;
 use Hapa\Core\Http\HttpResponsePolicy;
 use Hapa\Core\Integration\IntegrationAccountConfiguration;
 use Hapa\Core\Integration\IntegrationAccountRepository;
+use Hapa\Core\Integration\AutomationSecretClient;
+use Hapa\Core\Integration\ProviderSecretFields;
+use Hapa\Core\Integration\ProviderSecretGateway;
 use Hapa\Core\Kernel;
 use Hapa\Core\KernelFactory;
 use Hapa\Core\Logging\LoggerFactory;
@@ -166,6 +170,12 @@ final readonly class ContainerFactory
             $configuration->outboxRelay->lockTimeoutSeconds,
             $configuration->outboxRelay->retryBaseSeconds,
             $configuration->outboxRelay->retryMaximumSeconds,
+        ]));
+        $container->setDefinition(AutomationAdminConfig::class, new Definition(AutomationAdminConfig::class, [
+            $configuration->automationAdmin->baseUrl,
+            $configuration->automationAdmin->accessToken,
+            $configuration->automationAdmin->timeoutSeconds,
+            $configuration->application->isProduction(),
         ]));
 
         $container->register(SystemClock::class);
@@ -326,6 +336,10 @@ final readonly class ContainerFactory
                 new Reference(ConnectionFactory::class),
                 new Reference(Clock::class),
             ]);
+        $container->register(ProviderSecretFields::class);
+        $container->register(AutomationSecretClient::class)
+            ->setArguments([new Reference(AutomationAdminConfig::class)]);
+        $container->setAlias(ProviderSecretGateway::class, AutomationSecretClient::class)->setPublic(false);
         $container->register(UiController::class)
             ->setArguments([
                 new Reference(ViewRenderer::class),
@@ -341,6 +355,7 @@ final readonly class ContainerFactory
                 new Reference(AuthorizationPolicy::class),
                 new Reference(PricingPreview::class),
                 new Reference(ShipmentOverview::class),
+                new Reference(ProviderSecretFields::class),
             ]);
         $container->register(CustomerController::class)
             ->setArguments([new Reference(CustomerManagement::class)]);
@@ -355,6 +370,8 @@ final readonly class ContainerFactory
             ->setArguments([
                 new Reference(IntegrationAccountConfiguration::class),
                 new Reference(IntegrationAccountRepository::class),
+                new Reference(ProviderSecretGateway::class),
+                new Reference(ProviderSecretFields::class),
             ]);
         $container->register(PricingRuleController::class)
             ->setArguments([new Reference(PricingRuleManagement::class)]);

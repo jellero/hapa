@@ -51,6 +51,75 @@ SQL);
         }, $rows));
     }
 
+    /** @return array<string, mixed> */
+    public function find(int $id): array
+    {
+        foreach ($this->all() as $account) {
+            if ($account['id'] === $id) {
+                return $account;
+            }
+        }
+
+        throw new RuntimeException('Account integrazione non trovato.');
+    }
+
+    /** @param array<string, mixed> $status @throws JsonException */
+    public function recordSecretStatus(int $id, array $status, UserIdentity $actor, string $correlationId): void
+    {
+        $secretStatus = $status['status'] ?? null;
+        $secretVersion = $status['secret_version'] ?? null;
+        if (!is_string($secretStatus) || !in_array($secretStatus, ['configured', 'revoked'], true)
+            || !is_int($secretVersion) || $secretVersion < 1) {
+            throw new RuntimeException('Stato credenziali Automation non valido.');
+        }
+        $rotatedAt = isset($status['rotated_at']) && is_string($status['rotated_at']) ? $status['rotated_at'] : null;
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $pdo = $this->connection();
+        $pdo->beginTransaction();
+        try {
+            $statement = $pdo->prepare(<<<'SQL'
+UPDATE integration_accounts
+SET secret_status = :secret_status, secret_version = :secret_version,
+    secret_rotated_at = :secret_rotated_at, connection_test_status = 'never',
+    connection_tested_at = NULL, last_error = NULL, updated_at = :updated_at
+WHERE id = :id AND secret_version <= :secret_version
+SQL);
+            $statement->execute([
+                'id' => $id,
+                'secret_status' => $secretStatus,
+                'secret_version' => $secretVersion,
+                'secret_rotated_at' => $rotatedAt,
+                'updated_at' => $now,
+            ]);
+            if ($statement->rowCount() !== 1) {
+                throw new RuntimeException('Account integrazione non disponibile o stato credenziali obsoleto.');
+            }
+            $auditPayload = json_encode([
+                'secret_status' => $secretStatus,
+                'secret_version' => $secretVersion,
+                'secret_rotated_at' => $rotatedAt,
+            ], JSON_THROW_ON_ERROR);
+            $audit = $pdo->prepare(<<<'SQL'
+INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, after_data, correlation_id, created_at)
+VALUES (:actor_id, :action, 'integration_account', :entity_id, CAST(:after_data AS JSONB), :correlation_id, :created_at)
+SQL);
+            $audit->execute([
+                'actor_id' => $actor->id,
+                'action' => $secretStatus === 'revoked' ? 'integration.secrets_revoked' : 'integration.secrets_replaced',
+                'entity_id' => (string) $id,
+                'after_data' => $auditPayload,
+                'correlation_id' => $correlationId,
+                'created_at' => $now,
+            ]);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     /** @param array<string, mixed> $configuration @throws JsonException */
     public function create(array $configuration, UserIdentity $actor, string $correlationId): int
     {

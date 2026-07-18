@@ -26,7 +26,7 @@ La roadmap segue vertical slice di business. HAPA decide e conserva lo stato com
 - [x] storage privato locale per etichette e documenti con riferimenti opachi, checksum e scrittura atomica;
 - [x] CRUD amministrativo versionato dei dati non segreti per account Space, SellRapido, GLS e provider futuri;
 - [x] configurazione da UI di ambiente, endpoint, account, cataloghi, contratti, capacità, mapping, frequenze e batch;
-- [ ] campi credenziale write-only, mascherati e delegati allo storage cifrato di Automation senza persistenza in HAPA;
+- [x] campi credenziale write-only, mascherati e delegati allo storage cifrato di Automation senza persistenza in HAPA;
 - [ ] azioni UI separate per test connessione, rotazione/revoca, abilitazione e disabilitazione per capacità;
 - [ ] mostrare stato connessione, ultima verifica, scadenza token, checkpoint ed errore redatto senza esporre segreti;
 - [x] versionare e auditare ogni modifica della configurazione non segreta; l’attivazione produzione resta bloccata fino al gate Automation.

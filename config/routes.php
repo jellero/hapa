@@ -46,6 +46,12 @@ return static function (
     $retireIntegrationController = $integrationConfiguration instanceof IntegrationConfigurationController
         ? $integrationConfiguration->retire(...)
         : $unavailableAuthentication;
+    $replaceIntegrationSecretsController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->replaceSecrets(...)
+        : $unavailableAuthentication;
+    $revokeIntegrationSecretsController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->revokeSecrets(...)
+        : $unavailableAuthentication;
     $createPricingController = $pricingRules instanceof PricingRuleController
         ? $pricingRules->create(...)
         : $unavailableAuthentication;
@@ -161,6 +167,16 @@ return static function (
         '_controller' => $retireIntegrationController,
         '_permission' => 'integrations.manage',
         '_csrf_action' => 'integration.retire.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_secrets_replace', new Route('/ui/integrations/{accountId}/secrets', [
+        '_controller' => $replaceIntegrationSecretsController,
+        '_permission' => 'integrations.secrets.manage',
+        '_csrf_action' => 'integration.secrets.replace.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_secrets_revoke', new Route('/ui/integrations/{accountId}/secrets/revoke', [
+        '_controller' => $revokeIntegrationSecretsController,
+        '_permission' => 'integrations.secrets.manage',
+        '_csrf_action' => 'integration.secrets.revoke.{accountId}',
     ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
     $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...), '_permission' => 'users.manage'], methods: ['GET']));
     $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...), '_permission' => 'audit.view'], methods: ['GET']));

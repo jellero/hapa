@@ -76,6 +76,15 @@ final class ConfigurationLoader
             self::integer('OUTBOX_RELAY_RETRY_BASE_SECONDS', '30'),
             self::integer('OUTBOX_RELAY_RETRY_MAX_SECONDS', '3600'),
         );
+        $automationAdmin = new AutomationAdminConfig(
+            EnvironmentReader::value(
+                'AUTOMATION_ADMIN_API_URL',
+                $application->isProduction() ? 'https://hapa-automation-admin-api' : 'http://hapa-automation-admin-api:8091',
+            ),
+            EnvironmentReader::secret('AUTOMATION_ADMIN_API_TOKEN', 'hapa-automation-local-admin-token-change-me'),
+            self::decimal('AUTOMATION_ADMIN_API_TIMEOUT', '10.0'),
+            $application->isProduction(),
+        );
 
         if ($application->isProduction()) {
             if ($proxy->trustedProxies === []) {
@@ -93,6 +102,7 @@ final class ConfigurationLoader
                     $rabbitMqConsumer->password,
                 );
             }
+            self::assertProductionSecret('AUTOMATION_ADMIN_API_TOKEN', $automationAdmin->accessToken);
         }
 
         return new ConfigurationSet(
@@ -104,6 +114,7 @@ final class ConfigurationLoader
             $rabbitMq,
             $rabbitMqConsumer,
             $outboxRelay,
+            $automationAdmin,
         );
     }
 
