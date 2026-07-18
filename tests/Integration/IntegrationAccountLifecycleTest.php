@@ -82,7 +82,11 @@ final class IntegrationAccountLifecycleTest extends TestCase
             self::assertStringContainsString('test connessione', $exception->getMessage());
         }
 
-        $this->pdo->prepare("UPDATE integration_accounts SET connection_test_status = 'passed' WHERE id = :id")->execute(['id' => $this->accountId]);
+        $this->accounts->recordConnectionTest($this->accountId, [
+            'status' => 'passed',
+            'tested_at' => gmdate(DATE_ATOM),
+            'token_expires_at' => gmdate(DATE_ATOM, time() + 900),
+        ], $this->actor, 'integration-connection-test');
         $this->accounts->changeDesiredStatus($this->accountId, 1, 'pilot', $this->actor, 'integration-pilot');
         $account = $this->accounts->find($this->accountId);
         self::assertSame('pilot', $account['desired_status']);

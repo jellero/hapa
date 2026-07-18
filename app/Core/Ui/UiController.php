@@ -277,33 +277,49 @@ final readonly class UiController
             $account['change_status_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('integration.status.change.' . (string) $account['id'])
                 : '';
+            $account['connection_test_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.connection-test.' . (string) $account['id'])
+                : '';
+            $account['orders_import_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('integration.orders.import.' . (string) $account['id'])
+                : '';
             $account['secret_fields'] = $this->providerSecretFields?->forProvider((string) $account['provider_code']) ?? [];
         }
         unset($account);
+        $availableCapabilities = $this->integrationConfiguration?->availableCapabilities() ?? [];
+        $accountCounts = [];
+        foreach ($accounts as $account) {
+            $provider = (string) $account['provider_code'];
+            $accountCounts[$provider] = ($accountCounts[$provider] ?? 0) + 1;
+        }
 
         return $this->operational($request, 'ui/integrations', 'integrations', [
             'title' => 'Integrazioni',
             'eyebrow' => 'Ecosistema',
             'description' => 'Configura account e provider. L’esecuzione asincrona risiede nel servizio separato hapa-automation.',
             'integrations' => [
-                ['name' => 'hapa-automation', 'kind' => 'Servizio separato · RabbitMQ · database proprio', 'code' => 'automation', 'status' => 'Repository dedicato', 'tone' => 'success'],
-                ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore · ordini e offerte', 'code' => 'sellrapido', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'hapa-automation', 'kind' => 'Servizio separato · RabbitMQ · database proprio', 'code' => 'automation', 'status' => 'Operativo', 'tone' => 'success'],
+                ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore · import ordini IBS', 'code' => 'sellrapido', 'status' => 'Operativo', 'tone' => 'success'],
                 ['name' => 'Amazon', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'eMAG', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'Temu', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'IBS', 'kind' => 'Canale · offerte via percorso verificato', 'code' => 'ibs', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'IBS', 'kind' => 'Canale · ordini tramite SellRapido', 'code' => 'ibs', 'status' => 'Disponibile via SellRapido', 'tone' => 'success'],
                 ['name' => 'Space', 'kind' => 'Sorgente prezzo e stock · destinazione ordini', 'code' => 'space', 'status' => 'Contratti pronti', 'tone' => 'info'],
                 ['name' => 'GLS', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
                 ['name' => 'BRT (Bartolini)', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'brt', 'status' => 'Contratto pronto', 'tone' => 'info'],
             ],
             'configuredAccounts' => $accounts,
-            'availableCapabilities' => $this->integrationConfiguration?->availableCapabilities() ?? [],
+            'availableCapabilities' => $availableCapabilities,
+            'accountCounts' => $accountCounts,
             'createIntegrationCsrfToken' => $session instanceof WebSession ? $session->csrfToken('integration.create') : '',
             'saved' => $request->query->getBoolean('saved'),
             'secretsSaved' => $request->query->getBoolean('secrets_saved'),
             'secretsRevoked' => $request->query->getBoolean('secrets_revoked'),
             'configurationSynced' => $request->query->getBoolean('configuration_synced'),
             'statusRefreshed' => $request->query->getBoolean('status_refreshed'),
+            'connectionTested' => $request->query->getBoolean('connection_tested'),
+            'ordersImported' => $request->query->getBoolean('orders_imported'),
+            'ordersPublished' => max(0, $request->query->getInt('published')),
             'configurationError' => $request->query->getString('error'),
         ]);
     }

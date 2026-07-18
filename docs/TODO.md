@@ -74,10 +74,11 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 ## P3 — Ordini SellRapido → HAPA
 
 - [x] configurare stati importati, frequenza, overlap, pagina e account dalla UI;
-- [ ] autenticazione iniziale una sola volta, rinnovo access token e rotazione refresh token gestiti da Automation;
-- [ ] import JSON incrementale con `GET /api/v2/order`, filtri `modified`, `offset` e `limit`;
+- [x] autenticazione iniziale, riuso della sessione cifrata e rinnovo access token tramite refresh token gestiti da Automation;
+- [ ] rotazione preventiva del refresh token prima della scadenza dei 30 giorni;
+- [x] import JSON incrementale con `GET /api/v2/order`, filtri configurabili `modified`, `offset` e `limit`;
 - [ ] verificare con test contrattuali i nomi effettivi dei parametri, perché la guida alterna camelCase e snake_case;
-- [ ] usare un watermark su `modified` con finestra di sovrapposizione e non avanzarlo prima dell'outbox durevole;
+- [x] usare un watermark su `modified` con finestra di sovrapposizione e non avanzarlo prima dell'outbox durevole;
 - [x] `marketplace.order.observed` idempotente con `connector = sellrapido`;
 - [x] identità tecnica `integration_account_id + head.id`, conservando anche `code`, `marketplace_code`, `channel_code` e identificativi riga;
 - [x] conservare senza perdita gli stati SellRapido `standby`, `accepted`, `sent` e `cancelled`, portando in revisione le cancellazioni tardive;
@@ -86,7 +87,8 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 - [ ] completare lo snapshot pagamento dopo il congelamento dei campi effettivi del payload SellRapido;
 - [x] minimizzare e non conservare per default `upload_status.request_payload` e token marketplace grezzi;
 - [ ] revisione manuale per anomalie, righe senza SKU, collisioni e modifiche regressive;
-- [ ] riconciliazione iniziale con ordini SellRapido esistenti e deduplica del backfill.
+- [x] deduplica del backfill tramite identità deterministica dell’osservazione e vincoli HAPA;
+- [ ] riconciliazione iniziale con il volume completo degli ordini SellRapido esistenti.
 
 **Gate:** lo stesso ordine SellRapido non crea duplicati; aggiornamenti fuori ordine non fanno regredire HAPA; i dati storici restano ricostruibili; il checkpoint avanza soltanto dopo persistenza dell'osservazione.
 

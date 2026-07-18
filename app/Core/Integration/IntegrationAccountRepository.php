@@ -161,6 +161,69 @@ SQL);
         }
     }
 
+    /** @param array<string, mixed> $status @throws JsonException */
+    public function recordConnectionTest(int $id, array $status, UserIdentity $actor, string $correlationId): void
+    {
+        $passed = ($status['status'] ?? null) === 'passed';
+        $testedAt = $status['tested_at'] ?? null;
+        if (!$passed || !is_string($testedAt) || trim($testedAt) === '') {
+            throw new RuntimeException('Esito test connessione Automation non valido.');
+        }
+        $tokenExpiresAt = isset($status['token_expires_at']) && is_string($status['token_expires_at'])
+            ? $status['token_expires_at']
+            : null;
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $pdo = $this->connection();
+        $pdo->beginTransaction();
+        try {
+            $statement = $pdo->prepare(<<<'SQL'
+UPDATE integration_accounts
+SET connection_test_status = 'passed', connection_tested_at = :tested_at,
+    token_expires_at = :token_expires_at, technical_checked_at = :checked_at,
+    last_error = NULL, updated_at = :updated_at
+WHERE id = :id AND secret_status = 'configured' AND desired_status <> 'retired'
+SQL);
+            $statement->execute([
+                'id' => $id,
+                'tested_at' => $testedAt,
+                'token_expires_at' => $tokenExpiresAt,
+                'checked_at' => $now,
+                'updated_at' => $now,
+            ]);
+            if ($statement->rowCount() !== 1) {
+                throw new RuntimeException('Account non disponibile o credenziali non configurate.');
+            }
+            $encoded = json_encode([
+                'connection_test_status' => 'passed',
+                'connection_tested_at' => $testedAt,
+                'token_expires_at' => $tokenExpiresAt,
+            ], JSON_THROW_ON_ERROR);
+            $this->audit($id, 'integration.connection_test_passed', $encoded, $actor, $correlationId, $now);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    /** @param array<string, mixed> $result @throws JsonException */
+    public function recordManualImport(int $id, array $result, UserIdentity $actor, string $correlationId): void
+    {
+        if (($result['status'] ?? null) !== 'completed' || !is_int($result['published'] ?? null)) {
+            throw new RuntimeException('Esito import ordini Automation non valido.');
+        }
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $encoded = json_encode([
+            'status' => 'completed',
+            'observed' => $result['observed'] ?? 0,
+            'published' => $result['published'],
+            'duplicates' => $result['duplicates'] ?? 0,
+        ], JSON_THROW_ON_ERROR);
+        $this->audit($id, 'integration.orders_imported_manually', $encoded, $actor, $correlationId, $now);
+    }
+
     /** @throws JsonException */
     public function changeDesiredStatus(int $id, int $expectedVersion, string $target, UserIdentity $actor, string $correlationId): void
     {

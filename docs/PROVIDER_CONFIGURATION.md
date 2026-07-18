@@ -58,6 +58,8 @@ Ogni sostituzione incrementa `secret_version`; una sostituzione parziale mantien
 
 La configurazione non segreta viene applicata separatamente con una versione monotona. Automation rifiuta versioni regressive e conflitti con fingerprint diverso sulla stessa versione, conserva una proiezione tecnica e uno storico append-only, e ripete in difesa la scansione delle chiavi sensibili. La UI mostra la versione HAPA e quella Automation e non consente pilot o attivazione finché credenziali, test connessione e sincronizzazione non sono tutti validi.
 
+Per SellRapido la UI esegue un test reale di autenticazione e lettura ordini, mostra la scadenza redatta del token e consente un import immediato sugli account pilot o attivi. La sincronizzazione di una configurazione pilot/attiva abilita il polling automatico in Automation; disabilitazione, sospensione o ritiro lo arrestano quando non restano altri account eleggibili.
+
 ## SellRapido
 
 Impostazioni non segrete minime:

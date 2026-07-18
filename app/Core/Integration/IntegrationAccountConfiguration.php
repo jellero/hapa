@@ -24,6 +24,9 @@ final class IntegrationAccountConfiguration
             'base_url', 'account', 'catalog_id', 'catalog_uuid', 'downstream_channel',
             'order_states', 'poll_interval_seconds', 'overlap_seconds', 'page_size',
             'batch_size', 'catalog_mode', 'fields_lock', 'courier_mapping',
+            'orders_path', 'modified_parameter', 'offset_parameter', 'limit_parameter',
+            'status_parameter', 'maximum_pages_per_run', 'initial_lookback_days',
+            'request_timeout_seconds', 'maximum_response_bytes',
         ],
         'space' => ['base_url', 'timeout_seconds', 'poll_interval_seconds', 'overlap_seconds', 'state_mapping_version'],
         'gls' => [

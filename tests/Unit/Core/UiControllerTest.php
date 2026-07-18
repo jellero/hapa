@@ -93,6 +93,9 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('hapa-automation', $content);
         self::assertStringContainsString('RabbitMQ', $content);
         self::assertStringContainsString('database proprio', $content);
+        self::assertStringContainsString('SellRapido', $content);
+        self::assertStringContainsString('import ordini IBS', $content);
+        self::assertStringContainsString('Operativo', $content);
     }
 
     public function testItIgnoresUnknownCollectionFilters(): void

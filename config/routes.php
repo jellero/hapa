@@ -61,6 +61,12 @@ return static function (
     $changeIntegrationStatusController = $integrationConfiguration instanceof IntegrationConfigurationController
         ? $integrationConfiguration->changeStatus(...)
         : $unavailableAuthentication;
+    $testIntegrationConnectionController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->testConnection(...)
+        : $unavailableAuthentication;
+    $importIntegrationOrdersController = $integrationConfiguration instanceof IntegrationConfigurationController
+        ? $integrationConfiguration->importOrders(...)
+        : $unavailableAuthentication;
     $createPricingController = $pricingRules instanceof PricingRuleController
         ? $pricingRules->create(...)
         : $unavailableAuthentication;
@@ -201,6 +207,16 @@ return static function (
         '_controller' => $changeIntegrationStatusController,
         '_permission' => 'integrations.manage',
         '_csrf_action' => 'integration.status.change.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_connection_test', new Route('/ui/integrations/{accountId}/connection-test', [
+        '_controller' => $testIntegrationConnectionController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.connection-test.{accountId}',
+    ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_integration_orders_import', new Route('/ui/integrations/{accountId}/orders/import', [
+        '_controller' => $importIntegrationOrdersController,
+        '_permission' => 'integrations.manage',
+        '_csrf_action' => 'integration.orders.import.{accountId}',
     ], requirements: ['accountId' => '[1-9][0-9]*'], methods: ['POST']));
     $routes->add('ui_users', new Route('/ui/users', ['_controller' => $ui->users(...), '_permission' => 'users.manage'], methods: ['GET']));
     $routes->add('ui_audit', new Route('/ui/audit', ['_controller' => $ui->audit(...), '_permission' => 'audit.view'], methods: ['GET']));

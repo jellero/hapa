@@ -15,7 +15,7 @@
 </header>
 
 <?php if (($saved ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Configurazione salvata</strong><span>La nuova versione non abilita automaticamente alcun job provider.</span></div></div>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Configurazione salvata</strong><span>Sincronizza la nuova versione con Automation; i job vengono attivati soltanto quando l’account entra in pilot o attivo.</span></div></div>
 <?php endif; ?>
 <?php if (($configurationError ?? '') !== ''): ?>
     <div class="inline-notice inline-notice--warning" role="alert"><div><strong>Configurazione non salvata</strong><span><?= $e($configurationError) ?></span></div></div>
@@ -31,6 +31,12 @@
 <?php endif; ?>
 <?php if (($statusRefreshed ?? false) === true): ?>
     <div class="inline-notice inline-notice--info" role="status"><div><strong>Stato tecnico aggiornato</strong><span>Versioni e stato credenziali sono stati riletti direttamente da Automation.</span></div></div>
+<?php endif; ?>
+<?php if (($connectionTested ?? false) === true): ?>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Connessione SellRapido verificata</strong><span>Credenziali, token e lettura ordini sono operativi.</span></div></div>
+<?php endif; ?>
+<?php if (($ordersImported ?? false) === true): ?>
+    <div class="inline-notice inline-notice--info" role="status"><div><strong>Import SellRapido completato</strong><span><?= $e((string) ($ordersPublished ?? 0)) ?> osservazioni ordine pubblicate verso HAPA.</span></div></div>
 <?php endif; ?>
 
 <div class="inline-notice inline-notice--warning" role="note">
@@ -92,6 +98,12 @@
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/configuration/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['sync_configuration_csrf_token']) ?>"><button class="button button--secondary" type="submit">Sincronizza configurazione</button></form>
                     <?php endif; ?>
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/status/refresh" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['refresh_status_csrf_token']) ?>"><button class="button button--ghost" type="submit">Aggiorna stato tecnico</button></form>
+                    <?php if ($account['provider_code'] === 'sellrapido' && $account['secret_status'] === 'configured' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/connection-test" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['connection_test_csrf_token']) ?>"><button class="button button--secondary" type="submit">Verifica connessione SellRapido</button></form>
+                    <?php endif; ?>
+                    <?php if ($account['provider_code'] === 'sellrapido' && in_array($account['desired_status'], ['pilot', 'active'], true) && $account['connection_test_status'] === 'passed' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/orders/import" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['orders_import_csrf_token']) ?>"><button class="button button--primary" type="submit">Importa ordini ora</button></form>
+                    <?php endif; ?>
                 </div>
                 <?php if ($account['desired_status'] !== 'retired'): ?>
                 <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>/secrets" method="post" autocomplete="off">
@@ -153,9 +165,14 @@
                     <p><?= $e($integration['kind']) ?></p>
                 </div>
                 <div class="integration-card__meta">
-                    <span><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#integration"></use></svg> 0 account configurati</span>
+                    <?php $integrationAccountCount = (int) (($accountCounts ?? [])[$integration['code']] ?? 0); ?>
+                    <span><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#integration"></use></svg> <?= $e((string) $integrationAccountCount) ?> account configurati</span>
                 </div>
-                <button class="button button--ghost button--wide" type="button" disabled>Configura</button>
+                <?php if (array_key_exists($integration['code'], $availableCapabilities ?? [])): ?>
+                    <a class="button button--ghost button--wide" href="#new-integration-account">Configura</a>
+                <?php else: ?>
+                    <button class="button button--ghost button--wide" type="button" disabled>Non disponibile</button>
+                <?php endif; ?>
             </article>
         <?php endforeach; ?>
     </div>

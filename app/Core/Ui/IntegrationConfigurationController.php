@@ -181,6 +181,42 @@ final readonly class IntegrationConfigurationController
         }
     }
 
+    public function testConnection(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            if ($account['provider_code'] !== 'sellrapido') {
+                throw new RuntimeException('Il test operativo è disponibile per SellRapido.');
+            }
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $result = $this->configurationGateway->testConnection((string) $account['code']);
+            $this->accounts->recordConnectionTest((int) $account['id'], $result, $actor, $correlationId);
+
+            return new RedirectResponse('/ui/integrations?connection_tested=1', Response::HTTP_SEE_OTHER);
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
+    public function importOrders(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            if ($account['provider_code'] !== 'sellrapido' || !in_array($account['desired_status'], ['pilot', 'active'], true)) {
+                throw new RuntimeException('L’import manuale richiede un account SellRapido pilot o attivo.');
+            }
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $result = $this->configurationGateway->importOrders((string) $account['code']);
+            $this->accounts->recordManualImport((int) $account['id'], $result, $actor, $correlationId);
+
+            return new RedirectResponse('/ui/integrations?orders_imported=1&published=' . (int) ($result['published'] ?? 0), Response::HTTP_SEE_OTHER);
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
     /** @return array<string, mixed> @throws JsonException */
     private function configuration(Request $request): array
     {
