@@ -7,6 +7,7 @@ namespace Hapa\Modules\Space\Application;
 use DateTimeImmutable;
 use Hapa\Core\Database\TransactionManager;
 use Hapa\Core\Messaging\MessageEnvelope;
+use Hapa\Modules\Catalog\Contract\CatalogOfferRecalculator;
 use Hapa\Modules\Space\Contract\SpaceCatalogObservation;
 use Hapa\Modules\Space\Domain\SpaceCatalogIngestionOutcome;
 use JsonException;
@@ -18,6 +19,7 @@ final readonly class SpaceCatalogObservationHandler
     public function __construct(
         private PDO $pdo,
         private TransactionManager $transactions,
+        private CatalogOfferRecalculator $offerRecalculator,
     ) {
     }
 
@@ -60,6 +62,7 @@ final readonly class SpaceCatalogObservationHandler
 
             $this->updateOffer((int) $offer['id'], $observation);
             $this->updatePendingProduct($catalogItemId, $observation);
+            $this->offerRecalculator->recalculateProduct($this->pdo, $catalogItemId);
 
             return $this->finishObservation(
                 $observationId,
@@ -94,6 +97,7 @@ final readonly class SpaceCatalogObservationHandler
         }
 
         $this->createOffer($supplierId, $catalogItemId, $observation);
+        $this->offerRecalculator->recalculateProduct($this->pdo, $catalogItemId);
 
         return $this->finishObservation(
             $observationId,

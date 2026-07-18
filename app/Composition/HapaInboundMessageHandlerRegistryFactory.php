@@ -12,6 +12,9 @@ use Hapa\Core\Messaging\TransportProbeHandler;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
 use Hapa\Core\Outbox\ProviderCommandFactory;
 use Hapa\Core\Outbox\ProviderCommandPayloadValidator;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferPublicationResultHandler;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\MarketplaceOrderInboundHandler;
 use Hapa\Modules\Orders\Application\MarketplaceOrderObservationHandler;
@@ -45,7 +48,13 @@ final readonly class HapaInboundMessageHandlerRegistryFactory implements Inbound
             new SpaceCatalogInboundHandler(new SpaceCatalogObservationHandler(
                 $connection,
                 $transactions,
+                new MarketplaceOfferRecalculator(
+                    new PriceCalculator(),
+                    new SystemClock(),
+                    new ProviderCommandFactory(new ProviderCommandPayloadValidator(), new SystemClock()),
+                ),
             )),
+            new MarketplaceOfferPublicationResultHandler($connection),
             new SpacePurchaseOrderResultHandler($connection),
             new MarketplaceOrderInboundHandler(new MarketplaceOrderObservationHandler(
                 $connection,

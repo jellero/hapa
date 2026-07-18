@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Hapa\Tests\Integration;
 
 use DateTimeImmutable;
+use Hapa\Core\Clock\SystemClock;
 use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Database\PdoTransactionManager;
 use Hapa\Core\Messaging\MessageEnvelope;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
 use Hapa\Modules\Space\Domain\SpaceCatalogIngestionOutcome;
 use PDO;
@@ -28,6 +31,7 @@ final class SpaceCatalogObservationIngestionTest extends TestCase
             $this->handler = new SpaceCatalogObservationHandler(
                 $this->pdo,
                 new PdoTransactionManager($this->pdo),
+                new MarketplaceOfferRecalculator(new PriceCalculator(), new SystemClock()),
             );
         } catch (Throwable $exception) {
             self::markTestSkipped('PostgreSQL di test non disponibile: ' . $exception->getMessage());
@@ -57,7 +61,7 @@ final class SpaceCatalogObservationIngestionTest extends TestCase
         self::assertNotNull($result->catalogItemId);
 
         $statement = $this->pdo->prepare(<<<'SQL'
-SELECT item.sku, item.name, item.active, item.onboarding_status,
+SELECT item.sku, item.name, item.active, item.onboarding_status, item.sellable_quantity,
        offer.external_item_id, offer.purchase_cost_minor, offer.available_quantity
 FROM catalog_items AS item
 JOIN supplier_catalog_items AS offer ON offer.catalog_item_id = item.id
@@ -72,6 +76,12 @@ SQL);
         self::assertSame('pending_review', $row['onboarding_status']);
         self::assertSame(1299, (int) $row['purchase_cost_minor']);
         self::assertSame(12, (int) $row['available_quantity']);
+        self::assertSame(12, (int) $row['sellable_quantity']);
+        $offers = $this->pdo->query(
+            'SELECT COUNT(*) FROM marketplace_offers WHERE catalog_item_id = ' . (int) $result->catalogItemId,
+        );
+        self::assertNotFalse($offers);
+        self::assertGreaterThanOrEqual(1, (int) $offers->fetchColumn());
 
         $duplicate = $this->handler->handle($message);
         self::assertSame(SpaceCatalogIngestionOutcome::Duplicate, $duplicate->outcome);

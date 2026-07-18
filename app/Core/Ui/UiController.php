@@ -168,6 +168,9 @@ final readonly class UiController
             $item['review_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('catalog.review.' . (string) $item['id'])
                 : '';
+            $item['availability_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('catalog.availability.' . (string) $item['id'])
+                : '';
         }
         unset($item);
         $pricePreviews = $this->pricingPreview?->forProducts($catalogItems) ?? [];
@@ -200,6 +203,8 @@ final readonly class UiController
             'pricingError' => $request->query->getString('pricing_error'),
             'reviewSaved' => $request->query->getBoolean('review_saved'),
             'reviewError' => $request->query->getString('review_error'),
+            'availabilitySaved' => $request->query->getBoolean('availability_saved'),
+            'availabilityError' => $request->query->getString('availability_error'),
         ]);
     }
 

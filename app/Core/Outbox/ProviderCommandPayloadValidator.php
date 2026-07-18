@@ -40,6 +40,9 @@ final class ProviderCommandPayloadValidator
     private function offer(array $payload): void
     {
         self::connector($payload);
+        self::string($payload, 'offer_id');
+        self::string($payload, 'downstream_marketplace_code');
+        self::positiveInteger($payload, 'catalog_id');
         self::string($payload, 'sku');
         self::positiveInteger($payload, 'offer_version');
         self::nonNegativeInteger($payload, 'price_minor');

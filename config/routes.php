@@ -84,6 +84,9 @@ return static function (
     $reviewCatalogController = $catalogReview instanceof CatalogReviewController
         ? $catalogReview->review(...)
         : $unavailableAuthentication;
+    $updateCatalogAvailabilityController = $catalogReview instanceof CatalogReviewController
+        ? $catalogReview->updateAvailability(...)
+        : $unavailableAuthentication;
     $createCustomerController = $customers instanceof CustomerController
         ? $customers->create(...)
         : $unavailableAuthentication;
@@ -166,6 +169,11 @@ return static function (
         '_controller' => $reviewCatalogController,
         '_permission' => 'catalog.manage',
         '_csrf_action' => 'catalog.review.{itemId}',
+    ], requirements: ['itemId' => '[1-9][0-9]*'], methods: ['POST']));
+    $routes->add('ui_catalog_availability_update', new Route('/ui/catalog/items/{itemId}/availability', [
+        '_controller' => $updateCatalogAvailabilityController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'catalog.availability.{itemId}',
     ], requirements: ['itemId' => '[1-9][0-9]*'], methods: ['POST']));
     $routes->add('ui_order_detail', new Route(
         '/ui/orders/{orderId}',

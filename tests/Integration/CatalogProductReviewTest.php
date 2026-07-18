@@ -10,6 +10,8 @@ use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\UserRepository;
 use Hapa\Modules\Catalog\Application\CatalogProductReviewService;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Throwable;
@@ -19,6 +21,7 @@ final class CatalogProductReviewTest extends TestCase
     private PDO $pdo;
     private UserIdentity $actor;
     private int $itemId;
+    private CatalogProductReviewService $products;
 
     protected function setUp(): void
     {
@@ -40,7 +43,12 @@ RETURNING id
 SQL);
             $statement->execute(['sku' => 'REVIEW-' . bin2hex(random_bytes(6))]);
             $this->itemId = (int) $statement->fetchColumn();
-            (new CatalogProductReviewService($connections, $clock))->review(
+            $this->products = new CatalogProductReviewService(
+                $connections,
+                $clock,
+                new MarketplaceOfferRecalculator(new PriceCalculator(), $clock),
+            );
+            $this->products->review(
                 $this->itemId,
                 1,
                 'approved',
@@ -76,5 +84,33 @@ SQL);
         $history = $this->pdo->prepare('SELECT action FROM catalog_item_history WHERE catalog_item_id = :id');
         $history->execute(['id' => $this->itemId]);
         self::assertSame('approved', $history->fetchColumn());
+    }
+
+    public function testSafetyStockIsVersionedAndRecalculatesSellableQuantity(): void
+    {
+        $this->products->updateSafetyStock(
+            $this->itemId,
+            2,
+            3,
+            $this->actor,
+            'catalog-availability-test',
+        );
+
+        $statement = $this->pdo->prepare(
+            'SELECT safety_stock, sellable_quantity, version, offers_calculated_at FROM catalog_items WHERE id = :id',
+        );
+        $statement->execute(['id' => $this->itemId]);
+        $item = $statement->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($item);
+        self::assertSame(3, (int) $item['safety_stock']);
+        self::assertSame(0, (int) $item['sellable_quantity']);
+        self::assertSame(3, (int) $item['version']);
+        self::assertNotNull($item['offers_calculated_at']);
+
+        $history = $this->pdo->prepare(
+            "SELECT action FROM catalog_item_history WHERE catalog_item_id = :id AND version = 3",
+        );
+        $history->execute(['id' => $this->itemId]);
+        self::assertSame('safety_stock_updated', $history->fetchColumn());
     }
 }

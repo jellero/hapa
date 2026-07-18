@@ -21,6 +21,7 @@ final class CatalogProductReviewService implements CatalogProductManagement
     public function __construct(
         private readonly ConnectionFactory $connections,
         private readonly Clock $clock,
+        private readonly MarketplaceOfferRecalculator $offerRecalculator,
     ) {
     }
 
@@ -64,6 +65,61 @@ SQL);
             }
             $after = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, $decision, $before, $after, $actor, $correlationId, $now);
+            $this->offerRecalculator->recalculateProduct($pdo, $id);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public function updateSafetyStock(
+        int $id,
+        int $expectedVersion,
+        int $safetyStock,
+        UserIdentity $actor,
+        string $correlationId,
+    ): void {
+        if ($id < 1 || $expectedVersion < 1 || $safetyStock < 0) {
+            throw new InvalidArgumentException('Scorta di sicurezza non valida.');
+        }
+        $pdo = $this->connection();
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $pdo->beginTransaction();
+        try {
+            $before = $this->snapshot($id, true);
+            $statement = $pdo->prepare(<<<'SQL'
+UPDATE catalog_items
+SET safety_stock = :safety_stock,
+    version = version + 1,
+    updated_at = :updated_at
+WHERE id = :id AND version = :expected_version
+RETURNING version
+SQL);
+            $statement->execute([
+                'safety_stock' => $safetyStock,
+                'updated_at' => $now,
+                'id' => $id,
+                'expected_version' => $expectedVersion,
+            ]);
+            $version = $statement->fetchColumn();
+            if ($version === false) {
+                throw new CatalogReviewConflict('Il prodotto è stato modificato da un altro operatore.');
+            }
+            $after = $this->snapshot($id);
+            $this->historyAndAudit(
+                $id,
+                (int) $version,
+                'safety_stock_updated',
+                $before,
+                $after,
+                $actor,
+                $correlationId,
+                $now,
+            );
+            $this->offerRecalculator->recalculateProduct($pdo, $id);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {

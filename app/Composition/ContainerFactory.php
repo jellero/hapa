@@ -71,8 +71,10 @@ use Hapa\Core\Ui\SpacePurchaseManagement;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
+use Hapa\Modules\Catalog\Contract\CatalogOfferRecalculator;
 use Hapa\Modules\Catalog\Application\CatalogReadModel;
 use Hapa\Modules\Catalog\Application\CatalogProductReviewService;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
 use Hapa\Modules\Catalog\Application\PricingRuleService;
 use Hapa\Modules\Catalog\Application\PricingPreviewService;
 use Hapa\Modules\Customers\Application\CustomerReadModel;
@@ -237,6 +239,13 @@ final readonly class ContainerFactory
 
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
+        $container->register(MarketplaceOfferRecalculator::class)
+            ->setArguments([
+                new Reference(PriceCalculator::class),
+                new Reference(Clock::class),
+                new Reference(ProviderCommandFactory::class),
+            ]);
+        $container->setAlias(CatalogOfferRecalculator::class, MarketplaceOfferRecalculator::class)->setPublic(false);
         $container->register(PricingPreviewService::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),
@@ -267,18 +276,21 @@ final readonly class ContainerFactory
             ->setArguments([
                 new Reference(ConnectionFactory::class),
                 new Reference(Clock::class),
+                new Reference(MarketplaceOfferRecalculator::class),
             ]);
         $container->setAlias(CatalogProductManagement::class, CatalogProductReviewService::class)->setPublic(false);
         $container->register(PricingRuleService::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),
                 new Reference(Clock::class),
+                new Reference(MarketplaceOfferRecalculator::class),
             ]);
         $container->setAlias(PricingRuleManagement::class, PricingRuleService::class)->setPublic(false);
         $container->register(SpaceCatalogObservationHandler::class)
             ->setArguments([
                 new Reference(PDO::class),
                 new Reference(TransactionManager::class),
+                new Reference(CatalogOfferRecalculator::class),
             ]);
         $container->register(RabbitMqSpaceCatalogConsumer::class)
             ->setArguments([new Reference(RabbitMqConfig::class)]);
@@ -395,6 +407,8 @@ final readonly class ContainerFactory
                 new Reference(ProviderSecretFields::class),
                 new Reference(ProviderConfigurationGateway::class),
                 new Reference(SpacePurchaseManagement::class),
+                new Reference(CatalogOfferRecalculator::class),
+                new Reference(ConnectionFactory::class),
             ]);
         $container->register(SpacePurchaseController::class)
             ->setArguments([new Reference(SpacePurchaseManagement::class)]);

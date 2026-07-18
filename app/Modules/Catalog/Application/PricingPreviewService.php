@@ -34,6 +34,7 @@ final class PricingPreviewService implements PricingPreview
     {
         $marketplaces = $this->marketplaces();
         $rules = $this->rules();
+        $savedOffers = $this->savedOffers();
         $previews = [];
         foreach ($products as $product) {
             $id = (int) ($product['id'] ?? 0);
@@ -57,12 +58,22 @@ final class PricingPreviewService implements PricingPreview
                     'base_price_minor' => $cost,
                     'selling_price_minor' => null,
                     'markup_minor' => null,
+                    'sellable_quantity' => (int) ($product['sellable_quantity'] ?? 0),
                     'currency' => $currency,
                     'applied_rule_code' => null,
                     'publishable' => false,
                     'blockers' => [],
                     'error' => null,
+                    'offer_status' => null,
+                    'offer_version' => null,
+                    'calculated_at' => null,
                 ];
+                $saved = $savedOffers[$id][(int) $marketplace['id']] ?? null;
+                if (is_array($saved)) {
+                    $preview['offer_status'] = $saved['status'];
+                    $preview['offer_version'] = $saved['source_version'];
+                    $preview['calculated_at'] = $saved['calculated_at'];
+                }
                 try {
                     $calculated = $this->calculator->calculate($basePrice, $marketplace['code'], $sku, $rules);
                     $preview['selling_price_minor'] = $calculated->sellingPrice->minorAmount;
@@ -81,11 +92,11 @@ final class PricingPreviewService implements PricingPreview
         return $previews;
     }
 
-    /** @return list<array{code: string, name: string, business_status: string, technical_account_count: int}> */
+    /** @return list<array{id: int, code: string, name: string, business_status: string, technical_account_count: int}> */
     private function marketplaces(): array
     {
         $statement = $this->connection()->query(<<<'SQL'
-SELECT marketplace.code, marketplace.name, marketplace.business_status,
+SELECT marketplace.id, marketplace.code, marketplace.name, marketplace.business_status,
        COUNT(account.id) FILTER (
            WHERE account.technical_enabled
              AND account.status IN ('pilot', 'active')
@@ -102,11 +113,35 @@ SQL);
         }
 
         return array_values(array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
             'code' => (string) $row['code'],
             'name' => (string) $row['name'],
             'business_status' => (string) $row['business_status'],
             'technical_account_count' => (int) $row['technical_account_count'],
         ], $statement->fetchAll(PDO::FETCH_ASSOC)));
+    }
+
+    /** @return array<int, array<int, array{status: string, source_version: int, calculated_at: string|null}>> */
+    private function savedOffers(): array
+    {
+        $statement = $this->connection()->query(<<<'SQL'
+SELECT catalog_item_id, marketplace_id, status, source_version, calculated_at
+FROM marketplace_offers
+WHERE marketplace_account_id IS NULL
+SQL);
+        if ($statement === false) {
+            return [];
+        }
+        $offers = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $offers[(int) $row['catalog_item_id']][(int) $row['marketplace_id']] = [
+                'status' => (string) $row['status'],
+                'source_version' => (int) $row['source_version'],
+                'calculated_at' => is_string($row['calculated_at']) ? $row['calculated_at'] : null,
+            ];
+        }
+
+        return $offers;
     }
 
     /** @return list<PricingRule> */
@@ -142,7 +177,7 @@ SQL);
 
     /**
      * @param array<string, mixed> $product
-     * @param array{code: string, name: string, business_status: string, technical_account_count: int} $marketplace
+     * @param array{id: int, code: string, name: string, business_status: string, technical_account_count: int} $marketplace
      * @param array<string, mixed> $preview
      * @return list<string>
      */

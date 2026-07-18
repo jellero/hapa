@@ -15,4 +15,12 @@ interface CatalogProductManagement
         UserIdentity $actor,
         string $correlationId,
     ): void;
+
+    public function updateSafetyStock(
+        int $id,
+        int $expectedVersion,
+        int $safetyStock,
+        UserIdentity $actor,
+        string $correlationId,
+    ): void;
 }

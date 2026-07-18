@@ -26,6 +26,7 @@ final class IntegrationAccountConfiguration
             'batch_size', 'catalog_mode', 'fields_lock', 'courier_mapping',
             'orders_path', 'modified_parameter', 'offset_parameter', 'limit_parameter',
             'status_parameter', 'maximum_pages_per_run', 'initial_lookback_days',
+            'offer_path', 'offer_method', 'offer_min_interval_seconds', 'pilot_skus',
             'request_timeout_seconds', 'maximum_response_bytes',
         ],
         'space' => [

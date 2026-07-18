@@ -26,6 +26,7 @@ final class PricingRuleService implements PricingRuleManagement
     public function __construct(
         private readonly ConnectionFactory $connections,
         private readonly Clock $clock,
+        private readonly MarketplaceOfferRecalculator $offerRecalculator,
     ) {
     }
 
@@ -88,6 +89,7 @@ SQL);
             $id = (int) $statement->fetchColumn();
             $snapshot = $this->snapshot($id);
             $this->historyAndAudit($id, 1, 'created', null, $snapshot, $actor, $correlationId, $now);
+            $this->offerRecalculator->recalculateAll($pdo);
             $pdo->commit();
 
             return $id;
@@ -142,6 +144,7 @@ SQL);
             }
             $after = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, 'updated', $before, $after, $actor, $correlationId, $now);
+            $this->offerRecalculator->recalculateAll($pdo);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -179,6 +182,7 @@ SQL);
             }
             $after = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, 'retired', $before, $after, $actor, $correlationId, $now);
+            $this->offerRecalculator->recalculateAll($pdo);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {

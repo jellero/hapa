@@ -58,15 +58,16 @@ SellRapido è il connettore tecnico corrente che gestisce IBS. HAPA resta propri
 - [ ] congelare endpoint e payload reali V2, chiarendo la differenza fra `/api/v2/product` e gli esempi `/api/product/{uuid}` presenti nella guida;
 - [x] CRUD ricarichi autorizzato, versionato, protetto da optimistic locking e auditato;
 - [x] anteprima deterministica per marketplace con costo Space, regola di ricarico vincente, limiti e spiegazione dei blocchi di pubblicazione;
+- [x] calcolo persistente HAPA di prezzo finale e quantità vendibile, ricalcolato su costo/stock Space, regole, approvazione e scorta di sicurezza;
 - [ ] estendere il calcolo con fee, regime IVA e arrotondamenti approvati dai contratti reali dei canali;
 - [ ] identità prodotto remota stabile `integration_account_id + catalog_id + sku`;
 - [x] comando `marketplace.product.upsert.requested` per anagrafica, immagini, attributi e campi approvati;
 - [x] comando `marketplace.offer.publish.requested` per prezzo e quantità finali già decisi da HAPA;
-- [ ] adapter SellRapido `POST`/`PATCH` con batch massimo 1000, esiti parziali per indice e idempotenza applicativa;
+- [x] adapter SellRapido reale `POST`/`PATCH` per prezzo e quantità, esito per SKU, idempotenza applicativa, retry e rispetto del rate limit; batching fino a 1000 resta un'ottimizzazione;
 - [ ] usare cataloghi data-entry oppure configurare `fields_lock` per impedire che import esterni sovrascrivano i campi gestiti da HAPA;
 - [ ] riconciliazione mediante `GET /api/v2/product`, rispettando il limite di una richiesta ogni 120 secondi;
-- [ ] rispettare il limite di una scrittura prodotti ogni 300 secondi aggregando le modifiche senza perdere l'ultima versione;
-- [ ] pilot su un sottoinsieme SKU e un solo account SellRapido;
+- [x] rispettare il limite di una scrittura prodotti ogni 300 secondi differendo le offerte successive senza perdere l'ultima versione;
+- [x] pilot su un sottoinsieme SKU e un solo account SellRapido tramite `pilot_skus`;
 - [ ] cutover del writer precedente e verifica che esista un solo writer per catalogo/campo.
 
 **Gate:** HAPA riproduce i valori inviati; SellRapido viene aggiornato da un solo writer; nessun import automatico sovrascrive silenziosamente i campi HAPA; errori parziali sono riconciliati per singolo SKU.

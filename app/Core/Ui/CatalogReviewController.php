@@ -45,4 +45,33 @@ final readonly class CatalogReviewController
             );
         }
     }
+
+    public function updateAvailability(Request $request): Response
+    {
+        try {
+            $actor = $request->attributes->get('current_user');
+            if (!$actor instanceof UserIdentity) {
+                throw new InvalidArgumentException('Attore autenticato non disponibile.');
+            }
+            $this->products->updateSafetyStock(
+                $request->attributes->getInt('itemId'),
+                $request->request->getInt('version'),
+                $request->request->getInt('safety_stock'),
+                $actor,
+                $request->attributes->getString('correlation_id'),
+            );
+
+            return new RedirectResponse('/ui/catalog?availability_saved=1', Response::HTTP_SEE_OTHER);
+        } catch (InvalidArgumentException | CatalogReviewConflict $exception) {
+            return new RedirectResponse(
+                '/ui/catalog?availability_error=' . rawurlencode($exception->getMessage()),
+                Response::HTTP_SEE_OTHER,
+            );
+        } catch (Throwable) {
+            return new RedirectResponse(
+                '/ui/catalog?availability_error=' . rawurlencode('Impossibile aggiornare la scorta di sicurezza.'),
+                Response::HTTP_SEE_OTHER,
+            );
+        }
+    }
 }

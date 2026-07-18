@@ -67,6 +67,8 @@ Impostazioni non segrete minime:
 - URL base, predefinito `https://app.sellrapido.com/sr_company_ws` ma modificabile per ambiente;
 - account e descrizione;
 - catalogo SellRapido e UUID richiesto dagli endpoint di scrittura, da verificare sul contratto reale;
+- endpoint offerte (`offer_path`, predefinito `/api/v2/product`) e metodo `PATCH`/`POST` configurabili; il placeholder `{catalog_uuid}` supporta il tracciato alternativo `/api/product/{uuid}`;
+- intervallo minimo fra scritture offerte non inferiore a 300 secondi e lista `pilot_skus` obbligatoria per limitare un account pilot;
 - marketplace e canale downstream, inizialmente IBS;
 - stati ordine da importare;
 - frequenza polling, overlap del watermark, dimensione pagina e dimensione batch;

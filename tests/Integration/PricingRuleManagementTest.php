@@ -10,6 +10,8 @@ use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\UserRepository;
 use Hapa\Modules\Catalog\Application\PricingRuleService;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Throwable;
@@ -34,7 +36,11 @@ final class PricingRuleManagementTest extends TestCase
                 password_hash('Pricing-test-password-2026!', PASSWORD_ARGON2ID),
                 $clock->now(),
             );
-            $this->rules = new PricingRuleService($connections, $clock);
+            $this->rules = new PricingRuleService(
+                $connections,
+                $clock,
+                new MarketplaceOfferRecalculator(new PriceCalculator(), $clock),
+            );
         } catch (Throwable $exception) {
             self::markTestSkipped('PostgreSQL HAPA non disponibile: ' . $exception->getMessage());
         }

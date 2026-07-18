@@ -13,6 +13,8 @@ use Hapa\Core\Messaging\MessageEnvelope;
 use Hapa\Core\Outbox\PostgresOutboxRepository;
 use Hapa\Core\Outbox\ProviderCommandFactory;
 use Hapa\Core\Outbox\ProviderCommandPayloadValidator;
+use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
+use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Orders\Application\OrderEventOutboxMapper;
 use Hapa\Modules\Orders\Application\MarketplaceOrderObservationHandler;
 use Hapa\Modules\Orders\Infrastructure\Persistence\PostgresOrderRepository;
@@ -167,7 +169,11 @@ SQL);
         $spaceAccount = 'space-' . $suffix;
         $spaceItemId = (string) random_int(100000, 999999);
         $this->enableSpacePurchases($spaceAccount);
-        (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
+        (new SpaceCatalogObservationHandler(
+            $this->pdo,
+            new PdoTransactionManager($this->pdo),
+            new MarketplaceOfferRecalculator(new PriceCalculator(), new SystemClock()),
+        ))->handle(
             new MessageEnvelope(
                 'space-item-' . $suffix,
                 'space.catalog.item.observed',
@@ -265,7 +271,11 @@ SQL);
         $suffix = bin2hex(random_bytes(5));
         $sku = 'SKU-' . $suffix;
         $this->enableSpacePurchases('space-invalid-item-' . $suffix);
-        (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
+        (new SpaceCatalogObservationHandler(
+            $this->pdo,
+            new PdoTransactionManager($this->pdo),
+            new MarketplaceOfferRecalculator(new PriceCalculator(), new SystemClock()),
+        ))->handle(
             new MessageEnvelope(
                 'space-invalid-item-' . $suffix,
                 'space.catalog.item.observed',
@@ -316,7 +326,11 @@ SQL);
         ));
 
         $this->enableSpacePurchases('space-backfill-' . $suffix);
-        (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
+        (new SpaceCatalogObservationHandler(
+            $this->pdo,
+            new PdoTransactionManager($this->pdo),
+            new MarketplaceOfferRecalculator(new PriceCalculator(), new SystemClock()),
+        ))->handle(
             new MessageEnvelope(
                 'space-backfill-item-' . $suffix,
                 'space.catalog.item.observed',

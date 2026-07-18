@@ -64,6 +64,9 @@ final class ProviderCommandFactoryTest extends TestCase
         yield 'offer' => ['marketplace.offer.publish.requested', [
             ...self::common('offer:42:7'),
             'connector' => 'sellrapido',
+            'offer_id' => '42',
+            'downstream_marketplace_code' => 'ibs',
+            'catalog_id' => 123456,
             'sku' => 'SKU-42',
             'offer_version' => 7,
             'price_minor' => 1899,

@@ -74,7 +74,9 @@ HAPA seleziona una sola regola vincente. La precedenza è:
 
 A parità di ambito vince la priorità numerica maggiore; il codice regola risolve in modo deterministico un ulteriore pareggio.
 
-La UI esegue la stessa selezione deterministica per mostrare un’anteprima per ciascun marketplace. L’anteprima distingue il calcolo commerciale dalla pubblicabilità: approvazione prodotto, stock, stato marketplace e presenza di un account tecnico abilitato sono mostrati come gate separati. Non include ancora commissioni, regime IVA o arrotondamenti specifici del canale.
+HAPA esegue la selezione deterministica e persiste il risultato in `marketplace_offers` per ciascun marketplace. Il prezzo desiderato deriva dal costo Space e dalla regola vincente; la quantità vendibile canonica è `max(disponibilità Space - scorta di sicurezza HAPA, 0)`. Una nuova osservazione Space, l’approvazione del prodotto, una variazione della scorta o una modifica delle regole provocano il ricalcolo. La versione dell’offerta aumenta soltanto se prezzo, quantità, regola o stato cambiano.
+
+La UI mostra costo e stock fisico separati da prezzo e quantità decisi da HAPA. Approvazione prodotto, stato marketplace e presenza di un account tecnico abilitato rimangono gate distinti per la pubblicazione. Commissioni, regime IVA e arrotondamenti specifici del canale restano esclusi finché non sono contrattualizzati.
 
 ## Flusso di sincronizzazione
 
