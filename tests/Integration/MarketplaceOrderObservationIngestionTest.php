@@ -165,6 +165,7 @@ SQL);
         $sku = 'SKU-' . $suffix;
         $ean = '1234567890123';
         $spaceAccount = 'space-' . $suffix;
+        $spaceItemId = (string) random_int(100000, 999999);
         $this->enableSpacePurchases($spaceAccount);
         (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
             new MessageEnvelope(
@@ -176,7 +177,7 @@ SQL);
                 null,
                 [
                     'supplier' => 'space',
-                    'external_item_id' => 'SPACE-' . $suffix,
+                    'external_item_id' => $spaceItemId,
                     'supplier_sku' => $sku,
                     'ean' => $ean,
                     'name' => 'Prodotto acquistabile',
@@ -220,6 +221,7 @@ SQL);
         $payload = json_decode((string) $command->fetchColumn(), true, 32, JSON_THROW_ON_ERROR);
         self::assertSame($spaceAccount, $payload['integration_account_code']);
         self::assertSame($sku, $payload['lines'][0]['sku']);
+        self::assertSame($spaceItemId, $payload['lines'][0]['supplier_item_id']);
         self::assertSame(1, $payload['lines'][0]['quantity']);
         self::assertSame('hapa.commands', $this->value(
             "SELECT exchange_name FROM outbox_messages WHERE aggregate_id = '" . (int) $row['id'] . "' AND event_type = 'space.purchase_order.submit.requested'",
@@ -258,10 +260,55 @@ SQL);
         ));
     }
 
+    public function testItDoesNotQueueASpacePurchaseWithoutANumericLegacyItemId(): void
+    {
+        $suffix = bin2hex(random_bytes(5));
+        $sku = 'SKU-' . $suffix;
+        $this->enableSpacePurchases('space-invalid-item-' . $suffix);
+        (new SpaceCatalogObservationHandler($this->pdo, new PdoTransactionManager($this->pdo)))->handle(
+            new MessageEnvelope(
+                'space-invalid-item-' . $suffix,
+                'space.catalog.item.observed',
+                1,
+                new DateTimeImmutable('2026-07-18T06:00:00Z'),
+                'space-invalid-correlation-' . $suffix,
+                null,
+                [
+                    'supplier' => 'space',
+                    'external_item_id' => 'SPACE-' . $suffix,
+                    'supplier_sku' => $sku,
+                    'ean' => '1234567890123',
+                    'name' => 'Prodotto con identificativo legacy non valido',
+                    'description' => null,
+                    'purchase_cost_minor' => 250,
+                    'currency' => 'EUR',
+                    'available_quantity' => 12,
+                    'source_version' => 'space-invalid-v1-' . $suffix,
+                    'observed_at' => '2026-07-18T06:00:00Z',
+                ],
+            ),
+        );
+
+        $created = $this->handler->handle($this->message($suffix, 'v1', '2026-07-18T08:00:00Z'));
+        self::assertNotNull($created->orderId);
+        self::assertSame('manual_review', $this->value(
+            'SELECT status FROM supplier_purchase_orders WHERE order_id = ' . $created->orderId,
+        ));
+        self::assertSame(0, (int) $this->value(
+            "SELECT COUNT(*) FROM outbox_messages message
+             JOIN supplier_purchase_orders purchase
+               ON message.aggregate_type = 'supplier_purchase_order'
+              AND message.aggregate_id = CAST(purchase.id AS VARCHAR)
+             WHERE message.event_type = 'space.purchase_order.submit.requested'
+               AND purchase.order_id = " . $created->orderId,
+        ));
+    }
+
     public function testItBackfillsAnExistingOrderWhenSpaceBecomesOperational(): void
     {
         $suffix = bin2hex(random_bytes(5));
         $sku = 'SKU-' . $suffix;
+        $spaceItemId = (string) random_int(100000, 999999);
         $created = $this->handler->handle($this->message($suffix, 'v1', '2026-07-18T08:00:00Z'));
         self::assertNotNull($created->orderId);
         self::assertSame('manual_review', $this->value(
@@ -279,7 +326,7 @@ SQL);
                 null,
                 [
                     'supplier' => 'space',
-                    'external_item_id' => 'SPACE-BACKFILL-' . $suffix,
+                    'external_item_id' => $spaceItemId,
                     'supplier_sku' => $sku,
                     'ean' => '1234567890123',
                     'name' => 'Prodotto Space recuperato',

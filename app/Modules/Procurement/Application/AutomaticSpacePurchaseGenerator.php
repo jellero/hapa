@@ -214,6 +214,13 @@ SQL);
                 )];
             }
             $offer = $best[0];
+            if ($offer['external_item_id'] === null || !ctype_digit((string) $offer['external_item_id'])
+                || (int) $offer['external_item_id'] < 1) {
+                return ['lines' => [], 'reason' => sprintf(
+                    'ID articolo Space assente o non numerico per %s.',
+                    (string) $offer['supplier_sku'],
+                )];
+            }
             $quantity = (int) $salesLine['quantity_ordered'];
             $offerId = (int) $offer['supplier_catalog_item_id'];
             $required[$offerId] = ($required[$offerId] ?? 0) + $quantity;
@@ -236,7 +243,7 @@ SQL);
                 'order_line_id' => (int) $salesLine['id'],
                 'catalog_item_id' => (int) $offer['catalog_item_id'],
                 'supplier_catalog_item_id' => $offerId,
-                'external_item_id' => $offer['external_item_id'] === null ? null : (string) $offer['external_item_id'],
+                'external_item_id' => (string) $offer['external_item_id'],
                 'supplier_sku' => (string) $offer['supplier_sku'],
                 'description_snapshot' => $salesLine['description_snapshot'] === null ? null : (string) $salesLine['description_snapshot'],
                 'quantity' => $quantity,
