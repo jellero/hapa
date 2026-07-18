@@ -9,13 +9,10 @@ use Hapa\Core\Integration\IntegrationAccountRepository;
 use Hapa\Core\Integration\ProviderSecretFields;
 use Hapa\Core\Integration\ProviderSecretGateway;
 use Hapa\Core\Integration\ProviderConfigurationGateway;
-use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Security\UserIdentity;
-use Hapa\Modules\Catalog\Contract\CatalogOfferRecalculator;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
-use Throwable;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,8 +26,7 @@ final readonly class IntegrationConfigurationController
         private ProviderSecretFields $secretFields,
         private ProviderConfigurationGateway $configurationGateway,
         private SpacePurchaseManagement $spacePurchases,
-        private CatalogOfferRecalculator $offers,
-        private ConnectionFactory $connections,
+        private CatalogProductManagement $catalog,
     ) {
     }
 
@@ -141,7 +137,7 @@ final readonly class IntegrationConfigurationController
             if ($account['provider_code'] === 'space') {
                 $this->spacePurchases->generateOutstanding($correlationId);
             } elseif ($account['provider_code'] === 'sellrapido') {
-                $this->recalculateOffers();
+                $this->catalog->recalculateOffers();
             }
 
             return new RedirectResponse('/ui/integrations?configuration_synced=1', Response::HTTP_SEE_OTHER);
@@ -206,7 +202,7 @@ final readonly class IntegrationConfigurationController
             if ($account['provider_code'] === 'space') {
                 $this->spacePurchases->generateOutstanding($correlationId);
             } elseif ($account['provider_code'] === 'sellrapido') {
-                $this->recalculateOffers();
+                $this->catalog->recalculateOffers();
             }
 
             return new RedirectResponse('/ui/integrations?connection_tested=1', Response::HTTP_SEE_OTHER);
@@ -290,18 +286,4 @@ final readonly class IntegrationConfigurationController
         return $actor;
     }
 
-    private function recalculateOffers(): void
-    {
-        $pdo = $this->connections->create();
-        $pdo->beginTransaction();
-        try {
-            $this->offers->recalculateAll($pdo);
-            $pdo->commit();
-        } catch (Throwable $exception) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            throw $exception;
-        }
-    }
 }

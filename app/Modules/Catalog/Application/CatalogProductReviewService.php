@@ -75,6 +75,23 @@ SQL);
         }
     }
 
+    public function recalculateOffers(): int
+    {
+        $pdo = $this->connection();
+        $pdo->beginTransaction();
+        try {
+            $updated = $this->offerRecalculator->recalculateAll($pdo);
+            $pdo->commit();
+
+            return $updated;
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     public function updateSafetyStock(
         int $id,
         int $expectedVersion,

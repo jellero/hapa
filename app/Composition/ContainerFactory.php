@@ -407,8 +407,7 @@ final readonly class ContainerFactory
                 new Reference(ProviderSecretFields::class),
                 new Reference(ProviderConfigurationGateway::class),
                 new Reference(SpacePurchaseManagement::class),
-                new Reference(CatalogOfferRecalculator::class),
-                new Reference(ConnectionFactory::class),
+                new Reference(CatalogProductManagement::class),
             ]);
         $container->register(SpacePurchaseController::class)
             ->setArguments([new Reference(SpacePurchaseManagement::class)]);

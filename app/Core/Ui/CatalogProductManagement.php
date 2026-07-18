@@ -8,6 +8,8 @@ use Hapa\Core\Security\UserIdentity;
 
 interface CatalogProductManagement
 {
+    public function recalculateOffers(): int;
+
     public function review(
         int $id,
         int $expectedVersion,
