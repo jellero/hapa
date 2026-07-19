@@ -1,8 +1,10 @@
 # Roadmap HAPA
 
-Ultimo riesame: 18 luglio 2026.
+Ultimo riesame: 19 luglio 2026.
 
 La roadmap segue vertical slice di business. HAPA decide e conserva lo stato commerciale; Automation esegue le integrazioni. Nessun job provider viene abilitato globalmente prima del pilot della singola capacità.
+
+Le direttive funzionali e di interfaccia del 19 luglio 2026 sono descritte in [`SYSTEM_NOTES.md`](SYSTEM_NOTES.md). Diagrammi, tabelle e decisioni esistenti devono essere integrati e mantenuti, non sostituiti o rimossi.
 
 ## Baseline
 
@@ -195,6 +197,111 @@ La vertical slice usa il GLS Web Integrated Labeling Service SOAP/XML. La discov
 - [ ] riconciliazione e segregazione ruoli.
 
 Nessun codice fiscale operativo viene introdotto prima dei gate in [`FISCAL.md`](FISCAL.md).
+
+## P9 — Catalogo, pubblicazione e interfaccia operativa
+
+Il dettaglio completo è in [`SYSTEM_NOTES.md`](SYSTEM_NOTES.md).
+
+### P9.1 — Filtri di pubblicazione marketplace
+
+- [ ] introdurre policy di catalogo versionate e auditate con azione `include` o `exclude`;
+- [ ] supportare criteri su SKU, EAN, artista, titolo, formato, nome prodotto, marketplace, stato commerciale, stock e backorder;
+- [ ] supportare almeno gli operatori uguale, diverso, contiene, non contiene, prefisso, suffisso, appartiene a elenco e relative negazioni;
+- [ ] permettere, per esempio, di includere o escludere tutti gli SKU che contengono `223A`, incluso lo SKU `223A3432233`;
+- [ ] permettere inclusioni ed esclusioni equivalenti su artista, titolo e formato;
+- [ ] comporre criteri con modalità `tutti` o `almeno uno`, priorità, validità temporale e motivazione;
+- [ ] rendere deterministica la precedenza fra inclusioni ed esclusioni e mostrare il percorso decisionale nell'anteprima;
+- [ ] applicare le policy al catalogo o a sottoinsiemi dichiarativi, evitando una gestione manuale regola-per-singolo-SKU;
+- [ ] impedire l'emissione dei comandi marketplace quando una policy esclude il prodotto;
+- [ ] aggiungere test unitari, integrazione e fixture per conflitti, priorità e criteri testuali.
+
+### P9.2 — Catalogo commerciale e stock Space
+
+- [ ] estendere ricerca e filtri catalogo a SKU, EAN, artista, titolo, formato e nome prodotto;
+- [ ] permettere dalla scheda prodotto modifica consentita, approvazione, rifiuto, blocco, sblocco, scorta di sicurezza e ricalcolo;
+- [ ] mantenere separate scheda prodotto e politiche di catalogo;
+- [ ] mostrare in tabella costo Space, stock immediato, backorder, vendibile HAPA, versione, revisione, età dato, offerte e stato pubblicazione;
+- [ ] aggiungere indicatori separati per prodotti con prezzo, stock immediato, backorder, regole di ricarico e pubblicazioni obsolete o bloccate;
+- [ ] rendere configurabile per account la soglia di obsolescenza del dato, con valore iniziale rappresentabile in 24 ore;
+- [ ] mostrare quale regola di ricarico vince secondo la precedenza marketplace + selettore, selettore prodotto, marketplace e globale;
+- [ ] mostrare nell'anteprima costo, regola vincente, regole escluse e motivazioni di blocco;
+- [ ] mantenere fee, IVA e arrotondamenti fuori dal prezzo finale finché i contratti ufficiali non sono validati.
+
+### P9.3 — Login istituzionale
+
+- [ ] rinominare la schermata in **Portale operativo HAPA** con sottotitolo **Accesso ai servizi aziendali**;
+- [ ] usare testo neutro per credenziali aziendali, assistenza e accesso riservato;
+- [ ] sostituire le etichette con **Email aziendale**, **Password**, **Ricorda questo dispositivo**, **Accedi** e **Password dimenticata?**;
+- [ ] rimuovere claim promozionali, descrizioni operative, breadcrumb, “Centro operativo” e “Ogni ordine. Un solo controllo.”;
+- [ ] mantenere ambiente development e correlation ID soltanto come informazioni tecniche discrete a fondo pagina;
+- [ ] verificare accessibilità, gestione errori e comportamento responsive del login.
+
+### P9.4 — Picking operativo
+
+- [ ] generare automaticamente il picking dall'ordine quando le quantità evase da Space diventano disponibili;
+- [ ] distinguere righe in stock, backorder, disponibili, mancanti e in anomalia;
+- [ ] introdurre stati dedicati per attesa Space, attesa backorder, pronto, in lavorazione, completo, parziale, revisione e chiuso;
+- [ ] configurare timezone, orario limite giornaliero, giorni operativi e comportamento alla scadenza per il carico corriere;
+- [ ] usare come configurazione iniziale possibile le ore `15:00`, senza renderle un valore fisso nel codice;
+- [ ] mostrare priorità e tempo residuo dei picking prossimi alla scadenza;
+- [ ] mostrare EAN, SKU, artista, titolo, formato, quantità richiesta, scansionata, residua e disponibilità;
+- [ ] acquisire barcode fino al completamento con feedback per codice valido, duplicato, eccedente o estraneo all'ordine;
+- [ ] consentire chiusura completa, chiusura parziale motivata, attesa backorder e invio a revisione;
+- [ ] permettere dalla pagina picking la richiesta di spedizione e la visualizzazione, stampa e ristampa della lettera di vettura PDF;
+- [ ] garantire che stampa e ristampa non creino una seconda spedizione;
+- [ ] aggiungere fixture dimostrative per picking pronto, parziale, completo, in backorder, con EAN errato e prossimo alla scadenza;
+- [ ] aggiungere test di idempotenza sulla generazione automatica e sulle scansioni ripetute.
+
+### P9.5 — Azioni ordine e resi
+
+- [ ] permettere dal dettaglio ordine la selezione o richiesta di emissione fattura, soggetta al futuro modulo fiscale;
+- [ ] introdurre modifica controllata dell'ordine con optimistic locking e audit;
+- [ ] introdurre annullamento motivato con matrice delle transizioni consentite;
+- [ ] progettare il processo di reso come capacità separata successiva all'annullamento o alla consegna;
+- [ ] non accorpare stati di vendita, acquisto Space, picking, spedizione, fattura e reso;
+- [ ] mostrare nel dettaglio ordine lo stato completo di Space, incluse righe in stock e backorder.
+
+### P9.6 — Guida in linea
+
+- [ ] aggiungere nella barra di navigazione un pulsante **Guida**;
+- [ ] creare percorsi passo per passo per catalogo, prezzi, pubblicazione, ordini, picking, spedizioni, integrazioni, utenti e audit;
+- [ ] mostrare contenuti coerenti con i permessi dell'utente;
+- [ ] collegare ogni pagina alla relativa guida contestuale;
+- [ ] versionare la guida insieme alle funzionalità e includere risoluzione delle anomalie.
+
+### P9.7 — Utenti, ruoli e permessi
+
+- [ ] sostituire il flusso “Invita utente” con creazione diretta e operativa dell'account;
+- [ ] permettere all'amministratore di creare, sospendere, riattivare e disabilitare utenti;
+- [ ] gestire credenziale iniziale sicura e cambio password al primo accesso quando configurato;
+- [ ] permettere creazione e modifica dei ruoli;
+- [ ] associare permessi granulari ai ruoli e più ruoli allo stesso utente;
+- [ ] revocare sessioni attive e consultare audit e accessi;
+- [ ] proteggere le modifiche con autorizzazione deny-by-default, CSRF, optimistic locking e audit;
+- [ ] aggiungere test end-to-end del flusso amministrativo.
+
+### P9.8 — Stato integrazioni e scheduling
+
+- [ ] creare una vista unificata dello stato di tutti gli account e delle capacità provider;
+- [ ] mostrare configurazione HAPA, versione Automation, stato credenziali, ultimo test, ultima esecuzione, ultimo errore redatto, checkpoint, lag e prossimo avvio;
+- [ ] mostrare code pendenti, retry e dead state in forma aggregata e autorizzata;
+- [ ] rendere gestibili le frequenze di catalogo Space, verifica backorder, ordini marketplace in entrata, acquisti Space in uscita, offerte marketplace, riconciliazioni, fulfilment e spedizioni;
+- [ ] mantenere scheduling tecnico, lock, retry e rate limit in HAPA Automation;
+- [ ] validare le frequenze rispetto ai limiti contrattuali e spiegare eventuali normalizzazioni o rifiuti;
+- [ ] versionare e auditare ogni modifica di frequenza o capacità;
+- [ ] introdurre una anteprima della prossima esecuzione prima del salvataggio.
+
+### P9.9 — Backorder Space
+
+- [ ] rappresentare stock immediato e backorder come dati distinti per prodotto e riga d'ordine;
+- [ ] configurare la frequenza di ricontrollo del backorder per account Space;
+- [ ] aggiornare il picking quando una verifica rende disponibili nuove quantità senza creare duplicati;
+- [ ] impedire a osservazioni regressive di ridurre quantità già confermate;
+- [ ] gestire separatamente disponibilità totale, parziale e assente;
+- [ ] applicare policy esplicite per attesa, spedizione parziale, annullamento riga o revisione manuale;
+- [ ] mantenere l'ordine aperto finché acquisto, picking, spedizione e fulfilment non sono coerenti.
+
+**Gate P9:** le regole massive operano sul catalogo con anteprima deterministica; il singolo prodotto resta ricercabile, modificabile e bloccabile; il picking nasce in modo idempotente dagli esiti Space; label e ristampe non duplicano spedizioni; utenti e scheduling sono realmente amministrabili; stock e backorder restano distinti lungo tutto il flusso.
 
 ## Espansioni
 
