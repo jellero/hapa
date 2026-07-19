@@ -6,7 +6,7 @@ Ultimo riesame: 19 luglio 2026.
 
 Queste note integrano la documentazione esistente con direttive funzionali, operative e di interfaccia. Diagrammi, tabelle, flussi e decisioni già presenti negli altri documenti restano validi e non devono essere rimossi: le nuove capacità devono essere aggiunte mantenendo la tracciabilità delle decisioni precedenti.
 
-HAPA è l'identità dell'azienda. L'applicazione deve essere presentata come **Portale operativo HAPA** o **portale aziendale**, evitando di trattare HAPA come il nome commerciale del software.
+HAPA è l'identità dell'azienda. L'applicazione deve essere presentata come **Portale operativo HAPA** o **portale aziendale**, evitando di trattare HAPA come il nome commerciale del software. Questa indicazione riguarda l'identità mostrata all'utente e il tono neutro della schermata, non una qualificazione “istituzionale” del portale.
 
 ## 2. Catalogo commerciale
 
@@ -170,7 +170,7 @@ flowchart LR
 
 ## 5. Login e identità del portale
 
-La schermata di accesso deve essere neutra e istituzionale.
+La schermata di accesso deve essere neutra, sobria e coerente con l'identità aziendale. **HAPA identifica l'azienda**; “Portale operativo HAPA” identifica il punto di accesso ai servizi. Non deve essere usata la parola “istituzionale” come requisito funzionale o come testo visibile.
 
 ### 5.1 Testo previsto
 
@@ -199,17 +199,56 @@ Devono essere rimossi dalla schermata di accesso:
 
 ## 6. Picking
 
-Il picking è una capacità centrale e nasce dalla sezione ordini quando l'evasione Space rende disponibili una o più righe.
+Il picking HAPA deriva dall'ordine inviato a Space e dalla disponibilità fisica comunicata da Space per ciascuna unità o quantità ordinata. Non nasce da una semplice disponibilità teorica di catalogo.
 
-### 6.1 Generazione
+### 6.1 Alimentazione da Space
 
-- il picking viene generato automaticamente in base allo stato e alle quantità evase da Space;
-- stock immediato e backorder devono restare distinguibili per ogni riga;
-- le righe ancora in backorder vengono ricontrollate secondo una frequenza configurabile;
-- eventi duplicati o regressivi non devono creare sessioni duplicate né ridurre quantità già confermate;
-- l'operatore può vedere la causa di attesa o anomalia.
+1. HAPA invia a Space l'ordine di acquisto con le righe richieste.
+2. Quando Space dispone di una unità fisica, la carica nel proprio processo di evasione e la rende disponibile al picking HAPA.
+3. Space comunica per ogni riga almeno quantità richiesta, quantità fisicamente resa disponibile, quantità ancora attesa e quantità dichiarata non disponibile.
+4. HAPA Automation acquisisce gli aggiornamenti Space e aggiorna HAPA mediante eventi idempotenti.
+5. Per le quantità ancora attese o in backorder, HAPA Automation esegue verifiche periodiche con una frequenza configurata nella sezione scheduling.
+6. Le nuove verifiche aggiornano lo stato e le quantità del picking senza creare un secondo picking e senza ridurre quantità già confermate.
 
-### 6.2 Scadenza operativa
+Il sistema deve distinguere la disponibilità di catalogo dalla disponibilità fisica per quello specifico ordine. Una quantità è scansionabile soltanto dopo che Space l'ha resa disponibile al picking HAPA.
+
+### 6.2 Tipi di picking parziale
+
+Esistono due condizioni parziali diverse e non devono condividere lo stesso significato operativo:
+
+| Condizione | Significato | Lavorabile dall'operatore |
+|---|---|---|
+| Parziale in attesa | alcune unità sono disponibili, altre devono ancora arrivare da Space o risultano in backorder | no; il picking resta fuori dalla lavorazione ordinaria fino a un nuovo aggiornamento Space o a una decisione esplicita |
+| Parziale per indisponibilità | Space ha dichiarato una o più quantità non disponibili; le quantità presenti possono essere lavorate | sì, ma richiede gestione manuale del parziale, per esempio riduzione quantità, annullamento riga, annullamento ordine o altra decisione autorizzata |
+
+Un ordine è **pronto completo** quando tutte le unità richieste sono state rese disponibili da Space. È **parziale in attesa** quando mancano unità che possono ancora arrivare. È **parziale da gestire** quando le unità mancanti sono dichiarate non disponibili e serve una decisione manuale.
+
+### 6.3 Stato e code operative
+
+La pagina generale picking deve separare almeno:
+
+- pronti completi;
+- parziali in attesa Space, non lavorabili;
+- parziali con indisponibilità, lavorabili dopo o durante la decisione manuale;
+- in lavorazione;
+- completati e pronti per la spedizione;
+- anomalie e revisioni manuali.
+
+Gli stati minimi sono:
+
+- `waiting_space`;
+- `partial_waiting_space`;
+- `ready_complete`;
+- `partial_action_required`;
+- `in_progress`;
+- `completed`;
+- `completed_partial`;
+- `manual_review`;
+- `shipment_requested`;
+- `label_available`;
+- `closed`.
+
+### 6.4 Scadenza operativa
 
 Deve essere configurabile un orario limite giornaliero per completare i picking destinati al carico del corriere, inizialmente rappresentabile con le ore `15:00` ma modificabile dall'amministrazione.
 
@@ -222,14 +261,17 @@ La configurazione deve supportare almeno:
 - comportamento dei picking incompleti alla scadenza;
 - priorità ed evidenza dei picking prossimi alla scadenza.
 
-### 6.3 Pagina di lavorazione
+Il cutoff non rende lavorabile un picking che attende ancora merce: può soltanto evidenziarlo, richiedere una decisione manuale o applicare una policy esplicitamente autorizzata.
 
-La pagina interna del picking deve mostrare:
+### 6.5 Pagina di lavorazione per ordine e cliente
+
+Quando l'operatore apre il picking di uno specifico ordine o cliente deve vedere l'elenco delle unità da preparare e il progresso di scansione per riga.
 
 | Campo | Contenuto |
 |---|---|
 | Ordine | riferimento HAPA e origine marketplace |
 | Cliente | nominativo e destinazione redatta secondo i permessi |
+| Stato | pronto completo, parziale in attesa, parziale da gestire o in lavorazione |
 | Scadenza | tempo residuo al limite operativo |
 | Riga | posizione e quantità richiesta |
 | EAN | codice da acquisire con lettore barcode |
@@ -237,44 +279,72 @@ La pagina interna del picking deve mostrare:
 | Artista | artista normalizzato o snapshot ordine |
 | Titolo | titolo normalizzato o snapshot ordine |
 | Formato | formato commerciale |
-| Disponibilità | stock, backorder, disponibile, mancante o anomalia |
-| Quantità | richiesta, scansionata, residua e non disponibile |
+| Disponibilità Space | richiesta, resa disponibile, ancora attesa e non disponibile |
+| Da preparare | quantità fisicamente disponibile e autorizzata al picking |
+| Sparati | numero di barcode validi acquisiti per la riga |
+| Residui | quantità ancora da scansionare |
+| Decisione parziale | nessuna, attesa Space, riduzione, annullamento riga, annullamento ordine o revisione |
 
-L'operatore deve poter acquisire ripetutamente i codici a barre fino al completamento delle quantità, con feedback immediato per codice valido, duplicato, eccedente o non appartenente all'ordine.
+Ogni lettura valida incrementa immediatamente la colonna **Sparati** della riga corrispondente. Quando `sparati = da preparare`, la riga è completa e deve diventare verde. Il sistema deve mostrare anche il progresso complessivo dell'ordine.
+
+Una scansione deve essere rifiutata con feedback immediato quando il barcode:
+
+- non appartiene al picking;
+- eccede la quantità da preparare;
+- appartiene a una riga ancora in attesa Space;
+- è già stato acquisito oltre il limite previsto;
+- è ambiguo e corrisponde a più prodotti senza una risoluzione deterministica.
+
+La prima scansione valida porta il picking lavorabile in stato `in_progress`. Un picking `partial_waiting_space` non può iniziare la scansione ordinaria finché non cambia stato o non viene assunta una decisione autorizzata.
 
 Devono essere disponibili dati dimostrativi e fixture con picking:
 
-- pronto da iniziare;
+- pronto completo da iniziare;
 - parzialmente scansionato;
-- completo;
-- con riga in backorder;
+- completo con tutte le righe verdi;
+- parziale in attesa di unità Space, non lavorabile;
+- parziale con indisponibilità e decisione manuale richiesta;
 - con EAN errato;
 - prossimo alla scadenza.
 
-### 6.4 Chiusura e spedizione
+### 6.6 Gestione del parziale, chiusura e spedizione
+
+Per un parziale dovuto a indisponibilità definitiva, l'operatore autorizzato deve poter registrare separatamente la decisione per ogni riga mancante, includendo almeno:
+
+- attendere una verifica ulteriore, quando ancora consentito;
+- ridurre la quantità da evadere;
+- annullare la riga;
+- annullare l'ordine;
+- inviare a revisione manuale;
+- applicare altre azioni future definite dalla policy commerciale.
+
+La decisione deve essere motivata, versionata e auditata. Non deve essere dedotta automaticamente dal solo stato Space.
 
 Al termine l'operatore può:
 
-- chiudere il picking completo;
-- chiudere il picking parziale indicando quantità mancanti e motivazione;
-- lasciare il picking in attesa di backorder;
+- chiudere il picking completo quando tutte le quantità richieste risultano scansionate;
+- chiudere il picking parziale soltanto dopo la gestione autorizzata delle quantità non disponibili;
+- lasciare fuori lavorazione il picking parziale che attende ancora Space;
 - inviare a revisione un'anomalia;
-- avviare la richiesta di spedizione.
+- avviare la richiesta di spedizione quando le righe lavorabili sono complete e le decisioni sui parziali sono risolte.
 
 Dalla stessa pagina deve essere possibile lanciare la richiesta di spedizione, attendere l'esito asincrono, ottenere la lettera di vettura in PDF, visualizzarla e stamparla senza creare una seconda spedizione. La stampa o ristampa usa il documento già associato alla spedizione o una rigenerazione tecnica riconciliata.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> waiting_space
-    waiting_space --> ready: quantità Space disponibili
-    waiting_space --> waiting_backorder: righe non immediatamente disponibili
-    waiting_backorder --> ready: nuova verifica positiva
-    ready --> in_progress: prima scansione
-    in_progress --> completed: tutte le quantità confermate
-    in_progress --> partial: chiusura parziale autorizzata
+    [*] --> waiting_space: ordine inviato a Space
+    waiting_space --> partial_waiting_space: alcune unità rese disponibili
+    waiting_space --> ready_complete: tutte le unità rese disponibili
+    waiting_space --> partial_action_required: indisponibilità definitiva parziale
+    partial_waiting_space --> ready_complete: arrivano tutte le unità residue
+    partial_waiting_space --> partial_action_required: residuo dichiarato non disponibile
+    partial_action_required --> in_progress: decisione manuale consente lavorazione
+    ready_complete --> in_progress: prima scansione valida
+    in_progress --> completed: tutte le quantità richieste scansionate
+    in_progress --> completed_partial: quantità disponibili scansionate e parziale risolto
     in_progress --> manual_review: anomalia
     completed --> shipment_requested: richiesta spedizione
-    partial --> shipment_requested: policy consente spedizione parziale
+    completed_partial --> shipment_requested: spedizione parziale autorizzata
     shipment_requested --> label_available: esito GLS con PDF
     label_available --> closed: chiusura operativa
 ```
@@ -290,7 +360,7 @@ Dal dettaglio ordine, secondo permessi e stato, devono essere disponibili:
 - annullamento con motivazione e transizioni consentite;
 - apertura del successivo processo di reso, da implementare come capacità separata;
 - generazione o apertura del picking;
-- consultazione dello stato Space, incluse righe in stock e backorder;
+- consultazione dello stato Space, incluse quantità rese disponibili, ancora attese e non disponibili;
 - consultazione di spedizione, tracking, label e stato marketplace.
 
 L'annullamento non elimina l'ordine e non implica automaticamente un rimborso, un reso o l'annullamento dell'acquisto Space: ogni processo mantiene stato, autorizzazioni e audit separati.
@@ -354,7 +424,7 @@ Devono essere configurabili almeno:
 | Processo | Frequenza o regola |
 |---|---|
 | catalogo Space | aggiornamento incrementale di prezzo, stock e backorder |
-| verifica backorder Space | ricontrollo delle righe non immediatamente disponibili |
+| verifica ordini Space in attesa | ricontrollo delle quantità non ancora rese disponibili per i picking |
 | ordini marketplace in entrata | import ordini e modifiche da SellRapido |
 | acquisti in uscita verso Space | relay dei comandi e riconciliazione degli esiti |
 | offerte marketplace in uscita | pubblicazione di anagrafica, prezzo e quantità |
@@ -370,7 +440,7 @@ flowchart TB
     ScheduleConfig --> VersionedConfig["Versione HAPA auditata"]
     VersionedConfig --> AutomationAdmin["Canale amministrativo autenticato"]
     AutomationAdmin --> Scheduler["Scheduler HAPA Automation"]
-    Scheduler --> SpaceJobs["Catalogo e backorder Space"]
+    Scheduler --> SpaceJobs["Catalogo e ordini Space in attesa"]
     Scheduler --> OrderJobs["Ordini in entrata e acquisti in uscita"]
     Scheduler --> MarketplaceJobs["Offerte, riconciliazione e fulfilment"]
     Scheduler --> ShippingJobs["GLS e label"]
@@ -381,16 +451,18 @@ flowchart TB
     TechnicalStatus --> Admin
 ```
 
-## 11. Stock e backorder Space
+## 11. Stock, backorder e disponibilità fisica Space
 
-Stock e backorder sono concetti distinti e devono incidere sul ciclo ordine.
+Stock di catalogo, backorder e disponibilità fisica per uno specifico ordine sono concetti distinti.
 
-- una riga con quantità immediatamente disponibile può avanzare verso evasione e picking;
-- una riga in backorder resta associata all'acquisto e viene verificata periodicamente;
+- lo stock di catalogo influenza la decisione iniziale e la quantità vendibile, ma non prova che l'unità sia già pronta per il picking HAPA;
+- dopo l'invio dell'ordine, Space comunica le quantità fisicamente rese disponibili per ciascuna riga;
+- una quantità ancora attesa resta associata all'acquisto e viene verificata periodicamente da HAPA Automation;
 - la frequenza di verifica è configurabile per account Space;
-- una nuova osservazione può rendere pronta una riga, ma non deve far regredire quantità già confermate;
-- disponibilità parziale e totale devono essere rappresentate separatamente;
-- la policy HAPA determina se attendere, spedire parzialmente, annullare una riga o richiedere una decisione manuale;
+- una nuova osservazione può aumentare le quantità disponibili al picking, ma non deve far regredire quantità già confermate o scansionate;
+- una disponibilità parziale ancora attesa mantiene il picking fuori lavorazione ordinaria;
+- una indisponibilità definitiva rende il picking parziale gestibile manualmente, senza decidere automaticamente annullamenti o riduzioni;
+- quantità richiesta, resa disponibile, ancora attesa, non disponibile e scansionata devono essere rappresentate separatamente;
 - il marketplace non viene aggiornato con uno stato finale finché vendita, acquisto, picking, spedizione e fulfilment non sono coerenti.
 
 ## 12. Requisiti trasversali
