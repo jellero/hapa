@@ -110,6 +110,7 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 - [ ] censire valori e semantica effettiva dei campi `stato_os`, `stato_bo`, `stato_sh`, `stato_de`, `stato_arc_sh`, `stato_arc_de` e `closing_order`;
 - [ ] chiarire quali campi rappresentano preso in carico, in lavorazione, pronto, non disponibile, spedito, archiviato o altre condizioni operative;
 - [ ] distinguere stato della testata, stato delle singole righe, quantità ordinata, disponibile, evasa, spedita e residua;
+- [ ] distinguere nel contratto quantità richiesta, quantità fisicamente resa disponibile al picking HAPA, quantità ancora attesa e quantità dichiarata non disponibile;
 - [ ] conservare nella risposta API sia i valori grezzi Space sia lo stato normalizzato e la versione del mapping applicato;
 - [ ] definire un mapping versionato dai valori del database Space agli stati canonici HAPA, senza dedurlo dai soli nomi delle colonne;
 - [ ] definire la matrice delle transizioni ammesse e il trattamento di risposte duplicate, tardive, regressive o incoerenti;
@@ -122,6 +123,7 @@ La tabella operativa corrente per le righe d'ordine è `public.ordini_articoli`.
 - [ ] polling dell'API Space con checkpoint persistente, frequenza controllata e riconciliazione periodica;
 - [x] eventi iniziali `space.purchase_order.accepted` / `rejected` applicati idempotentemente in HAPA;
 - [ ] evento di polling `space.purchase_order.status_changed` con versione sorgente, valori grezzi e dettaglio righe;
+- [ ] includere negli eventi Space le quantità fisicamente rese disponibili, ancora attese e non disponibili per aggiornare un solo picking HAPA;
 - [ ] gestione separata di indisponibilità totale, indisponibilità parziale e sostituzioni, sempre secondo una policy commerciale HAPA esplicita;
 - [ ] riconciliazione tramite API dopo timeout ambiguo prima di qualsiasi nuovo inserimento dell'ordine;
 - [ ] audit completo di richiesta, risposta redatta, stato precedente, stato nuovo, causazione e decisioni manuali;
@@ -227,30 +229,40 @@ Il dettaglio completo è in [`SYSTEM_NOTES.md`](SYSTEM_NOTES.md).
 - [ ] mostrare nell'anteprima costo, regola vincente, regole escluse e motivazioni di blocco;
 - [ ] mantenere fee, IVA e arrotondamenti fuori dal prezzo finale finché i contratti ufficiali non sono validati.
 
-### P9.3 — Login istituzionale
+### P9.3 — Login e identità aziendale
 
-- [ ] rinominare la schermata in **Portale operativo HAPA** con sottotitolo **Accesso ai servizi aziendali**;
-- [ ] usare testo neutro per credenziali aziendali, assistenza e accesso riservato;
+- [ ] presentare la schermata come **Portale operativo HAPA** con sottotitolo **Accesso ai servizi aziendali**, chiarendo che HAPA è l'azienda e non il nome commerciale del software;
+- [ ] usare testo neutro e sobrio per credenziali aziendali, assistenza e accesso riservato, senza introdurre la parola “istituzionale” come requisito o contenuto visibile;
 - [ ] sostituire le etichette con **Email aziendale**, **Password**, **Ricorda questo dispositivo**, **Accedi** e **Password dimenticata?**;
 - [ ] rimuovere claim promozionali, descrizioni operative, breadcrumb, “Centro operativo” e “Ogni ordine. Un solo controllo.”;
 - [ ] mantenere ambiente development e correlation ID soltanto come informazioni tecniche discrete a fondo pagina;
 - [ ] verificare accessibilità, gestione errori e comportamento responsive del login.
 
-### P9.4 — Picking operativo
+### P9.4 — Picking alimentato dall'evasione fisica Space
 
-- [ ] generare automaticamente il picking dall'ordine quando le quantità evase da Space diventano disponibili;
-- [ ] distinguere righe in stock, backorder, disponibili, mancanti e in anomalia;
-- [ ] introdurre stati dedicati per attesa Space, attesa backorder, pronto, in lavorazione, completo, parziale, revisione e chiuso;
+- [ ] creare o aggiornare un solo picking per ordine in base alle quantità fisicamente rese disponibili da Space, non in base al solo stock teorico di catalogo;
+- [ ] acquisire per ogni riga quantità richiesta, quantità resa disponibile al picking HAPA, quantità ancora attesa e quantità dichiarata non disponibile;
+- [ ] fare aggiornare HAPA da HAPA Automation mediante eventi idempotenti e non regressivi;
+- [ ] ricontrollare con frequenza configurabile le righe ancora attese o in backorder senza creare picking duplicati;
+- [ ] distinguere `ready_complete`, quando tutte le unità sono disponibili, da `partial_waiting_space`, quando alcune unità devono ancora arrivare;
+- [ ] mantenere `partial_waiting_space` fuori dalla lavorazione ordinaria fino a un nuovo aggiornamento Space o a una decisione esplicita;
+- [ ] distinguere `partial_action_required`, quando Space dichiara quantità non disponibili e serve una gestione manuale del parziale;
+- [ ] permettere sul parziale non disponibile decisioni motivate e auditate come riduzione quantità, annullamento riga, annullamento ordine, ulteriore attesa o revisione;
+- [ ] separare nella pagina generale pronti completi, parziali in attesa, parziali da gestire, in lavorazione, completati e anomalie;
+- [ ] introdurre almeno gli stati `waiting_space`, `partial_waiting_space`, `ready_complete`, `partial_action_required`, `in_progress`, `completed`, `completed_partial`, `manual_review`, `shipment_requested`, `label_available` e `closed`;
 - [ ] configurare timezone, orario limite giornaliero, giorni operativi e comportamento alla scadenza per il carico corriere;
 - [ ] usare come configurazione iniziale possibile le ore `15:00`, senza renderle un valore fisso nel codice;
-- [ ] mostrare priorità e tempo residuo dei picking prossimi alla scadenza;
-- [ ] mostrare EAN, SKU, artista, titolo, formato, quantità richiesta, scansionata, residua e disponibilità;
-- [ ] acquisire barcode fino al completamento con feedback per codice valido, duplicato, eccedente o estraneo all'ordine;
-- [ ] consentire chiusura completa, chiusura parziale motivata, attesa backorder e invio a revisione;
+- [ ] non rendere lavorabile automaticamente al cutoff un picking che attende ancora merce Space;
+- [ ] mostrare nella lavorazione EAN, SKU, artista, titolo, formato, quantità richiesta, disponibile, ancora attesa, non disponibile, da preparare, sparata e residua;
+- [ ] incrementare la colonna **Sparati** a ogni lettura barcode valida;
+- [ ] rendere verde la riga quando il numero di barcode sparati raggiunge la quantità da preparare;
+- [ ] mostrare il progresso complessivo del picking e feedback per barcode estraneo, eccedente, ambiguo o relativo a una riga ancora in attesa;
+- [ ] impedire l'avvio ordinario della scansione per un picking `partial_waiting_space`;
+- [ ] consentire chiusura completa o chiusura parziale soltanto dopo la risoluzione autorizzata delle quantità non disponibili;
 - [ ] permettere dalla pagina picking la richiesta di spedizione e la visualizzazione, stampa e ristampa della lettera di vettura PDF;
 - [ ] garantire che stampa e ristampa non creino una seconda spedizione;
-- [ ] aggiungere fixture dimostrative per picking pronto, parziale, completo, in backorder, con EAN errato e prossimo alla scadenza;
-- [ ] aggiungere test di idempotenza sulla generazione automatica e sulle scansioni ripetute.
+- [ ] aggiungere fixture dimostrative per pronto completo, parzialmente scansionato, tutte righe verdi, parziale in attesa non lavorabile, parziale con indisponibilità, EAN errato e prossimo alla scadenza;
+- [ ] aggiungere test di idempotenza sugli aggiornamenti Space e sulle scansioni ripetute.
 
 ### P9.5 — Azioni ordine e resi
 
@@ -259,7 +271,7 @@ Il dettaglio completo è in [`SYSTEM_NOTES.md`](SYSTEM_NOTES.md).
 - [ ] introdurre annullamento motivato con matrice delle transizioni consentite;
 - [ ] progettare il processo di reso come capacità separata successiva all'annullamento o alla consegna;
 - [ ] non accorpare stati di vendita, acquisto Space, picking, spedizione, fattura e reso;
-- [ ] mostrare nel dettaglio ordine lo stato completo di Space, incluse righe in stock e backorder.
+- [ ] mostrare nel dettaglio ordine quantità Space richieste, rese disponibili, ancora attese e non disponibili.
 
 ### P9.6 — Guida in linea
 
@@ -285,23 +297,24 @@ Il dettaglio completo è in [`SYSTEM_NOTES.md`](SYSTEM_NOTES.md).
 - [ ] creare una vista unificata dello stato di tutti gli account e delle capacità provider;
 - [ ] mostrare configurazione HAPA, versione Automation, stato credenziali, ultimo test, ultima esecuzione, ultimo errore redatto, checkpoint, lag e prossimo avvio;
 - [ ] mostrare code pendenti, retry e dead state in forma aggregata e autorizzata;
-- [ ] rendere gestibili le frequenze di catalogo Space, verifica backorder, ordini marketplace in entrata, acquisti Space in uscita, offerte marketplace, riconciliazioni, fulfilment e spedizioni;
+- [ ] rendere gestibili le frequenze di catalogo Space, verifica degli ordini Space ancora attesi, ordini marketplace in entrata, acquisti Space in uscita, offerte marketplace, riconciliazioni, fulfilment e spedizioni;
 - [ ] mantenere scheduling tecnico, lock, retry e rate limit in HAPA Automation;
 - [ ] validare le frequenze rispetto ai limiti contrattuali e spiegare eventuali normalizzazioni o rifiuti;
 - [ ] versionare e auditare ogni modifica di frequenza o capacità;
 - [ ] introdurre una anteprima della prossima esecuzione prima del salvataggio.
 
-### P9.9 — Backorder Space
+### P9.9 — Backorder e disponibilità fisica Space
 
-- [ ] rappresentare stock immediato e backorder come dati distinti per prodotto e riga d'ordine;
-- [ ] configurare la frequenza di ricontrollo del backorder per account Space;
-- [ ] aggiornare il picking quando una verifica rende disponibili nuove quantità senza creare duplicati;
-- [ ] impedire a osservazioni regressive di ridurre quantità già confermate;
-- [ ] gestire separatamente disponibilità totale, parziale e assente;
-- [ ] applicare policy esplicite per attesa, spedizione parziale, annullamento riga o revisione manuale;
+- [ ] rappresentare separatamente stock di catalogo, backorder e quantità fisicamente disponibile per uno specifico ordine;
+- [ ] configurare la frequenza di ricontrollo delle righe ordine ancora attese per account Space;
+- [ ] aggiornare lo stesso picking quando Space rende disponibili nuove unità senza creare duplicati;
+- [ ] impedire a osservazioni regressive di ridurre quantità già confermate o scansionate;
+- [ ] gestire separatamente quantità disponibile, ancora attesa e dichiarata non disponibile;
+- [ ] mantenere fuori lavorazione il parziale ancora atteso;
+- [ ] portare in gestione manuale il parziale dichiarato non disponibile senza applicare automaticamente annullamenti o riduzioni;
 - [ ] mantenere l'ordine aperto finché acquisto, picking, spedizione e fulfilment non sono coerenti.
 
-**Gate P9:** le regole massive operano sul catalogo con anteprima deterministica; il singolo prodotto resta ricercabile, modificabile e bloccabile; il picking nasce in modo idempotente dagli esiti Space; label e ristampe non duplicano spedizioni; utenti e scheduling sono realmente amministrabili; stock e backorder restano distinti lungo tutto il flusso.
+**Gate P9:** le regole massive operano sul catalogo con anteprima deterministica; il singolo prodotto resta ricercabile, modificabile e bloccabile; il login rappresenta HAPA come azienda con testo neutro; il picking riflette quantità fisicamente rese disponibili da Space e distingue parziale in attesa da parziale per indisponibilità; ogni scansione incrementa la colonna Sparati e completa visivamente la riga; label e ristampe non duplicano spedizioni; utenti e scheduling sono realmente amministrabili.
 
 ## Espansioni
 
