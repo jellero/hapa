@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Configuration;
 
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class ProxyConfig
 {
@@ -18,7 +18,7 @@ final readonly class ProxyConfig
         foreach ($trustedProxies as $proxy) {
             $value = trim($proxy);
             if ($value === '' || !preg_match('/^[A-Za-z0-9_.:\/-]+$/D', $value)) {
-                throw new RuntimeException('TRUSTED_PROXIES contiene un valore non valido.');
+                throw new HapaRuntimeException('TRUSTED_PROXIES contiene un valore non valido.');
             }
 
             $normalized[] = $value;

@@ -17,7 +17,7 @@ use Hapa\Modules\Orders\Domain\OrderNumber;
 use Hapa\Modules\Orders\Domain\OrderStateMachine;
 use Hapa\Modules\Orders\Domain\OrderStatus;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class MarketplaceOrderObservationHandler
 {
@@ -90,7 +90,7 @@ SQL);
         $integration->execute(['code' => $observation->integrationAccountCode]);
         $accountConfiguration = $integration->fetch(PDO::FETCH_ASSOC);
         if (!is_array($accountConfiguration)) {
-            throw new RuntimeException('Account SellRapido HAPA non configurato.');
+            throw new HapaRuntimeException('Account SellRapido HAPA non configurato.');
         }
 
         $marketplace = $this->pdo->prepare(
@@ -99,7 +99,7 @@ SQL);
         $marketplace->execute(['code' => $observation->marketplaceCode]);
         $marketplaceId = $marketplace->fetchColumn();
         if ($marketplaceId === false) {
-            throw new RuntimeException('Marketplace SellRapido non censito in HAPA.');
+            throw new HapaRuntimeException('Marketplace SellRapido non censito in HAPA.');
         }
 
         $existing = $this->pdo->prepare(
@@ -109,7 +109,7 @@ SQL);
         $row = $existing->fetch(PDO::FETCH_ASSOC);
         if (is_array($row)) {
             if ((int) $row['marketplace_id'] !== (int) $marketplaceId || $row['connector_code'] !== 'sellrapido') {
-                throw new RuntimeException('Account SellRapido associato a un marketplace differente.');
+                throw new HapaRuntimeException('Account SellRapido associato a un marketplace differente.');
             }
             $update = $this->pdo->prepare(<<<'SQL'
 UPDATE marketplace_accounts
@@ -148,7 +148,7 @@ SQL);
         ]);
         $id = $insert->fetchColumn();
         if ($id === false) {
-            throw new RuntimeException('Creazione account marketplace SellRapido fallita.');
+            throw new HapaRuntimeException('Creazione account marketplace SellRapido fallita.');
         }
 
         return [(int) $marketplaceId, (int) $id];
@@ -208,7 +208,7 @@ SQL);
         ]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         if (!is_array($row)) {
-            throw new RuntimeException('Osservazione ordine SellRapido duplicata non recuperabile.');
+            throw new HapaRuntimeException('Osservazione ordine SellRapido duplicata non recuperabile.');
         }
 
         return new MarketplaceOrderIngestionResult(
@@ -277,7 +277,7 @@ SQL);
         $statement->execute(['number' => (string) $number]);
         $orderId = $statement->fetchColumn();
         if ($orderId === false) {
-            throw new RuntimeException('Ordine SellRapido creato ma non recuperabile.');
+            throw new HapaRuntimeException('Ordine SellRapido creato ma non recuperabile.');
         }
         $this->decorateOrder((int) $orderId, $marketplaceAccountId, $customerId, $observation, false);
 
@@ -298,7 +298,7 @@ SQL);
         $statement->execute(['id' => $orderId]);
         $number = $statement->fetchColumn();
         if (!is_string($number)) {
-            throw new RuntimeException('Ordine SellRapido non recuperabile per la cancellazione.');
+            throw new HapaRuntimeException('Ordine SellRapido non recuperabile per la cancellazione.');
         }
         $order = $this->orders->find(new OrderNumber($number));
         if ($order === null || OrderStateMachine::isTerminal($order->status())) {
@@ -485,7 +485,7 @@ SQL);
         ]);
         $customerId = $statement->fetchColumn();
         if ($customerId === false) {
-            throw new RuntimeException('Creazione cliente SellRapido fallita.');
+            throw new HapaRuntimeException('Creazione cliente SellRapido fallita.');
         }
         $this->appendCustomerHistory((int) $customerId, 1, 'marketplace_imported', $observation);
 
@@ -524,7 +524,7 @@ SQL);
         ]);
         $version = $statement->fetchColumn();
         if ($version === false) {
-            throw new RuntimeException('Aggiornamento cliente SellRapido fallito.');
+            throw new HapaRuntimeException('Aggiornamento cliente SellRapido fallito.');
         }
         $this->appendCustomerHistory($customerId, (int) $version, 'marketplace_observed', $observation);
     }
@@ -605,16 +605,7 @@ SQL);
     {
         $address = $observation->shippingAddress;
 
-        return new OrderAddress(
-            $address['recipient'],
-            $address['address_line1'],
-            $address['address_line2'],
-            $address['postal_code'],
-            $address['city'],
-            $address['province'],
-            $address['country_code'],
-            $address['phone'],
-        );
+        return new OrderAddress($address);
     }
 
     private function finish(
@@ -638,7 +629,7 @@ SQL);
             'id' => $observationId,
         ]);
         if ($statement->rowCount() !== 1) {
-            throw new RuntimeException('Finalizzazione osservazione ordine SellRapido fallita.');
+            throw new HapaRuntimeException('Finalizzazione osservazione ordine SellRapido fallita.');
         }
 
         return new MarketplaceOrderIngestionResult($observationId, $orderId, $outcome, $reason);

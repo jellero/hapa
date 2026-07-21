@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Hapa\Core\Outbox;
 
 use DateTimeImmutable;
+use Hapa\Core\Messaging\DeterministicMessageId;
 use JsonException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class PostgresOutboxRepository implements OutboxRepository
 {
@@ -19,17 +20,18 @@ final readonly class PostgresOutboxRepository implements OutboxRepository
     {
         $statement = $this->pdo->prepare(<<<'SQL'
 INSERT INTO outbox_messages (
-    aggregate_type, aggregate_id, event_type, exchange_name, routing_key, payload, status,
+    message_id, aggregate_type, aggregate_id, event_type, exchange_name, routing_key, payload, status,
     idempotency_key, correlation_id, schema_version, attempts, max_attempts,
     available_at, created_at, updated_at
 ) VALUES (
-    :aggregate_type, :aggregate_id, :event_type, :exchange_name, :routing_key, CAST(:payload AS JSONB), 'pending',
+    :message_id, :aggregate_type, :aggregate_id, :event_type, :exchange_name, :routing_key, CAST(:payload AS JSONB), 'pending',
     :idempotency_key, :correlation_id, :schema_version, 0, :max_attempts,
     :available_at, :created_at, :updated_at
 )
 ON CONFLICT (idempotency_key) DO NOTHING
 SQL);
         $statement->execute([
+            'message_id' => DeterministicMessageId::fromIdempotencyKey($message->idempotencyKey),
             'aggregate_type' => $message->aggregateType,
             'aggregate_id' => $message->aggregateId,
             'event_type' => $message->eventType,
@@ -51,7 +53,7 @@ SQL);
     public function claim(string $workerId, int $limit, DateTimeImmutable $now): array
     {
         if (trim($workerId) === '' || $limit < 1 || $limit > 500) {
-            throw new RuntimeException('Worker identity e limite di claim devono essere validi.');
+            throw new HapaRuntimeException('Worker identity e limite di claim devono essere validi.');
         }
 
         $lockToken = bin2hex(random_bytes(16));
@@ -75,7 +77,7 @@ SET status = 'processing',
     updated_at = :updated_at
 FROM candidates
 WHERE message.id = candidates.id
-RETURNING message.id, message.aggregate_type, message.aggregate_id, message.event_type,
+RETURNING message.id, message.message_id, message.aggregate_type, message.aggregate_id, message.event_type,
           message.exchange_name, message.routing_key, message.payload::text AS payload,
           message.idempotency_key, message.correlation_id,
           message.schema_version, message.attempts, message.max_attempts,
@@ -92,7 +94,7 @@ SQL);
         /** @var list<array<string, mixed>> $rows */
         $rows = $statement->fetchAll();
 
-        return array_map(self::hydrate(...), $rows);
+        return array_map(static fn (array $row): ClaimedOutboxMessage => self::hydrate($row), $rows);
     }
 
     public function complete(ClaimedOutboxMessage $message, DateTimeImmutable $completedAt): void
@@ -202,16 +204,17 @@ SQL, $changes));
         try {
             $payload = json_decode((string) $row['payload'], true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw new RuntimeException('Payload outbox JSON non decodificabile.', 0, $exception);
+            throw new HapaRuntimeException('Payload outbox JSON non decodificabile.', 0, $exception);
         }
 
         if (!is_array($payload)) {
-            throw new RuntimeException('Il payload outbox deve essere un oggetto JSON.');
+            throw new HapaRuntimeException('Il payload outbox deve essere un oggetto JSON.');
         }
 
         /** @var array<string, mixed> $payload */
         return new ClaimedOutboxMessage(
             (int) $row['id'],
+            (string) $row['message_id'],
             (string) $row['aggregate_type'],
             (string) $row['aggregate_id'],
             (string) $row['event_type'],

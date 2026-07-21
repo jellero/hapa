@@ -48,30 +48,10 @@ SQL);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
-        $entries = [];
-        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $before = $row['before_data'] === null
-                ? null
-                : json_decode((string) $row['before_data'], true, 512, JSON_THROW_ON_ERROR);
-            $after = $row['after_data'] === null
-                ? null
-                : json_decode((string) $row['after_data'], true, 512, JSON_THROW_ON_ERROR);
-            $entries[] = [
-                'id' => (int) $row['id'],
-                'created_at' => (string) $row['created_at'],
-                'actor_id' => $row['actor_id'] === null ? null : (string) $row['actor_id'],
-                'actor_name' => $row['actor_name'] === null ? null : (string) $row['actor_name'],
-                'actor_email' => $row['actor_email'] === null ? null : (string) $row['actor_email'],
-                'action' => (string) $row['action'],
-                'entity_type' => (string) $row['entity_type'],
-                'entity_id' => (string) $row['entity_id'],
-                'correlation_id' => $row['correlation_id'] === null ? null : (string) $row['correlation_id'],
-                'before' => is_array($before) ? $before : null,
-                'after' => is_array($after) ? $after : null,
-            ];
-        }
-
-        return $entries;
+        return array_values(array_map(
+            static fn (array $row): array => self::hydrate($row),
+            $statement->fetchAll(PDO::FETCH_ASSOC),
+        ));
     }
 
     /** @return list<string> */
@@ -96,5 +76,43 @@ SQL);
     private function connection(): PDO
     {
         return $this->connection ??= $this->connections->create();
+    }
+
+    /** @param array<string, mixed> $row
+     *  @return array<string, mixed>
+     *  @throws JsonException
+     */
+    private static function hydrate(array $row): array
+    {
+        return [
+            'id' => (int) $row['id'],
+            'created_at' => (string) $row['created_at'],
+            'actor_id' => self::nullableString($row['actor_id']),
+            'actor_name' => self::nullableString($row['actor_name']),
+            'actor_email' => self::nullableString($row['actor_email']),
+            'action' => (string) $row['action'],
+            'entity_type' => (string) $row['entity_type'],
+            'entity_id' => (string) $row['entity_id'],
+            'correlation_id' => self::nullableString($row['correlation_id']),
+            'before' => self::jsonObject($row['before_data']),
+            'after' => self::jsonObject($row['after_data']),
+        ];
+    }
+
+    private static function nullableString(mixed $value): ?string
+    {
+        return $value === null ? null : (string) $value;
+    }
+
+    /** @return array<string, mixed>|null @throws JsonException */
+    private static function jsonObject(mixed $value): ?array
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $decoded = json_decode((string) $value, true, 512, JSON_THROW_ON_ERROR);
+
+        return is_array($decoded) ? $decoded : null;
     }
 }

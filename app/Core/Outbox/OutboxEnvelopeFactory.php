@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Hapa\Core\Outbox;
 
 use DateTimeImmutable;
-use Hapa\Core\Messaging\DeterministicMessageId;
 use Hapa\Core\Messaging\MessageEnvelope;
 use Throwable;
 
@@ -14,7 +13,7 @@ final class OutboxEnvelopeFactory
     public function create(ClaimedOutboxMessage $message): MessageEnvelope
     {
         return new MessageEnvelope(
-            DeterministicMessageId::fromIdempotencyKey($message->idempotencyKey),
+            $message->messageId,
             $message->eventType,
             $message->schemaVersion,
             $this->occurredAt($message),
@@ -31,6 +30,7 @@ final class OutboxEnvelopeFactory
             try {
                 return new DateTimeImmutable($value);
             } catch (Throwable) {
+                // Invalid optional timestamps fall back to the persisted creation time.
             }
         }
 

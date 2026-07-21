@@ -15,6 +15,7 @@ final class OutboxEnvelopeFactoryTest extends TestCase
     {
         $message = new ClaimedOutboxMessage(
             42,
+            'e834feda-c306-870a-af22-9e1d757b212d',
             'order',
             'ORD-001',
             'order.changed',
@@ -39,7 +40,7 @@ final class OutboxEnvelopeFactoryTest extends TestCase
         $envelope = (new OutboxEnvelopeFactory())->create($message);
         $decoded = json_decode($envelope->toJson(), true, 512, JSON_THROW_ON_ERROR);
 
-        self::assertSame('1ebac0f3-24f7-55c5-b6de-d82196c78b8a', $envelope->messageId);
+        self::assertSame('e834feda-c306-870a-af22-9e1d757b212d', $envelope->messageId);
         self::assertSame('order.changed', $envelope->eventType);
         self::assertSame('2026-07-16T10:00:00+00:00', $decoded['occurred_at']);
         self::assertSame('order-ORD-001-v2', $decoded['correlation_id']);
@@ -51,6 +52,7 @@ final class OutboxEnvelopeFactoryTest extends TestCase
     {
         $message = new ClaimedOutboxMessage(
             43,
+            'b5bbff4d-55a7-87d7-91ad-1c61987e1858',
             'catalog',
             'SKU-001',
             'catalog.product.changed',

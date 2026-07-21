@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 $basePath = dirname(__DIR__);
-require $basePath . '/vendor/autoload.php';
+require_once $basePath . '/vendor/autoload.php';
 
 $request = Request::createFromGlobals();
 if ($request->isMethod('GET') && $request->getPathInfo() === '/health/live') {

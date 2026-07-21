@@ -7,6 +7,7 @@ namespace Hapa\Core\Ui;
 use Hapa\Core\Audit\AuditLogger;
 use Hapa\Core\Security\CredentialAuthenticator;
 use Hapa\Core\Security\SessionManager;
+use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\WebSession;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -32,23 +33,9 @@ final readonly class AuthenticationController
         $email = strtolower(trim($request->request->getString('email')));
         $password = $request->request->getString('password');
         $next = self::safeNext($request->request->getString('next'));
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 254 || $password === '') {
-            return $this->failed($request, $email, 'Inserisci email e password valide.');
-        }
-
-        $user = $this->authenticator->authenticate($email, $password);
-        if ($user === null) {
-            $this->audit->record(
-                null,
-                'security.login_failed',
-                'user_login',
-                hash('sha256', $email),
-                null,
-                ['result' => 'rejected'],
-                $request->attributes->getString('correlation_id'),
-            );
-
-            return $this->failed($request, $email, 'Credenziali non valide.');
+        $user = $this->authenticatedUser($request, $email, $password);
+        if ($user instanceof Response) {
+            return $user;
         }
 
         $this->sessions->authenticate($session, $user, $request->request->getBoolean('remember'));
@@ -63,6 +50,19 @@ final readonly class AuthenticationController
         );
 
         return new RedirectResponse($next, Response::HTTP_SEE_OTHER);
+    }
+
+    private function authenticatedUser(Request $request, string $email, string $password): UserIdentity|Response
+    {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 254 || $password === '') {
+            return $this->failed($request, $email, 'Inserisci email e password valide.');
+        }
+        $user = $this->authenticator->authenticate($email, $password);
+        if ($user !== null) {
+            return $user;
+        }
+        $this->audit->record(null, 'security.login_failed', 'user_login', hash('sha256', $email), null, ['result' => 'rejected'], $request->attributes->getString('correlation_id'));
+        return $this->failed($request, $email, 'Credenziali non valide.');
     }
 
     public function logout(Request $request): Response

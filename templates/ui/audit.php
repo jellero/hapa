@@ -6,9 +6,13 @@ $formatDate = static function (string $value): string {
         return $value;
     }
 };
-$formatJson = static fn (?array $value): string => $value === null
-    ? '—'
-    : (json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}');
+$formatJson = static function (?array $value): string {
+    if ($value === null) {
+        return '—';
+    }
+    $encoded = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    return $encoded === false ? '{}' : $encoded;
+};
 ?>
 <header class="page-header">
     <div>
@@ -25,9 +29,10 @@ $formatJson = static fn (?array $value): string => $value === null
     </div>
 
     <form class="data-toolbar" method="get" action="/ui/audit" role="search">
-        <label class="search-field">
+        <label class="search-field" for="audit-query">
+            <span class="sr-only">Cerca nel registro audit</span>
             <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg>
-            <input type="search" name="q" value="<?= $e($query ?? '') ?>" placeholder="Attore, azione, entità o correlation ID">
+            <input id="audit-query" type="search" name="q" value="<?= $e($query ?? '') ?>" placeholder="Attore, azione, entità o correlation ID">
         </label>
         <div class="toolbar-field">
             <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#filter"></use></svg>

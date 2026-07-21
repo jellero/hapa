@@ -12,6 +12,7 @@ $date = static function (?string $value): string {
 $money = static fn (?int $minor, string $currency): string => $minor === null
     ? '—'
     : number_format($minor / 100, 2, ',', '.') . ' ' . $currency;
+$selected = static fn (bool $condition): string => $condition ? ' selected' : '';
 ?>
 <a class="back-link" href="/ui/customers"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>Torna ai clienti</a>
 
@@ -19,12 +20,12 @@ $money = static fn (?int $minor, string $currency): string => $minor === null
 <header class="page-header page-header--detail"><div><p class="eyebrow"><?= $e($eyebrow) ?></p><h1><?= $e($title) ?></h1><p class="page-header__description">Il cliente richiesto non è presente nell’anagrafica HAPA.</p></div></header>
 <div class="empty-state"><span class="empty-state__icon"><svg class="icon"><use href="/assets/icons.svg#customer"></use></svg></span><h2>Cliente non trovato</h2><p>Codice richiesto: <?= $e($customerId) ?></p></div>
 <?php else: ?>
-<?php $statusTone = $customer['status'] === 'active' ? 'success' : ($customer['status'] === 'inactive' ? 'warning' : 'neutral'); ?>
+<?php $statusTone = match ($customer['status']) { 'active' => 'success', 'inactive' => 'warning', default => 'neutral' }; ?>
 <header class="page-header page-header--detail">
     <div><div class="detail-title-row"><p class="eyebrow"><?= $e($eyebrow) ?></p><span class="status-badge status-badge--<?= $e($statusTone) ?>"><?= $e($customer['status']) ?></span></div><h1><?= $e($title) ?></h1><p class="page-header__description"><?= $e($description) ?></p></div>
 </header>
 
-<?php if (($customerSaved ?? false) === true): ?><div class="inline-notice inline-notice--info" role="status"><div><strong>Cliente salvato</strong><span>La nuova versione è presente nello storico e nell’audit.</span></div></div><?php endif; ?>
+<?php if (($customerSaved ?? false) === true): ?><output class="inline-notice inline-notice--info"><div><strong>Cliente salvato</strong><span>La nuova versione è presente nello storico e nell’audit.</span></div></output><?php endif; ?>
 <?php if (($customerError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Cliente non salvato</strong><span><?= $e($customerError) ?></span></div></div><?php endif; ?>
 
 <section class="summary-grid" aria-label="Riepilogo cliente">
@@ -40,8 +41,8 @@ $money = static fn (?int $minor, string $currency): string => $minor === null
     <form class="auth-form" action="/ui/customers/<?= $e(rawurlencode($customer['customer_code'])) ?>" method="post">
         <input type="hidden" name="_csrf_token" value="<?= $e($updateCustomerCsrfToken ?? '') ?>">
         <input type="hidden" name="version" value="<?= $e((string) $customer['version']) ?>">
-        <?php if ($customer['status'] === 'archived'): ?><input type="hidden" name="status" value="archived"><p>Stato: <span class="status-badge status-badge--neutral">archived</span></p><?php else: ?><label>Stato <select name="status" required><?php foreach (['active' => 'Attivo', 'inactive' => 'Inattivo'] as $value => $label): ?><option value="<?= $e($value) ?>"<?= $customer['status'] === $value ? ' selected' : '' ?>><?= $e($label) ?></option><?php endforeach; ?></select></label><?php endif; ?>
-        <label>Tipo <select name="customer_type" required><option value="person"<?= $customer['customer_type'] === 'person' ? ' selected' : '' ?>>Persona</option><option value="business"<?= $customer['customer_type'] === 'business' ? ' selected' : '' ?>>Azienda</option></select></label>
+        <?php if ($customer['status'] === 'archived'): ?><input type="hidden" name="status" value="archived"><p>Stato: <span class="status-badge status-badge--neutral">archived</span></p><?php else: ?><label>Stato <select name="status" required><?php foreach (['active' => 'Attivo', 'inactive' => 'Inattivo'] as $value => $label): ?><option value="<?= $e($value) ?>"<?= $selected($customer['status'] === $value) ?>><?= $e($label) ?></option><?php endforeach; ?></select></label><?php endif; ?>
+        <label>Tipo <select name="customer_type" required><option value="person"<?= $selected($customer['customer_type'] === 'person') ?>>Persona</option><option value="business"<?= $selected($customer['customer_type'] === 'business') ?>>Azienda</option></select></label>
         <label>Nome visualizzato <input name="display_name" value="<?= $e($customer['display_name']) ?>" maxlength="240" required></label>
         <label>Nome <input name="first_name" value="<?= $e($customer['first_name'] ?? '') ?>" maxlength="120"></label>
         <label>Cognome <input name="last_name" value="<?= $e($customer['last_name'] ?? '') ?>" maxlength="120"></label>

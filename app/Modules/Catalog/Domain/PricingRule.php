@@ -20,51 +20,59 @@ final readonly class PricingRule
         public ?int $minimumPriceMinor = null,
         public ?int $maximumPriceMinor = null,
     ) {
-        if (preg_match('/^[a-z0-9][a-z0-9_-]{1,95}$/', $code) !== 1) {
+        $this->assertIdentifiers();
+        $this->assertPricingValues();
+        $this->assertScopeTargets();
+    }
+
+    private function assertIdentifiers(): void
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9_-]{1,95}$/', $this->code) !== 1) {
             throw new InvalidArgumentException('Il codice della regola prezzo non è valido.');
         }
 
-        if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+        if (preg_match('/^[A-Z]{3}$/', $this->currency) !== 1) {
             throw new InvalidArgumentException('La valuta della regola prezzo non è valida.');
         }
 
-        if ($marketplaceCode !== null && preg_match('/^[a-z0-9][a-z0-9_-]{1,63}$/', $marketplaceCode) !== 1) {
+        if ($this->marketplaceCode !== null && preg_match('/^[a-z0-9][a-z0-9_-]{1,63}$/', $this->marketplaceCode) !== 1) {
             throw new InvalidArgumentException('Il codice marketplace della regola prezzo non è valido.');
         }
 
-        if ($sku !== null && (trim($sku) !== $sku || $sku === '' || strlen($sku) > 160)) {
+        if ($this->sku !== null && (trim($this->sku) !== $this->sku || $this->sku === '' || strlen($this->sku) > 160)) {
             throw new InvalidArgumentException('Lo SKU della regola prezzo non è valido.');
         }
+    }
 
-        if ($priority < 0 || $priority > 100_000) {
+    private function assertPricingValues(): void
+    {
+        if ($this->priority < 0 || $this->priority > 100_000) {
             throw new InvalidArgumentException('La priorità della regola deve essere compresa tra 0 e 100000.');
         }
 
-        if ($adjustmentValue < 0) {
+        if ($this->adjustmentValue < 0) {
             throw new InvalidArgumentException('Il ricarico non può essere negativo.');
         }
 
-        if ($adjustmentType === PriceAdjustmentType::Percentage && $adjustmentValue > 100_000) {
+        if ($this->adjustmentType === PriceAdjustmentType::Percentage && $this->adjustmentValue > 100_000) {
             throw new InvalidArgumentException('Il ricarico percentuale supera il limite del 1000%.');
         }
 
-        if ($adjustmentType === PriceAdjustmentType::FixedPrice && $adjustmentValue === 0) {
+        if ($this->adjustmentType === PriceAdjustmentType::FixedPrice && $this->adjustmentValue === 0) {
             throw new InvalidArgumentException('Il prezzo fisso deve essere positivo.');
         }
 
-        if ($minimumPriceMinor !== null && $minimumPriceMinor < 0) {
+        if ($this->minimumPriceMinor !== null && $this->minimumPriceMinor < 0) {
             throw new InvalidArgumentException('Il prezzo minimo non può essere negativo.');
         }
 
-        if ($maximumPriceMinor !== null && $maximumPriceMinor < 0) {
+        if ($this->maximumPriceMinor !== null && $this->maximumPriceMinor < 0) {
             throw new InvalidArgumentException('Il prezzo massimo non può essere negativo.');
         }
 
-        if ($minimumPriceMinor !== null && $maximumPriceMinor !== null && $minimumPriceMinor > $maximumPriceMinor) {
+        if ($this->minimumPriceMinor !== null && $this->maximumPriceMinor !== null && $this->minimumPriceMinor > $this->maximumPriceMinor) {
             throw new InvalidArgumentException('Il prezzo minimo non può superare il prezzo massimo.');
         }
-
-        $this->assertScopeTargets();
     }
 
     public function appliesTo(string $marketplaceCode, string $sku): bool

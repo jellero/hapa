@@ -58,7 +58,7 @@ $canGeneratePurchase = ($canManagePurchase ?? false) === true
 </header>
 
 <?php if (($purchaseGenerated ?? false) === true): ?>
-<div class="inline-notice inline-notice--success" role="status"><div><strong>Generazione acquisto Space eseguita</strong><span>Lo stato aggiornato e l’eventuale motivo di revisione sono visibili nella sezione Acquisti verso Space.</span></div></div>
+<output class="inline-notice inline-notice--success"><div><strong>Generazione acquisto Space eseguita</strong><span>Lo stato aggiornato e l’eventuale motivo di revisione sono visibili nella sezione Acquisti verso Space.</span></div></output>
 <?php endif; ?>
 <?php if (($purchaseError ?? '') !== ''): ?>
 <div class="inline-notice inline-notice--warning" role="alert"><div><strong>Acquisto Space non generato</strong><span><?= $e($purchaseError) ?></span></div></div>

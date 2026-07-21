@@ -11,7 +11,7 @@ use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Console\UserCreateCommand;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
@@ -54,7 +54,7 @@ final readonly class Bootstrap
     {
         $kernel = $this->container->get(Kernel::class);
         if (!$kernel instanceof Kernel) {
-            throw new RuntimeException('Il container non ha prodotto il Kernel applicativo.');
+            throw new HapaRuntimeException('Il container non ha prodotto il Kernel applicativo.');
         }
 
         return $kernel;
@@ -64,7 +64,7 @@ final readonly class Bootstrap
     {
         $command = $this->container->get(SystemCheckCommand::class);
         if (!$command instanceof SystemCheckCommand) {
-            throw new RuntimeException('Il container non ha prodotto il comando system:check.');
+            throw new HapaRuntimeException('Il container non ha prodotto il comando system:check.');
         }
 
         return $command;
@@ -74,7 +74,7 @@ final readonly class Bootstrap
     {
         $command = $this->container->get(OutboxRelayCommand::class);
         if (!$command instanceof OutboxRelayCommand) {
-            throw new RuntimeException('Il container non ha prodotto il comando outbox:relay.');
+            throw new HapaRuntimeException('Il container non ha prodotto il comando outbox:relay.');
         }
 
         return $command;
@@ -84,7 +84,7 @@ final readonly class Bootstrap
     {
         $command = $this->container->get(InboxConsumeCommand::class);
         if (!$command instanceof InboxConsumeCommand) {
-            throw new RuntimeException('Il container non ha prodotto il comando inbox:consume.');
+            throw new HapaRuntimeException('Il container non ha prodotto il comando inbox:consume.');
         }
 
         return $command;
@@ -94,7 +94,7 @@ final readonly class Bootstrap
     {
         $command = $this->container->get(UserCreateCommand::class);
         if (!$command instanceof UserCreateCommand) {
-            throw new RuntimeException('Il container non ha prodotto il comando security:user:create.');
+            throw new HapaRuntimeException('Il container non ha prodotto il comando security:user:create.');
         }
 
         return $command;

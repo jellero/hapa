@@ -77,6 +77,7 @@ final class OutboxRelayTest extends TestCase
     {
         return new ClaimedOutboxMessage(
             1,
+            '4487f2ea-d4d4-8b1d-b9c8-dceacfc7ca8a',
             'order',
             'ORD-001',
             'order.changed',

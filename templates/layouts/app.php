@@ -92,7 +92,7 @@
                 </div>
             </header>
 
-            <div class="preview-banner" role="status" data-preview-banner>
+            <output class="preview-banner" data-preview-banner>
                 <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#shield"></use></svg>
                 <div>
                     <strong>Sessione protetta attiva</strong>
@@ -101,7 +101,7 @@
                 <button class="icon-button icon-button--compact" type="button" aria-label="Nascondi avviso" data-banner-dismiss>
                     <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg>
                 </button>
-            </div>
+            </output>
 
             <main class="main-content" id="main-content" tabindex="-1">
                 <?= $content ?>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\View;
 
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -39,7 +39,7 @@ final readonly class ViewRenderer
     private function resolve(string $template): string
     {
         if (!preg_match('#^[a-z0-9/_-]+$#D', $template)) {
-            throw new RuntimeException('Nome template non valido.');
+            throw new HapaRuntimeException('Nome template non valido.');
         }
 
         $root = realpath($this->templatesPath);
@@ -51,7 +51,7 @@ final readonly class ViewRenderer
             || !str_starts_with($file, $root . DIRECTORY_SEPARATOR)
             || !is_file($file)
         ) {
-            throw new RuntimeException(sprintf('Template non trovato: %s', $template));
+            throw new HapaRuntimeException(sprintf('Template non trovato: %s', $template));
         }
 
         return $file;
@@ -62,7 +62,7 @@ final readonly class ViewRenderer
      */
     private function evaluate(string $file, array $data): string
     {
-        $e = static fn (mixed $value): string => htmlspecialchars(
+        $data['e'] = static fn (mixed $value): string => htmlspecialchars(
             (string) $value,
             ENT_QUOTES | ENT_SUBSTITUTE,
             'UTF-8',
@@ -73,11 +73,13 @@ final readonly class ViewRenderer
         ob_start();
 
         try {
-            require $file;
+            // Templates must execute on every render; require_once would make
+            // every render after the first one return an empty response.
+            require $file; // NOSONAR
             $output = ob_get_clean();
 
             if ($output === false) {
-                throw new RuntimeException('Impossibile completare il rendering del template.');
+                throw new HapaRuntimeException('Impossibile completare il rendering del template.');
             }
 
             return $output;

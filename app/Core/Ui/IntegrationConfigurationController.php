@@ -13,12 +13,16 @@ use Hapa\Core\Security\UserIdentity;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 final readonly class IntegrationConfigurationController
 {
+    private const SAVED_PATH = '/ui/integrations?saved=1';
+    private const ERROR_PATH = '/ui/integrations?error=';
+
     public function __construct(
         private IntegrationAccountConfiguration $validator,
         private IntegrationAccountRepository $accounts,
@@ -36,10 +40,10 @@ final readonly class IntegrationConfigurationController
             $configuration = $this->configuration($request);
             $this->accounts->create($configuration, $this->actor($request), $request->attributes->getString('correlation_id'));
 
-            return new RedirectResponse('/ui/integrations?saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::SAVED_PATH, Response::HTTP_SEE_OTHER);
         } catch (InvalidArgumentException | JsonException $exception) {
             return new RedirectResponse(
-                '/ui/integrations?error=' . rawurlencode($exception->getMessage()),
+                self::ERROR_PATH . rawurlencode($exception->getMessage()),
                 Response::HTTP_SEE_OTHER,
             );
         }
@@ -57,10 +61,10 @@ final readonly class IntegrationConfigurationController
                 $request->attributes->getString('correlation_id'),
             );
 
-            return new RedirectResponse('/ui/integrations?saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::SAVED_PATH, Response::HTTP_SEE_OTHER);
         } catch (InvalidArgumentException | JsonException $exception) {
             return new RedirectResponse(
-                '/ui/integrations?error=' . rawurlencode($exception->getMessage()),
+                self::ERROR_PATH . rawurlencode($exception->getMessage()),
                 Response::HTTP_SEE_OTHER,
             );
         }
@@ -75,7 +79,7 @@ final readonly class IntegrationConfigurationController
             $request->attributes->getString('correlation_id'),
         );
 
-        return new RedirectResponse('/ui/integrations?saved=1', Response::HTTP_SEE_OTHER);
+        return new RedirectResponse(self::SAVED_PATH, Response::HTTP_SEE_OTHER);
     }
 
     public function replaceSecrets(Request $request): Response
@@ -99,7 +103,7 @@ final readonly class IntegrationConfigurationController
 
             return new RedirectResponse('/ui/integrations?secrets_saved=1', Response::HTTP_SEE_OTHER);
         } catch (InvalidArgumentException | JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -107,7 +111,7 @@ final readonly class IntegrationConfigurationController
     {
         try {
             if ($request->request->getString('confirm_revoke') !== 'yes') {
-                throw new RuntimeException('La revoca richiede conferma esplicita.');
+                throw new HapaRuntimeException('La revoca richiede conferma esplicita.');
             }
             $account = $this->accounts->find($request->attributes->getInt('accountId'));
             $actor = $this->actor($request);
@@ -122,7 +126,7 @@ final readonly class IntegrationConfigurationController
 
             return new RedirectResponse('/ui/integrations?secrets_revoked=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -142,7 +146,7 @@ final readonly class IntegrationConfigurationController
 
             return new RedirectResponse('/ui/integrations?configuration_synced=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -161,7 +165,7 @@ final readonly class IntegrationConfigurationController
 
             return new RedirectResponse('/ui/integrations?status_refreshed=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -172,7 +176,7 @@ final readonly class IntegrationConfigurationController
             $target = $request->request->getString('target_status');
             if ($account['environment'] === 'production' && in_array($target, ['pilot', 'active'], true)
                 && $request->request->getString('confirm_production') !== 'yes') {
-                throw new RuntimeException('L’attivazione in produzione richiede conferma esplicita.');
+                throw new HapaRuntimeException('L’attivazione in produzione richiede conferma esplicita.');
             }
             $this->accounts->changeDesiredStatus(
                 (int) $account['id'],
@@ -182,9 +186,9 @@ final readonly class IntegrationConfigurationController
                 $request->attributes->getString('correlation_id'),
             );
 
-            return new RedirectResponse('/ui/integrations?saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::SAVED_PATH, Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -193,7 +197,7 @@ final readonly class IntegrationConfigurationController
         try {
             $account = $this->accounts->find($request->attributes->getInt('accountId'));
             if (!in_array($account['provider_code'], ['sellrapido', 'space'], true)) {
-                throw new RuntimeException('Il test operativo è disponibile per SellRapido e Space.');
+                throw new HapaRuntimeException('Il test operativo è disponibile per SellRapido e Space.');
             }
             $actor = $this->actor($request);
             $correlationId = $request->attributes->getString('correlation_id');
@@ -207,7 +211,7 @@ final readonly class IntegrationConfigurationController
 
             return new RedirectResponse('/ui/integrations?connection_tested=1', Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -216,7 +220,7 @@ final readonly class IntegrationConfigurationController
         try {
             $account = $this->accounts->find($request->attributes->getInt('accountId'));
             if ($account['provider_code'] !== 'sellrapido' || !in_array($account['desired_status'], ['pilot', 'active'], true)) {
-                throw new RuntimeException('L’import manuale richiede un account SellRapido pilot o attivo.');
+                throw new HapaRuntimeException('L’import manuale richiede un account SellRapido pilot o attivo.');
             }
             $actor = $this->actor($request);
             $correlationId = $request->attributes->getString('correlation_id');
@@ -225,7 +229,7 @@ final readonly class IntegrationConfigurationController
 
             return new RedirectResponse('/ui/integrations?orders_imported=1&published=' . (int) ($result['published'] ?? 0), Response::HTTP_SEE_OTHER);
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -236,7 +240,7 @@ final readonly class IntegrationConfigurationController
             if ($account['provider_code'] !== 'space'
                 || !in_array($account['desired_status'], ['pilot', 'active'], true)
                 || !in_array('catalog.read', $account['capabilities'], true)) {
-                throw new RuntimeException('La sincronizzazione manuale richiede un account Space pilot o attivo con catalog.read.');
+                throw new HapaRuntimeException('La sincronizzazione manuale richiede un account Space pilot o attivo con catalog.read.');
             }
             $actor = $this->actor($request);
             $correlationId = $request->attributes->getString('correlation_id');
@@ -248,7 +252,7 @@ final readonly class IntegrationConfigurationController
                 Response::HTTP_SEE_OTHER,
             );
         } catch (JsonException | RuntimeException $exception) {
-            return new RedirectResponse('/ui/integrations?error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         }
     }
 

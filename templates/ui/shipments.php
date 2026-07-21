@@ -13,6 +13,11 @@ $tone = static fn (string $status): string => match ($status) {
     'shipped' => 'success', 'label_available', 'created' => 'info',
     'error' => 'danger', 'pending' => 'warning', default => 'neutral',
 };
+$weight = static fn (array $shipment): string => match (true) {
+    $shipment['package_weight_grams'] > 0 => number_format($shipment['package_weight_grams'] / 1000, 3, ',', '.') . ' kg',
+    $shipment['weight_kg'] === null => '—',
+    default => (string) $shipment['weight_kg'] . ' kg',
+};
 ?>
 <header class="page-header"><div><p class="eyebrow"><?= $e($eyebrow) ?></p><h1><?= $e($title) ?></h1><p class="page-header__description"><?= $e($description) ?></p></div></header>
 
@@ -31,7 +36,7 @@ $tone = static fn (string $status): string => match ($status) {
         <td><?= $e($shipment['customer_name'] ?? '—') ?><small><?= $e($shipment['customer_code'] ?? '—') ?></small></td>
         <td><?= $e($shipment['provider']) ?></td>
         <td><?= $e((string) $shipment['package_detail_count']) ?> / <?= $e((string) $shipment['packages']) ?><small>registrati / dichiarati</small></td>
-        <td><?= $e($shipment['package_weight_grams'] > 0 ? number_format($shipment['package_weight_grams'] / 1000, 3, ',', '.') . ' kg' : ($shipment['weight_kg'] === null ? '—' : (string) $shipment['weight_kg'] . ' kg')) ?></td>
+        <td><?= $e($weight($shipment)) ?></td>
         <td><?= $e((string) $shipment['label_count']) ?><small><?= $e($shipment['latest_label_format'] ?? '—') ?> · <?= $e($date($shipment['latest_label_generated_at'])) ?></small></td>
         <td><span class="status-badge status-badge--<?= $e($tone($shipment['status'])) ?>"><?= $e($shipment['status']) ?></span></td><td><?= $e($date($shipment['updated_at'])) ?></td>
     </tr><?php endforeach; ?><?php endif; ?>

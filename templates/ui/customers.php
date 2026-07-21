@@ -74,7 +74,7 @@ $date = static function (?string $value): string {
                 <tr><td colspan="8"><div class="empty-state"><span class="empty-state__icon"><svg class="icon"><use href="/assets/icons.svg#customer"></use></svg></span><h3>Nessun cliente trovato</h3><p>I profili vengono creati dagli ordini importati o dai futuri casi d’uso amministrativi.</p></div></td></tr>
             <?php else: ?>
                 <?php foreach ($customers as $customer): ?>
-                    <?php $tone = $customer['status'] === 'active' ? 'success' : ($customer['status'] === 'inactive' ? 'warning' : 'neutral'); ?>
+                    <?php $tone = match ($customer['status']) { 'active' => 'success', 'inactive' => 'warning', default => 'neutral' }; ?>
                     <tr>
                         <td><strong><?= $e($customer['customer_code']) ?></strong><small>v<?= $e((string) $customer['version']) ?></small></td>
                         <td><?= $e($customer['display_name']) ?><small><?= $e($customer['customer_type']) ?></small></td>

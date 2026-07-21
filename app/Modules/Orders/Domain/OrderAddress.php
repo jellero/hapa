@@ -15,16 +15,12 @@ final readonly class OrderAddress
     public string $countryCode;
     public ?string $phone;
 
-    public function __construct(
-        string $recipient,
-        string $addressLine1,
-        ?string $addressLine2,
-        string $postalCode,
-        string $city,
-        ?string $province,
-        string $countryCode,
-        ?string $phone,
-    ) {
+    /** @param array{recipient:string,address_line1:string,address_line2:?string,postal_code:string,city:string,province:?string,country_code:string,phone:?string} $data */
+    public function __construct(array $data)
+    {
+        ['recipient' => $recipient, 'address_line1' => $addressLine1, 'address_line2' => $addressLine2,
+            'postal_code' => $postalCode, 'city' => $city, 'province' => $province,
+            'country_code' => $countryCode, 'phone' => $phone] = $data;
         $this->recipient = self::required($recipient, 'destinatario', 240);
         $this->addressLine1 = self::required($addressLine1, 'indirizzo', 240);
         $this->addressLine2 = self::optional($addressLine2, 'seconda riga indirizzo', 240);

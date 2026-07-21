@@ -16,7 +16,7 @@ use Hapa\Modules\Catalog\Domain\PricingRuleScope;
 use InvalidArgumentException;
 use JsonException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Throwable;
 
 final class PricingRuleService implements PricingRuleManagement
@@ -40,7 +40,7 @@ LEFT JOIN marketplaces marketplace ON marketplace.id = rule.marketplace_id
 ORDER BY rule.retired_at NULLS FIRST, rule.enabled DESC, rule.priority DESC, rule.code
 SQL);
         if ($statement === false) {
-            throw new RuntimeException('Impossibile leggere le regole di ricarico.');
+            throw new HapaRuntimeException('Impossibile leggere le regole di ricarico.');
         }
 
         return array_values(array_map(self::hydrate(...), $statement->fetchAll(PDO::FETCH_ASSOC)));
@@ -51,7 +51,7 @@ SQL);
     {
         $statement = $this->connection()->query('SELECT id, code, name FROM marketplaces WHERE business_status <> \'retired\' ORDER BY name');
         if ($statement === false) {
-            throw new RuntimeException('Impossibile leggere i marketplace.');
+            throw new HapaRuntimeException('Impossibile leggere i marketplace.');
         }
 
         return array_values(array_map(static fn (array $row): array => [
@@ -88,7 +88,7 @@ SQL);
             $statement->execute([...$rule, 'created_at' => $now, 'updated_at' => $now]);
             $id = (int) $statement->fetchColumn();
             $snapshot = $this->snapshot($id);
-            $this->historyAndAudit($id, 1, 'created', null, $snapshot, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, 1, 'created', null, $snapshot, self::auditContext($actor, $correlationId, $now));
             $this->offerRecalculator->recalculateAll($pdo);
             $pdo->commit();
 
@@ -143,7 +143,7 @@ SQL);
                 throw new PricingRuleConflict('La regola è stata modificata da un altro operatore.');
             }
             $after = $this->snapshot($id);
-            $this->historyAndAudit($id, (int) $version, 'updated', $before, $after, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, (int) $version, 'updated', $before, $after, self::auditContext($actor, $correlationId, $now));
             $this->offerRecalculator->recalculateAll($pdo);
             $pdo->commit();
         } catch (Throwable $exception) {
@@ -181,7 +181,7 @@ SQL);
                 throw new PricingRuleConflict('La regola è stata modificata o ritirata da un altro operatore.');
             }
             $after = $this->snapshot($id);
-            $this->historyAndAudit($id, (int) $version, 'retired', $before, $after, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, (int) $version, 'retired', $before, $after, self::auditContext($actor, $correlationId, $now));
             $this->offerRecalculator->recalculateAll($pdo);
             $pdo->commit();
         } catch (Throwable $exception) {
@@ -215,7 +215,7 @@ SQL);
         $priority = self::integer($input['priority'] ?? 100, 'Priorità');
         $minimum = self::nullableInteger($input['minimum_price_minor'] ?? null, 'Prezzo minimo');
         $maximum = self::nullableInteger($input['maximum_price_minor'] ?? null, 'Prezzo massimo');
-        new PricingRule(
+        $rule = new PricingRule(
             $code,
             $scope,
             $marketplaceCode,
@@ -234,17 +234,17 @@ SQL);
         }
 
         return [
-            'code' => $code,
+            'code' => $rule->code,
             'name' => $name,
-            'scope' => $scope->value,
+            'scope' => $rule->scope->value,
             'marketplace_id' => $marketplaceId,
-            'sku' => $sku,
-            'adjustment_type' => $adjustmentType->value,
-            'adjustment_value' => $adjustmentValue,
-            'currency' => $currency,
-            'minimum_price_minor' => $minimum,
-            'maximum_price_minor' => $maximum,
-            'priority' => $priority,
+            'sku' => $rule->sku,
+            'adjustment_type' => $rule->adjustmentType->value,
+            'adjustment_value' => $rule->adjustmentValue,
+            'currency' => $rule->currency,
+            'minimum_price_minor' => $rule->minimumPriceMinor,
+            'maximum_price_minor' => $rule->maximumPriceMinor,
+            'priority' => $rule->priority,
             'enabled' => ($input['enabled'] ?? false) ? 'true' : 'false',
             'valid_from' => $validFrom?->format(DATE_ATOM),
             'valid_until' => $validUntil?->format(DATE_ATOM),
@@ -291,6 +291,7 @@ SQL);
     /**
      * @param array<string, mixed>|null $before
      * @param array<string, mixed> $after
+     * @param array{actor:UserIdentity,correlation_id:string,now:string} $context
      * @throws JsonException
      */
     private function historyAndAudit(
@@ -299,9 +300,7 @@ SQL);
         string $action,
         ?array $before,
         array $after,
-        UserIdentity $actor,
-        string $correlationId,
-        string $now,
+        array $context,
     ): void {
         $afterJson = json_encode($after, JSON_THROW_ON_ERROR);
         $history = $this->connection()->prepare(<<<'SQL'
@@ -313,23 +312,29 @@ SQL);
             'version' => $version,
             'action' => $action,
             'snapshot' => $afterJson,
-            'actor_id' => $actor->id,
-            'correlation_id' => $correlationId,
-            'created_at' => $now,
+            'actor_id' => $context['actor']->id,
+            'correlation_id' => $context['correlation_id'],
+            'created_at' => $context['now'],
         ]);
         $audit = $this->connection()->prepare(<<<'SQL'
 INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, before_data, after_data, correlation_id, created_at)
 VALUES (:actor_id, :action, 'pricing_rule', :entity_id, CAST(:before_data AS JSONB), CAST(:after_data AS JSONB), :correlation_id, :created_at)
 SQL);
         $audit->execute([
-            'actor_id' => $actor->id,
+            'actor_id' => $context['actor']->id,
             'action' => 'pricing.rule_' . $action,
             'entity_id' => (string) $id,
             'before_data' => $before === null ? null : json_encode($before, JSON_THROW_ON_ERROR),
             'after_data' => $afterJson,
-            'correlation_id' => $correlationId,
-            'created_at' => $now,
+            'correlation_id' => $context['correlation_id'],
+            'created_at' => $context['now'],
         ]);
+    }
+
+    /** @return array{actor:UserIdentity,correlation_id:string,now:string} */
+    private static function auditContext(UserIdentity $actor, string $correlationId, string $now): array
+    {
+        return ['actor' => $actor, 'correlation_id' => $correlationId, 'now' => $now];
     }
 
     /**

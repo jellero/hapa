@@ -8,6 +8,13 @@ final class CreateCustomerOrderMasterData extends AbstractMigration
 {
     public function up(): void
     {
+        $this->migratePart1();
+        $this->migratePart2();
+    }
+
+
+    private function migratePart1(): void
+    {
         $this->execute(<<<'SQL'
 CREATE TABLE customers (
     id BIGSERIAL PRIMARY KEY,
@@ -122,6 +129,10 @@ CREATE TABLE customer_addresses (
 )
 SQL);
 
+    }
+
+    private function migratePart2(): void
+    {
         $this->execute('CREATE INDEX customer_addresses_customer_idx ON customer_addresses (customer_id, active)');
         $this->execute(<<<'SQL'
 CREATE UNIQUE INDEX customer_addresses_default_shipping_unique

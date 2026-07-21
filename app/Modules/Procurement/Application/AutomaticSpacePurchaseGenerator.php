@@ -8,7 +8,7 @@ use Hapa\Core\Outbox\OutboxRepository;
 use Hapa\Core\Outbox\ProviderCommandFactory;
 use Hapa\Modules\Procurement\Contract\AutomaticPurchaseGenerator;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class AutomaticSpacePurchaseGenerator implements AutomaticPurchaseGenerator
 {
@@ -45,7 +45,7 @@ final readonly class AutomaticSpacePurchaseGenerator implements AutomaticPurchas
         }
 
         if ($reason !== null) {
-            $purchaseId = $this->persist(
+            $this->persist(
                 $existing,
                 $order,
                 $supplierId,
@@ -59,7 +59,7 @@ final readonly class AutomaticSpacePurchaseGenerator implements AutomaticPurchas
         }
 
         if ($account === null) {
-            throw new RuntimeException('Account Space non risolto dopo la validazione.');
+            throw new HapaRuntimeException('Account Space non risolto dopo la validazione.');
         }
 
         $purchaseId = $this->persist(
@@ -103,7 +103,7 @@ final readonly class AutomaticSpacePurchaseGenerator implements AutomaticPurchas
         ));
 
         if (!$queued) {
-            throw new RuntimeException('Comando acquisto Space duplicato senza un acquisto già richiesto.');
+            throw new HapaRuntimeException('Comando acquisto Space duplicato senza un acquisto già richiesto.');
         }
     }
 
@@ -117,10 +117,10 @@ SQL);
         $statement->execute(['id' => $orderId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         if (!is_array($row)) {
-            throw new RuntimeException('Ordine vendita non trovato per la generazione acquisto Space.');
+            throw new HapaRuntimeException('Ordine vendita non trovato per la generazione acquisto Space.');
         }
         if ($row['shipping_address'] === null) {
-            throw new RuntimeException('Indirizzo di spedizione assente sull\'ordine vendita.');
+            throw new HapaRuntimeException('Indirizzo di spedizione assente sull\'ordine vendita.');
         }
 
         return $row;
@@ -131,7 +131,7 @@ SQL);
         $statement = $this->pdo->query("SELECT id FROM suppliers WHERE code = 'space' AND active FOR SHARE");
         $id = $statement === false ? false : $statement->fetchColumn();
         if ($id === false) {
-            throw new RuntimeException('Fornitore Space non configurato o disabilitato.');
+            throw new HapaRuntimeException('Fornitore Space non configurato o disabilitato.');
         }
 
         return (int) $id;
@@ -192,72 +192,68 @@ SQL);
 
         $resolved = [];
         $required = [];
+        $reason = null;
         foreach ($salesLines as $salesLine) {
-            $candidates = $this->candidates($supplierId, $salesLine);
-            if ($candidates === []) {
-                return ['lines' => [], 'reason' => sprintf(
-                    'Riga %d (%s) non associata a un articolo Space attivo.',
-                    (int) $salesLine['line_number'],
-                    (string) $salesLine['sku'],
-                )];
+            $result = $this->resolveLine($supplierId, $salesLine, $required);
+            if ($result['reason'] !== null) {
+                $reason = $result['reason'];
+                break;
             }
-            $bestScore = (int) $candidates[0]['match_score'];
-            $best = array_values(array_filter(
-                $candidates,
-                static fn (array $candidate): bool => (int) $candidate['match_score'] === $bestScore,
-            ));
-            if (count($best) !== 1) {
-                return ['lines' => [], 'reason' => sprintf(
-                    'Riga %d (%s) associabile a più articoli Space con la stessa priorità.',
-                    (int) $salesLine['line_number'],
-                    (string) $salesLine['sku'],
-                )];
-            }
-            $offer = $best[0];
-            if ($offer['external_item_id'] === null || !ctype_digit((string) $offer['external_item_id'])
-                || (int) $offer['external_item_id'] < 1) {
-                return ['lines' => [], 'reason' => sprintf(
-                    'ID articolo Space assente o non numerico per %s.',
-                    (string) $offer['supplier_sku'],
-                )];
-            }
-            $quantity = (int) $salesLine['quantity_ordered'];
-            $offerId = (int) $offer['supplier_catalog_item_id'];
-            $required[$offerId] = ($required[$offerId] ?? 0) + $quantity;
-            if ($required[$offerId] > (int) $offer['available_quantity']) {
-                return ['lines' => [], 'reason' => sprintf(
-                    'Disponibilità Space insufficiente per %s: richiesti %d, osservati %d.',
-                    (string) $offer['supplier_sku'],
-                    $required[$offerId],
-                    (int) $offer['available_quantity'],
-                )];
-            }
-            if ($offer['purchase_cost_minor'] === null) {
-                return ['lines' => [], 'reason' => sprintf(
-                    'Costo di acquisto Space assente per %s.',
-                    (string) $offer['supplier_sku'],
-                )];
-            }
-            $resolved[] = [
-                'line_number' => (int) $salesLine['line_number'],
-                'order_line_id' => (int) $salesLine['id'],
-                'catalog_item_id' => (int) $offer['catalog_item_id'],
-                'supplier_catalog_item_id' => $offerId,
-                'external_item_id' => (string) $offer['external_item_id'],
-                'supplier_sku' => (string) $offer['supplier_sku'],
-                'description_snapshot' => $salesLine['description_snapshot'] === null ? null : (string) $salesLine['description_snapshot'],
-                'quantity' => $quantity,
-                'unit_cost_minor' => (int) $offer['purchase_cost_minor'],
-                'currency' => (string) $offer['currency'],
-            ];
+            $resolved[] = $result['line'];
         }
 
-        $currencies = array_values(array_unique(array_column($resolved, 'currency')));
-        if (count($currencies) !== 1) {
-            return ['lines' => [], 'reason' => 'Le righe Space risolte usano valute differenti.'];
+        if ($reason === null && count(array_unique(array_column($resolved, 'currency'))) !== 1) {
+            $reason = 'Le righe Space risolte usano valute differenti.';
         }
 
-        return ['lines' => $resolved, 'reason' => null];
+        return ['lines' => $reason === null ? $resolved : [], 'reason' => $reason];
+    }
+
+    /**
+     * @param array<string,mixed> $salesLine
+     * @param array<int,int> $required
+     * @return array{line:array<string,mixed>,reason:?string}
+     */
+    private function resolveLine(int $supplierId, array $salesLine, array &$required): array
+    {
+        $candidates = $this->candidates($supplierId, $salesLine);
+        if ($candidates === []) {
+            return ['line' => [], 'reason' => sprintf('Riga %d (%s) non associata a un articolo Space attivo.', (int) $salesLine['line_number'], (string) $salesLine['sku'])];
+        }
+        $bestScore = (int) $candidates[0]['match_score'];
+        $best = array_values(array_filter($candidates, static fn (array $candidate): bool => (int) $candidate['match_score'] === $bestScore));
+        $offer = count($best) === 1 ? $best[0] : null;
+        $reason = $offer === null
+            ? sprintf('Riga %d (%s) associabile a più articoli Space con la stessa priorità.', (int) $salesLine['line_number'], (string) $salesLine['sku'])
+            : self::validateResolvedOffer($offer, (int) $salesLine['quantity_ordered'], $required);
+        return ['line' => $reason === null && $offer !== null ? self::purchaseLine($salesLine, $offer) : [], 'reason' => $reason];
+    }
+
+    /**
+     * @param array<string,mixed> $offer
+     * @param array<int,int> $required
+     */
+    private static function validateResolvedOffer(array $offer, int $quantity, array &$required): ?string
+    {
+        if ($offer['external_item_id'] === null || !ctype_digit((string) $offer['external_item_id']) || (int) $offer['external_item_id'] < 1) {
+            return sprintf('ID articolo Space assente o non numerico per %s.', (string) $offer['supplier_sku']);
+        }
+        $offerId = (int) $offer['supplier_catalog_item_id'];
+        $required[$offerId] = ($required[$offerId] ?? 0) + $quantity;
+        if ($required[$offerId] > (int) $offer['available_quantity']) {
+            return sprintf('Disponibilità Space insufficiente per %s: richiesti %d, osservati %d.', (string) $offer['supplier_sku'], $required[$offerId], (int) $offer['available_quantity']);
+        }
+        return $offer['purchase_cost_minor'] === null ? sprintf('Costo di acquisto Space assente per %s.', (string) $offer['supplier_sku']) : null;
+    }
+
+    /**
+     * @param array<string,mixed> $salesLine
+     * @param array<string,mixed> $offer
+     * @return array<string,mixed>
+     */
+    private static function purchaseLine(array $salesLine, array $offer): array
+    {
+        return ['line_number' => (int) $salesLine['line_number'], 'order_line_id' => (int) $salesLine['id'], 'catalog_item_id' => (int) $offer['catalog_item_id'], 'supplier_catalog_item_id' => (int) $offer['supplier_catalog_item_id'], 'external_item_id' => (string) $offer['external_item_id'], 'supplier_sku' => (string) $offer['supplier_sku'], 'description_snapshot' => $salesLine['description_snapshot'] === null ? null : (string) $salesLine['description_snapshot'], 'quantity' => (int) $salesLine['quantity_ordered'], 'unit_cost_minor' => (int) $offer['purchase_cost_minor'], 'currency' => (string) $offer['currency']];
     }
 
     /**
@@ -321,9 +317,18 @@ SQL);
             $lines,
         ));
         $currency = $lines === [] ? (string) $order['currency'] : (string) $lines[0]['currency'];
-        if ($existing === null) {
-            $number = 'SPA-' . strtoupper(substr(hash('sha256', (string) $order['order_number']), 0, 28));
-            $statement = $this->pdo->prepare(<<<'SQL'
+        $purchaseId = $existing === null
+            ? $this->insertPurchase($order, $supplierId, $integrationAccountId, $status, $currency, $subtotal, $lastError)
+            : $this->updatePurchase($existing, $integrationAccountId, $status, $currency, $subtotal, $lastError);
+        $this->replaceLines($purchaseId, $lines);
+        return $purchaseId;
+    }
+
+    /** @param array<string,mixed> $order */
+    private function insertPurchase(array $order, int $supplierId, ?int $integrationAccountId, string $status, string $currency, ?int $subtotal, ?string $lastError): int
+    {
+        $number = 'SPA-' . strtoupper(substr(hash('sha256', (string) $order['order_number']), 0, 28));
+        $statement = $this->pdo->prepare(<<<'SQL'
 INSERT INTO supplier_purchase_orders (
     order_id, supplier_id, integration_account_id, purchase_number,
     status, currency, subtotal_minor, tax_total_minor, grand_total_minor,
@@ -348,12 +353,16 @@ SQL);
             $statement->execute();
             $id = $statement->fetchColumn();
             if ($id === false) {
-                throw new RuntimeException('Creazione automatica acquisto Space fallita.');
+                throw new HapaRuntimeException('Creazione automatica acquisto Space fallita.');
             }
-            $purchaseId = (int) $id;
-        } else {
-            $purchaseId = (int) $existing['id'];
-            $statement = $this->pdo->prepare(<<<'SQL'
+        return (int) $id;
+    }
+
+    /** @param array<string,mixed> $existing */
+    private function updatePurchase(array $existing, ?int $integrationAccountId, string $status, string $currency, ?int $subtotal, ?string $lastError): int
+    {
+        $purchaseId = (int) $existing['id'];
+        $statement = $this->pdo->prepare(<<<'SQL'
 UPDATE supplier_purchase_orders
 SET integration_account_id = :integration_account_id, status = :status,
     currency = :currency, subtotal_minor = :subtotal_minor,
@@ -371,11 +380,7 @@ SQL);
             $statement->bindValue('submitted', $status === 'requested', PDO::PARAM_BOOL);
             $statement->bindValue('last_error', $lastError, $lastError === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
             $statement->bindValue('id', $purchaseId, PDO::PARAM_INT);
-            $statement->execute();
-        }
-
-        $this->replaceLines($purchaseId, $lines);
-
+        $statement->execute();
         return $purchaseId;
     }
 
@@ -420,7 +425,7 @@ SQL);
         $statement->execute(['id' => $purchaseId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         if (!is_array($row)) {
-            throw new RuntimeException('Acquisto Space appena generato non recuperabile.');
+            throw new HapaRuntimeException('Acquisto Space appena generato non recuperabile.');
         }
 
         return $row;

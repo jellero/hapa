@@ -12,10 +12,12 @@ use Hapa\Modules\Space\Contract\SpaceCatalogObservation;
 use Hapa\Modules\Space\Domain\SpaceCatalogIngestionOutcome;
 use JsonException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class SpaceCatalogObservationHandler
 {
+    private const DATABASE_TIMESTAMP = 'Y-m-d H:i:s.uP';
+
     public function __construct(
         private PDO $pdo,
         private TransactionManager $transactions,
@@ -45,33 +47,28 @@ final readonly class SpaceCatalogObservationHandler
 
         $offer = $this->offerByExternalIdentity($supplierId, $observation->externalItemId);
         if ($offer !== null) {
-            $catalogItemId = (int) $offer['catalog_item_id'];
-            $lastObservedAt = $offer['observed_at'] === null
-                ? null
-                : new DateTimeImmutable((string) $offer['observed_at']);
-
-            if ($lastObservedAt !== null && $lastObservedAt > $observation->observedAt) {
-                return $this->finishObservation(
-                    $observationId,
-                    $catalogItemId,
-                    'ignored',
-                    SpaceCatalogIngestionOutcome::IgnoredStale,
-                    'Osservazione precedente a quella già applicata.',
-                );
-            }
-
-            $this->updateOffer((int) $offer['id'], $observation);
-            $this->updatePendingProduct($catalogItemId, $observation);
-            $this->offerRecalculator->recalculateProduct($this->pdo, $catalogItemId);
-
-            return $this->finishObservation(
-                $observationId,
-                $catalogItemId,
-                'applied',
-                SpaceCatalogIngestionOutcome::Updated,
-            );
+            return $this->ingestExistingOffer($observationId, $offer, $observation);
         }
 
+        return $this->ingestNewOffer($observationId, $supplierId, $observation);
+    }
+
+    /** @param array<string,mixed> $offer */
+    private function ingestExistingOffer(int $observationId, array $offer, SpaceCatalogObservation $observation): SpaceCatalogIngestionResult
+    {
+        $catalogItemId = (int) $offer['catalog_item_id'];
+        $lastObservedAt = $offer['observed_at'] === null ? null : new DateTimeImmutable((string) $offer['observed_at']);
+        if ($lastObservedAt !== null && $lastObservedAt > $observation->observedAt) {
+            return $this->finishObservation($observationId, $catalogItemId, 'ignored', SpaceCatalogIngestionOutcome::IgnoredStale, 'Osservazione precedente a quella già applicata.');
+        }
+        $this->updateOffer((int) $offer['id'], $observation);
+        $this->updatePendingProduct($catalogItemId, $observation);
+        $this->offerRecalculator->recalculateProduct($this->pdo, $catalogItemId);
+        return $this->finishObservation($observationId, $catalogItemId, 'applied', SpaceCatalogIngestionOutcome::Updated);
+    }
+
+    private function ingestNewOffer(int $observationId, int $supplierId, SpaceCatalogObservation $observation): SpaceCatalogIngestionResult
+    {
         $eanMatches = $this->catalogItemsByEan($observation->ean);
         $skuMatch = $this->catalogItemBySku($observation->supplierSku);
         if (count($eanMatches) > 1) {
@@ -111,11 +108,11 @@ final readonly class SpaceCatalogObservationHandler
     {
         $statement = $this->pdo->query("SELECT id FROM suppliers WHERE code = 'space' AND active FOR SHARE");
         if ($statement === false) {
-            throw new RuntimeException('Impossibile leggere il fornitore Space.');
+            throw new HapaRuntimeException('Impossibile leggere il fornitore Space.');
         }
         $id = $statement->fetchColumn();
         if ($id === false) {
-            throw new RuntimeException('Fornitore Space non configurato o disabilitato.');
+            throw new HapaRuntimeException('Fornitore Space non configurato o disabilitato.');
         }
 
         return (int) $id;
@@ -149,7 +146,7 @@ SQL);
             'external_item_id' => $observation->externalItemId,
             'source_version' => $observation->sourceVersion,
             'payload' => json_encode($observation->payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-            'observed_at' => $observation->observedAt->format('Y-m-d H:i:s.uP'),
+            'observed_at' => $observation->observedAt->format(self::DATABASE_TIMESTAMP),
         ]);
         $id = $statement->fetchColumn();
 
@@ -176,7 +173,7 @@ SQL);
         ]);
         $row = $statement->fetch();
         if (!is_array($row)) {
-            throw new RuntimeException('Osservazione duplicata non recuperabile.');
+            throw new HapaRuntimeException('Osservazione duplicata non recuperabile.');
         }
 
         return new SpaceCatalogIngestionResult(
@@ -261,7 +258,7 @@ SQL);
         ]);
         $id = $statement->fetchColumn();
         if ($id === false) {
-            throw new RuntimeException('Creazione prodotto HAPA fallita.');
+            throw new HapaRuntimeException('Creazione prodotto HAPA fallita.');
         }
 
         return (int) $id;
@@ -335,7 +332,7 @@ SQL);
             'currency' => $observation->currency,
             'available_quantity' => $observation->availableQuantity,
             'source_version' => $observation->sourceVersion,
-            'observed_at' => $observation->observedAt->format('Y-m-d H:i:s.uP'),
+            'observed_at' => $observation->observedAt->format(self::DATABASE_TIMESTAMP),
             'id' => $offerId,
         ]);
     }
@@ -355,7 +352,7 @@ SQL);
             'currency' => $observation->currency,
             'available_quantity' => $observation->availableQuantity,
             'source_version' => $observation->sourceVersion,
-            'observed_at' => $observation->observedAt->format('Y-m-d H:i:s.uP'),
+            'observed_at' => $observation->observedAt->format(self::DATABASE_TIMESTAMP),
         ];
     }
 
@@ -394,7 +391,7 @@ SQL);
             'id' => $observationId,
         ]);
         if ($statement->rowCount() !== 1) {
-            throw new RuntimeException('Finalizzazione osservazione catalogo Space fallita.');
+            throw new HapaRuntimeException('Finalizzazione osservazione catalogo Space fallita.');
         }
 
         return new SpaceCatalogIngestionResult($observationId, $catalogItemId, $outcome, $reason);

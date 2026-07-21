@@ -9,7 +9,7 @@ use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Security\UserIdentity;
 use JsonException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Throwable;
 
 final class IntegrationAccountRepository
@@ -37,7 +37,7 @@ FROM integration_accounts account
 ORDER BY account.provider_code, account.display_name
 SQL);
         if ($statement === false) {
-            throw new RuntimeException('Impossibile leggere gli account integrazione.');
+            throw new HapaRuntimeException('Impossibile leggere gli account integrazione.');
         }
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
 
@@ -62,7 +62,7 @@ SQL);
             }
         }
 
-        throw new RuntimeException('Account integrazione non trovato.');
+        throw new HapaRuntimeException('Account integrazione non trovato.');
     }
 
     /** @param array<string, mixed> $status @throws JsonException */
@@ -73,7 +73,7 @@ SQL);
         if (!is_string($secretStatus) || !in_array($secretStatus, ['missing', 'configured', 'revoked'], true)
             || !is_int($secretVersion) || $secretVersion < 0
             || ($secretStatus !== 'missing' && $secretVersion < 1)) {
-            throw new RuntimeException('Stato credenziali Automation non valido.');
+            throw new HapaRuntimeException('Stato credenziali Automation non valido.');
         }
         $rotatedAt = isset($status['rotated_at']) && is_string($status['rotated_at']) ? $status['rotated_at'] : null;
         $now = $this->clock->now()->format(DATE_ATOM);
@@ -95,7 +95,7 @@ SQL);
                 'updated_at' => $now,
             ]);
             if ($statement->rowCount() !== 1) {
-                throw new RuntimeException('Account integrazione non disponibile o stato credenziali obsoleto.');
+                throw new HapaRuntimeException('Account integrazione non disponibile o stato credenziali obsoleto.');
             }
             $auditPayload = json_encode([
                 'secret_status' => $secretStatus,
@@ -133,7 +133,7 @@ SQL);
         $version = $status['configuration_version'] ?? null;
         $appliedAt = $status['applied_at'] ?? null;
         if (($status['status'] ?? null) !== 'applied' || !is_int($version) || $version < 1 || !is_string($appliedAt)) {
-            throw new RuntimeException('Stato configurazione Automation non valido.');
+            throw new HapaRuntimeException('Stato configurazione Automation non valido.');
         }
         $now = $this->clock->now()->format(DATE_ATOM);
         $pdo = $this->connection();
@@ -148,7 +148,7 @@ WHERE id = :id AND configuration_version >= :version
 SQL);
             $statement->execute(['id' => $id, 'version' => $version, 'applied_at' => $appliedAt, 'checked_at' => $now]);
             if ($statement->rowCount() !== 1) {
-                throw new RuntimeException('Versione Automation incompatibile con la configurazione HAPA.');
+                throw new HapaRuntimeException('Versione Automation incompatibile con la configurazione HAPA.');
             }
             $encoded = json_encode(['automation_configuration_version' => $version, 'automation_configured_at' => $appliedAt], JSON_THROW_ON_ERROR);
             $this->audit($id, 'integration.configuration_synchronized', $encoded, $actor, $correlationId, $now);
@@ -167,7 +167,7 @@ SQL);
         $passed = ($status['status'] ?? null) === 'passed';
         $testedAt = $status['tested_at'] ?? null;
         if (!$passed || !is_string($testedAt) || trim($testedAt) === '') {
-            throw new RuntimeException('Esito test connessione Automation non valido.');
+            throw new HapaRuntimeException('Esito test connessione Automation non valido.');
         }
         $tokenExpiresAt = isset($status['token_expires_at']) && is_string($status['token_expires_at'])
             ? $status['token_expires_at']
@@ -191,7 +191,7 @@ SQL);
                 'updated_at' => $now,
             ]);
             if ($statement->rowCount() !== 1) {
-                throw new RuntimeException('Account non disponibile o credenziali non configurate.');
+                throw new HapaRuntimeException('Account non disponibile o credenziali non configurate.');
             }
             $encoded = json_encode([
                 'connection_test_status' => 'passed',
@@ -212,7 +212,7 @@ SQL);
     public function recordManualImport(int $id, array $result, UserIdentity $actor, string $correlationId): void
     {
         if (($result['status'] ?? null) !== 'completed' || !is_int($result['published'] ?? null)) {
-            throw new RuntimeException('Esito import ordini Automation non valido.');
+            throw new HapaRuntimeException('Esito import ordini Automation non valido.');
         }
         $now = $this->clock->now()->format(DATE_ATOM);
         $encoded = json_encode([
@@ -228,7 +228,7 @@ SQL);
     public function recordManualCatalogSync(int $id, array $result, UserIdentity $actor, string $correlationId): void
     {
         if (($result['status'] ?? null) !== 'completed' || !is_int($result['published'] ?? null)) {
-            throw new RuntimeException('Esito sincronizzazione catalogo Space non valido.');
+            throw new HapaRuntimeException('Esito sincronizzazione catalogo Space non valido.');
         }
         $now = $this->clock->now()->format(DATE_ATOM);
         $encoded = json_encode([
@@ -246,7 +246,7 @@ SQL);
     {
         $target = strtolower(trim($target));
         if (!in_array($target, ['disabled', 'pilot', 'active', 'suspended'], true)) {
-            throw new RuntimeException('Stato account non consentito.');
+            throw new HapaRuntimeException('Stato account non consentito.');
         }
         $pdo = $this->connection();
         $now = $this->clock->now()->format(DATE_ATOM);
@@ -256,20 +256,19 @@ SQL);
             $statement->execute(['id' => $id]);
             $current = $statement->fetch(PDO::FETCH_ASSOC);
             if (!is_array($current) || (int) $current['configuration_version'] !== $expectedVersion || $current['desired_status'] === 'retired') {
-                throw new RuntimeException('Configurazione modificata da un altro operatore o account non disponibile.');
+                throw new HapaRuntimeException('Configurazione modificata da un altro operatore o account non disponibile.');
             }
             $from = (string) $current['desired_status'];
             if ($target === 'pilot' && !in_array($from, ['disabled', 'suspended'], true)) {
-                throw new RuntimeException('Il pilot può partire soltanto da disabled o suspended.');
+                throw new HapaRuntimeException('Il pilot può partire soltanto da disabled o suspended.');
             }
             if ($target === 'active' && $from !== 'pilot') {
-                throw new RuntimeException('L’attivazione completa richiede prima lo stato pilot.');
+                throw new HapaRuntimeException('L’attivazione completa richiede prima lo stato pilot.');
             }
-            if (in_array($target, ['pilot', 'active'], true)) {
-                if ($current['secret_status'] !== 'configured' || $current['connection_test_status'] !== 'passed'
-                    || (int) $current['automation_configuration_version'] !== $expectedVersion) {
-                    throw new RuntimeException('Servono credenziali configurate, test connessione superato e configurazione Automation sincronizzata.');
-                }
+            if (in_array($target, ['pilot', 'active'], true)
+                && ($current['secret_status'] !== 'configured' || $current['connection_test_status'] !== 'passed'
+                    || (int) $current['automation_configuration_version'] !== $expectedVersion)) {
+                throw new HapaRuntimeException('Servono credenziali configurate, test connessione superato e configurazione Automation sincronizzata.');
             }
             $update = $pdo->prepare(<<<'SQL'
 UPDATE integration_accounts
@@ -280,7 +279,7 @@ SQL);
             $update->execute(['target' => $target, 'updated_at' => $now, 'id' => $id, 'expected_version' => $expectedVersion]);
             $version = $update->fetchColumn();
             if ($version === false) {
-                throw new RuntimeException('Transizione account concorrente.');
+                throw new HapaRuntimeException('Transizione account concorrente.');
             }
             $snapshot = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, 'status_changed', $snapshot, $actor, $correlationId, $now);
@@ -367,7 +366,7 @@ SQL);
             ]);
             $version = $statement->fetchColumn();
             if ($version === false) {
-                throw new RuntimeException('Configurazione modificata da un altro operatore o account non disponibile.');
+                throw new HapaRuntimeException('Configurazione modificata da un altro operatore o account non disponibile.');
             }
             $this->replaceChildren($id, $configuration['capabilities'], $configuration['settings']);
             $snapshot = $this->snapshot($id);
@@ -406,7 +405,7 @@ SQL);
             ]);
             $version = $statement->fetchColumn();
             if ($version === false) {
-                throw new RuntimeException('Configurazione modificata da un altro operatore o account già ritirato.');
+                throw new HapaRuntimeException('Configurazione modificata da un altro operatore o account già ritirato.');
             }
             $snapshot = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, 'retired', $snapshot, $actor, $correlationId, $now);
@@ -466,7 +465,7 @@ SQL);
         $statement->execute(['id' => $id]);
         $snapshot = $statement->fetch(PDO::FETCH_ASSOC);
         if (!is_array($snapshot)) {
-            throw new RuntimeException('Account integrazione non trovato.');
+            throw new HapaRuntimeException('Account integrazione non trovato.');
         }
         $snapshot['configuration_version'] = (int) $snapshot['configuration_version'];
         $snapshot['capabilities'] = json_decode((string) $snapshot['capabilities'], true, 512, JSON_THROW_ON_ERROR);

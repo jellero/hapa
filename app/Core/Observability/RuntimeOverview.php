@@ -6,7 +6,7 @@ namespace Hapa\Core\Observability;
 
 use Hapa\Core\Database\ConnectionFactory;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final class RuntimeOverview
 {
@@ -52,7 +52,7 @@ final class RuntimeOverview
             $table,
         ));
         if ($statement === false) {
-            throw new RuntimeException('Impossibile calcolare le metriche runtime HAPA.');
+            throw new HapaRuntimeException('Impossibile calcolare le metriche runtime HAPA.');
         }
 
         $counts = [];
@@ -73,7 +73,7 @@ final class RuntimeOverview
             $condition === null ? '' : ' WHERE ' . $condition,
         ));
         if ($statement === false) {
-            throw new RuntimeException('Impossibile calcolare una metrica HAPA.');
+            throw new HapaRuntimeException('Impossibile calcolare una metrica HAPA.');
         }
 
         return (int) $statement->fetchColumn();
@@ -84,7 +84,7 @@ final class RuntimeOverview
         $this->assertTable($table);
         $this->assertCondition($condition);
         if (!in_array($column, ['received_at', 'available_at'], true)) {
-            throw new RuntimeException('Colonna metrica HAPA non valida.');
+            throw new HapaRuntimeException('Colonna metrica HAPA non valida.');
         }
         $statement = $this->connection()->query(sprintf(
             "SELECT COALESCE(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - MIN(%s)), 0)::BIGINT FROM %s WHERE %s",
@@ -93,7 +93,7 @@ final class RuntimeOverview
             $condition,
         ));
         if ($statement === false) {
-            throw new RuntimeException('Impossibile calcolare il lag HAPA.');
+            throw new HapaRuntimeException('Impossibile calcolare il lag HAPA.');
         }
 
         return max(0, (int) $statement->fetchColumn());
@@ -105,7 +105,7 @@ final class RuntimeOverview
             'orders', 'customers', 'catalog_items', 'shipments',
             'inbox_messages', 'outbox_messages', 'audit_logs',
         ], true)) {
-            throw new RuntimeException('Tabella metrica HAPA non valida.');
+            throw new HapaRuntimeException('Tabella metrica HAPA non valida.');
         }
     }
 
@@ -118,7 +118,7 @@ final class RuntimeOverview
             "status = 'failed'",
             "status IN ('pending', 'retry')",
         ], true)) {
-            throw new RuntimeException('Condizione metrica HAPA non valida.');
+            throw new HapaRuntimeException('Condizione metrica HAPA non valida.');
         }
     }
 

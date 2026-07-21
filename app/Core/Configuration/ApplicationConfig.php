@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Hapa\Core\Configuration;
 
 use DateTimeZone;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class ApplicationConfig
 {
@@ -23,7 +23,7 @@ final readonly class ApplicationConfig
     ) {
         $normalizedName = strtolower(trim($name));
         if (!in_array($normalizedName, ['development', 'testing', 'production'], true)) {
-            throw new RuntimeException(sprintf('APP_ENV non valido: %s', $name));
+            throw new HapaRuntimeException(sprintf('APP_ENV non valido: %s', $name));
         }
 
         $normalizedUrl = rtrim(trim($appUrl), '/');
@@ -38,12 +38,12 @@ final readonly class ApplicationConfig
             || isset($urlParts['query'])
             || isset($urlParts['fragment'])
         ) {
-            throw new RuntimeException(sprintf('APP_URL non valido: %s', $appUrl));
+            throw new HapaRuntimeException(sprintf('APP_URL non valido: %s', $appUrl));
         }
 
         $normalizedTimezone = trim($timezone);
         if (!in_array($normalizedTimezone, DateTimeZone::listIdentifiers(), true)) {
-            throw new RuntimeException(sprintf('APP_TIMEZONE non valido: %s', $timezone));
+            throw new HapaRuntimeException(sprintf('APP_TIMEZONE non valido: %s', $timezone));
         }
 
         $normalizedLogLevel = strtolower(trim($logLevel));
@@ -57,15 +57,15 @@ final readonly class ApplicationConfig
             'alert',
             'emergency',
         ], true)) {
-            throw new RuntimeException(sprintf('LOG_LEVEL non valido: %s', $logLevel));
+            throw new HapaRuntimeException(sprintf('LOG_LEVEL non valido: %s', $logLevel));
         }
 
         if ($normalizedName === 'production' && $debug) {
-            throw new RuntimeException('APP_DEBUG deve essere false in produzione.');
+            throw new HapaRuntimeException('APP_DEBUG deve essere false in produzione.');
         }
 
         if ($normalizedName === 'production' && !str_starts_with($normalizedUrl, 'https://')) {
-            throw new RuntimeException('APP_URL deve usare HTTPS in produzione.');
+            throw new HapaRuntimeException('APP_URL deve usare HTTPS in produzione.');
         }
 
         $this->name = $normalizedName;

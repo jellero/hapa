@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hapa\Modules\Catalog\Application;
 
 use DateTimeImmutable;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Ui\CatalogOverview;
 use PDO;
@@ -50,13 +51,24 @@ SQL);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
-        $items = [];
-        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $observedAt = is_string($row['observed_at']) ? new DateTimeImmutable($row['observed_at']) : null;
-            $items[] = [
+        $items = array_values(array_map(
+            static fn (array $row): array => self::hydrate($row),
+            $statement->fetchAll(PDO::FETCH_ASSOC),
+        ));
+        $metrics = $this->metrics();
+
+        return ['items' => $items, 'metrics' => $metrics];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,int|string|bool|null>
+     */
+    private static function hydrate(array $row): array
+    {
+        $observedAt = is_string($row['observed_at']) ? new DateTimeImmutable($row['observed_at']) : null;
+
+        return [
                 'id' => (int) $row['id'],
                 'sku' => (string) $row['sku'],
                 'ean' => is_string($row['ean']) ? $row['ean'] : null,
@@ -69,20 +81,19 @@ SQL);
                 'offers_calculated_at' => is_string($row['offers_calculated_at'])
                     ? (new DateTimeImmutable($row['offers_calculated_at']))->format(DATE_ATOM)
                     : null,
-                'purchase_cost_minor' => is_int($row['purchase_cost_minor'])
-                    ? $row['purchase_cost_minor']
-                    : (is_string($row['purchase_cost_minor']) ? (int) $row['purchase_cost_minor'] : null),
+                'purchase_cost_minor' => self::nullableInt($row['purchase_cost_minor']),
                 'currency' => is_string($row['currency']) ? $row['currency'] : null,
-                'available_quantity' => is_int($row['available_quantity'])
-                    ? $row['available_quantity']
-                    : (is_string($row['available_quantity']) ? (int) $row['available_quantity'] : null),
+                'available_quantity' => self::nullableInt($row['available_quantity']),
                 'source_version' => is_string($row['source_version']) ? $row['source_version'] : null,
                 'observed_at' => $observedAt?->format(DATE_ATOM),
                 'age_seconds' => $observedAt === null ? null : max(0, time() - $observedAt->getTimestamp()),
                 'marketplace_offer_count' => (int) $row['marketplace_offer_count'],
             ];
-        }
+    }
 
+    /** @return array{total: int, pending_review: int, active: int, stale: int} */
+    private function metrics(): array
+    {
         $metricsStatement = $this->connection()->query(<<<'SQL'
 SELECT COUNT(*) AS total,
        COUNT(*) FILTER (WHERE onboarding_status = 'pending_review') AS pending_review,
@@ -93,19 +104,21 @@ SELECT COUNT(*) AS total,
 FROM catalog_items
 SQL);
         if ($metricsStatement === false) {
-            throw new \RuntimeException('Impossibile leggere le metriche catalogo.');
+            throw new HapaRuntimeException('Impossibile leggere le metriche catalogo.');
         }
         $metrics = $metricsStatement->fetch(PDO::FETCH_ASSOC);
 
         return [
-            'items' => $items,
-            'metrics' => [
-                'total' => (int) ($metrics['total'] ?? 0),
-                'pending_review' => (int) ($metrics['pending_review'] ?? 0),
-                'active' => (int) ($metrics['active'] ?? 0),
-                'stale' => (int) ($metrics['stale'] ?? 0),
-            ],
+            'total' => (int) ($metrics['total'] ?? 0),
+            'pending_review' => (int) ($metrics['pending_review'] ?? 0),
+            'active' => (int) ($metrics['active'] ?? 0),
+            'stale' => (int) ($metrics['stale'] ?? 0),
         ];
+    }
+
+    private static function nullableInt(mixed $value): ?int
+    {
+        return is_int($value) || is_string($value) ? (int) $value : null;
     }
 
     private function connection(): PDO

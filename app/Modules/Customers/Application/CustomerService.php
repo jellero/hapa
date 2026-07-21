@@ -58,7 +58,7 @@ SQL);
             $statement->execute([...$this->parameters($profile), 'created_at' => $now, 'updated_at' => $now]);
             $id = (int) $statement->fetchColumn();
             $after = $this->snapshot($id);
-            $this->historyAndAudit($id, 1, 'created', null, $after, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, 1, 'created', null, $after, self::auditContext($actor, $correlationId, $now));
             $pdo->commit();
 
             return (string) $profile->code;
@@ -114,7 +114,7 @@ SQL);
             $id = (int) $result['id'];
             $version = (int) $result['version'];
             $after = $this->snapshot($id);
-            $this->historyAndAudit($id, $version, 'updated', $before, $after, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, $version, 'updated', $before, $after, self::auditContext($actor, $correlationId, $now));
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -161,7 +161,7 @@ SQL);
             $id = (int) $result['id'];
             $version = (int) $result['version'];
             $after = $this->snapshot($id);
-            $this->historyAndAudit($id, $version, 'archived', $before, $after, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, $version, 'archived', $before, $after, self::auditContext($actor, $correlationId, $now));
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -182,20 +182,13 @@ SQL);
             ?? throw new InvalidArgumentException('Tipo cliente non valido.');
         $emailValue = self::nullable($input['email'] ?? null);
 
-        return new CustomerProfile(
-            $code,
-            $status,
-            $type,
-            (string) ($input['display_name'] ?? ''),
-            self::nullable($input['first_name'] ?? null),
-            self::nullable($input['last_name'] ?? null),
-            self::nullable($input['company_name'] ?? null),
-            $emailValue === null ? null : new EmailAddress($emailValue),
-            self::nullable($input['phone'] ?? null),
-            self::nullable($input['tax_identifier'] ?? null),
-            self::nullable($input['vat_number'] ?? null),
-            (string) ($input['locale'] ?? 'it-IT'),
-        );
+        return new CustomerProfile([
+            'code' => $code, 'status' => $status, 'type' => $type, 'display_name' => (string) ($input['display_name'] ?? ''),
+            'first_name' => self::nullable($input['first_name'] ?? null), 'last_name' => self::nullable($input['last_name'] ?? null),
+            'company_name' => self::nullable($input['company_name'] ?? null), 'email' => $emailValue === null ? null : new EmailAddress($emailValue),
+            'phone' => self::nullable($input['phone'] ?? null), 'tax_identifier' => self::nullable($input['tax_identifier'] ?? null),
+            'vat_number' => self::nullable($input['vat_number'] ?? null), 'locale' => (string) ($input['locale'] ?? 'it-IT'),
+        ]);
     }
 
     private function generateCode(): CustomerCode
@@ -255,6 +248,7 @@ SQL);
     /**
      * @param array<string, mixed>|null $before
      * @param array<string, mixed> $after
+     * @param array{actor:UserIdentity,correlation_id:string,now:string} $context
      * @throws JsonException
      */
     private function historyAndAudit(
@@ -263,9 +257,7 @@ SQL);
         string $changeType,
         ?array $before,
         array $after,
-        UserIdentity $actor,
-        string $correlationId,
-        string $now,
+        array $context,
     ): void {
         $afterJson = json_encode($after, JSON_THROW_ON_ERROR);
         $history = $this->connection()->prepare(<<<'SQL'
@@ -280,9 +272,9 @@ SQL);
             'version' => $version,
             'change_type' => $changeType,
             'snapshot' => $afterJson,
-            'actor_id' => $actor->id,
-            'correlation_id' => $correlationId,
-            'occurred_at' => $now,
+            'actor_id' => $context['actor']->id,
+            'correlation_id' => $context['correlation_id'],
+            'occurred_at' => $context['now'],
         ]);
         $audit = $this->connection()->prepare(<<<'SQL'
 INSERT INTO audit_logs (
@@ -293,14 +285,20 @@ INSERT INTO audit_logs (
 )
 SQL);
         $audit->execute([
-            'actor_id' => $actor->id,
+            'actor_id' => $context['actor']->id,
             'action' => 'customer.' . $changeType,
             'entity_id' => (string) $after['customer_code'],
             'before_data' => $before === null ? null : json_encode($this->redactor->redact($before), JSON_THROW_ON_ERROR),
             'after_data' => json_encode($this->redactor->redact($after), JSON_THROW_ON_ERROR),
-            'correlation_id' => $correlationId,
-            'created_at' => $now,
+            'correlation_id' => $context['correlation_id'],
+            'created_at' => $context['now'],
         ]);
+    }
+
+    /** @return array{actor:UserIdentity,correlation_id:string,now:string} */
+    private static function auditContext(UserIdentity $actor, string $correlationId, string $now): array
+    {
+        return ['actor' => $actor, 'correlation_id' => $correlationId, 'now' => $now];
     }
 
     /**

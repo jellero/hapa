@@ -8,6 +8,9 @@ use InvalidArgumentException;
 
 final readonly class CustomerAddress
 {
+    public bool $active;
+    public bool $defaultShipping;
+    public bool $defaultBilling;
     public string $label;
     public string $recipient;
     public string $addressLine1;
@@ -18,20 +21,14 @@ final readonly class CustomerAddress
     public string $countryCode;
     public ?string $phone;
 
-    public function __construct(
-        string $label,
-        string $recipient,
-        string $addressLine1,
-        ?string $addressLine2,
-        string $postalCode,
-        string $city,
-        ?string $province,
-        string $countryCode,
-        ?string $phone,
-        public bool $active = true,
-        public bool $defaultShipping = false,
-        public bool $defaultBilling = false,
-    ) {
+    /** @param array{label:string,recipient:string,address_line1:string,address_line2:?string,postal_code:string,city:string,province:?string,country_code:string,phone:?string,active?:bool,default_shipping?:bool,default_billing?:bool} $data */
+    public function __construct(array $data)
+    {
+        ['label' => $label, 'recipient' => $recipient, 'address_line1' => $addressLine1, 'address_line2' => $addressLine2,
+            'postal_code' => $postalCode, 'city' => $city, 'province' => $province, 'country_code' => $countryCode, 'phone' => $phone] = $data;
+        $this->active = $data['active'] ?? true;
+        $this->defaultShipping = $data['default_shipping'] ?? false;
+        $this->defaultBilling = $data['default_billing'] ?? false;
         $this->label = self::required($label, 'etichetta', 80);
         $this->recipient = self::required($recipient, 'destinatario', 240);
         $this->addressLine1 = self::required($addressLine1, 'indirizzo', 240);
@@ -46,7 +43,7 @@ final readonly class CustomerAddress
             throw new InvalidArgumentException('Il paese deve rispettare il formato ISO 3166-1 alpha-2.');
         }
 
-        if (!$active && ($defaultShipping || $defaultBilling)) {
+        if (!$this->active && ($this->defaultShipping || $this->defaultBilling)) {
             throw new InvalidArgumentException('Un indirizzo non attivo non può essere predefinito.');
         }
 

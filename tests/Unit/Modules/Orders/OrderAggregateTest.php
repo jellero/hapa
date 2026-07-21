@@ -237,25 +237,16 @@ final class OrderAggregateTest extends TestCase
 
     public function testItReconstitutesOnlyACoherentTransitionHistory(): void
     {
-        $order = Order::reconstitute(
-            new OrderNumber('HAPA-0002'),
-            OrderOrigin::Marketplace,
-            'external-43',
-            10,
-            null,
-            'EUR',
-            OrderStatus::SentToSpace,
-            4,
-            [new OrderLine(1, 'SKU-1', null, null, 1)],
-            $this->address(),
-            null,
-            $this->time(3),
-            null,
-            [
+        $order = Order::reconstitute([
+            'number' => new OrderNumber('HAPA-0002'), 'origin' => OrderOrigin::Marketplace, 'external_order_id' => 'external-43',
+            'marketplace_id' => 10, 'origin_reference' => null, 'currency' => 'EUR', 'status' => OrderStatus::SentToSpace,
+            'version' => 4, 'lines' => [new OrderLine(1, 'SKU-1', null, null, 1)], 'shipping_address' => $this->address(),
+            'billing_address' => null, 'last_occurred_at' => $this->time(3), 'status_before_manual_review' => null,
+            'transitions' => [
                 new OrderTransition(OrderStatus::Imported, OrderStatus::Accepted, 2, $this->time(1)),
                 new OrderTransition(OrderStatus::Accepted, OrderStatus::SentToSpace, 4, $this->time(3)),
             ],
-        );
+        ]);
 
         self::assertSame(OrderStatus::SentToSpace, $order->status());
         self::assertSame(4, $order->version());
@@ -263,25 +254,16 @@ final class OrderAggregateTest extends TestCase
         self::assertSame([], $order->releaseEvents());
 
         $this->expectException(OrderDomainException::class);
-        Order::reconstitute(
-            new OrderNumber('HAPA-0003'),
-            OrderOrigin::Marketplace,
-            'external-44',
-            10,
-            null,
-            'EUR',
-            OrderStatus::SentToSpace,
-            3,
-            [new OrderLine(1, 'SKU-1', null, null, 1)],
-            $this->address(),
-            null,
-            $this->time(2),
-            null,
-            [
+        Order::reconstitute([
+            'number' => new OrderNumber('HAPA-0003'), 'origin' => OrderOrigin::Marketplace, 'external_order_id' => 'external-44',
+            'marketplace_id' => 10, 'origin_reference' => null, 'currency' => 'EUR', 'status' => OrderStatus::SentToSpace,
+            'version' => 3, 'lines' => [new OrderLine(1, 'SKU-1', null, null, 1)], 'shipping_address' => $this->address(),
+            'billing_address' => null, 'last_occurred_at' => $this->time(2), 'status_before_manual_review' => null,
+            'transitions' => [
                 new OrderTransition(OrderStatus::Imported, OrderStatus::Accepted, 2, $this->time(1)),
                 new OrderTransition(OrderStatus::WaitingAddress, OrderStatus::Accepted, 3, $this->time(2)),
             ],
-        );
+        ]);
     }
 
     private function order(): Order
@@ -311,16 +293,11 @@ final class OrderAggregateTest extends TestCase
 
     private function address(): OrderAddress
     {
-        return new OrderAddress(
-            ' Mario Rossi ',
-            ' Via Roma 1 ',
-            null,
-            '00100',
-            'Roma',
-            'RM',
-            'it',
-            '+39 0612345678',
-        );
+        return new OrderAddress([
+            'recipient' => ' Mario Rossi ', 'address_line1' => ' Via Roma 1 ', 'address_line2' => null,
+            'postal_code' => '00100', 'city' => 'Roma', 'province' => 'RM', 'country_code' => 'it',
+            'phone' => '+39 0612345678',
+        ]);
     }
 
     private function time(int $minute): DateTimeImmutable

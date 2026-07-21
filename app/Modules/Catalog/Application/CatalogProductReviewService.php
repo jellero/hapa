@@ -64,7 +64,7 @@ SQL);
                 throw new CatalogReviewConflict('Il prodotto è stato modificato da un altro operatore.');
             }
             $after = $this->snapshot($id);
-            $this->historyAndAudit($id, (int) $version, $decision, $before, $after, $actor, $correlationId, $now);
+            $this->historyAndAudit($id, (int) $version, $decision, $before, $after, self::auditContext($actor, $correlationId, $now));
             $this->offerRecalculator->recalculateProduct($pdo, $id);
             $pdo->commit();
         } catch (Throwable $exception) {
@@ -132,9 +132,7 @@ SQL);
                 'safety_stock_updated',
                 $before,
                 $after,
-                $actor,
-                $correlationId,
-                $now,
+                self::auditContext($actor, $correlationId, $now),
             );
             $this->offerRecalculator->recalculateProduct($pdo, $id);
             $pdo->commit();
@@ -172,6 +170,7 @@ SQL);
     /**
      * @param array<string, mixed> $before
      * @param array<string, mixed> $after
+     * @param array{actor:UserIdentity,correlation_id:string,now:string} $context
      * @throws JsonException
      */
     private function historyAndAudit(
@@ -180,9 +179,7 @@ SQL);
         string $decision,
         array $before,
         array $after,
-        UserIdentity $actor,
-        string $correlationId,
-        string $now,
+        array $context,
     ): void {
         $beforeJson = json_encode($before, JSON_THROW_ON_ERROR);
         $afterJson = json_encode($after, JSON_THROW_ON_ERROR);
@@ -195,23 +192,29 @@ SQL);
             'version' => $version,
             'action' => $decision,
             'snapshot' => $afterJson,
-            'actor_id' => $actor->id,
-            'correlation_id' => $correlationId,
-            'created_at' => $now,
+            'actor_id' => $context['actor']->id,
+            'correlation_id' => $context['correlation_id'],
+            'created_at' => $context['now'],
         ]);
         $audit = $this->connection()->prepare(<<<'SQL'
 INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, before_data, after_data, correlation_id, created_at)
 VALUES (:actor_id, :action, 'catalog_item', :entity_id, CAST(:before_data AS JSONB), CAST(:after_data AS JSONB), :correlation_id, :created_at)
 SQL);
         $audit->execute([
-            'actor_id' => $actor->id,
+            'actor_id' => $context['actor']->id,
             'action' => 'catalog.item_' . $decision,
             'entity_id' => (string) $id,
             'before_data' => $beforeJson,
             'after_data' => $afterJson,
-            'correlation_id' => $correlationId,
-            'created_at' => $now,
+            'correlation_id' => $context['correlation_id'],
+            'created_at' => $context['now'],
         ]);
+    }
+
+    /** @return array{actor:UserIdentity,correlation_id:string,now:string} */
+    private static function auditContext(UserIdentity $actor, string $correlationId, string $now): array
+    {
+        return ['actor' => $actor, 'correlation_id' => $correlationId, 'now' => $now];
     }
 
     private function connection(): PDO

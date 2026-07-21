@@ -6,7 +6,7 @@ namespace Hapa\Core\Messaging;
 
 use DateTimeImmutable;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class PostgresInboxRepository implements InboxRepository
 {
@@ -71,7 +71,7 @@ SQL);
         ]);
 
         if ($statement->rowCount() !== 1) {
-            throw new RuntimeException(sprintf(
+            throw new HapaRuntimeException(sprintf(
                 'Impossibile completare il messaggio inbox %s.',
                 $messageId,
             ));
@@ -85,7 +85,7 @@ SQL);
         string $error,
     ): void {
         if ($attempt < 1) {
-            throw new RuntimeException('Il tentativo inbox deve essere positivo.');
+            throw new HapaRuntimeException('Il tentativo inbox deve essere positivo.');
         }
 
         $statement = $this->pdo->prepare(<<<'SQL'

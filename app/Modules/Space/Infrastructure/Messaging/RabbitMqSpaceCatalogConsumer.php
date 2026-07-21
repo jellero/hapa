@@ -57,6 +57,7 @@ final class RabbitMqSpaceCatalogConsumer
                 $this->channel->close();
             }
         } catch (Throwable) {
+            // Resource cleanup is best effort during shutdown.
         }
 
         try {
@@ -64,6 +65,7 @@ final class RabbitMqSpaceCatalogConsumer
                 $this->connection->close();
             }
         } catch (Throwable) {
+            // Resource cleanup is best effort during shutdown.
         }
 
         $this->channel = null;

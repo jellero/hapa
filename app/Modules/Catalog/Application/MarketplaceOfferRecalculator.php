@@ -14,7 +14,7 @@ use Hapa\Modules\Catalog\Domain\PriceCalculator;
 use Hapa\Modules\Catalog\Domain\PricingRule;
 use Hapa\Modules\Catalog\Domain\PricingRuleScope;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Throwable;
 
 final readonly class MarketplaceOfferRecalculator implements CatalogOfferRecalculator
@@ -29,7 +29,7 @@ final readonly class MarketplaceOfferRecalculator implements CatalogOfferRecalcu
     public function recalculateProduct(PDO $pdo, int $catalogItemId): int
     {
         if ($catalogItemId < 1) {
-            throw new RuntimeException('Prodotto HAPA non valido per il ricalcolo offerte.');
+            throw new HapaRuntimeException('Prodotto HAPA non valido per il ricalcolo offerte.');
         }
 
         return $this->recalculate($pdo, [$catalogItemId]);
@@ -39,7 +39,7 @@ final readonly class MarketplaceOfferRecalculator implements CatalogOfferRecalcu
     {
         $statement = $pdo->query('SELECT id FROM catalog_items ORDER BY id');
         if ($statement === false) {
-            throw new RuntimeException('Impossibile leggere i prodotti da ricalcolare.');
+            throw new HapaRuntimeException('Impossibile leggere i prodotti da ricalcolare.');
         }
 
         return $this->recalculate($pdo, array_values(array_map(
@@ -60,66 +60,71 @@ final readonly class MarketplaceOfferRecalculator implements CatalogOfferRecalcu
         $updatedOffers = 0;
         foreach ($catalogItemIds as $catalogItemId) {
             $product = $this->product($pdo, $catalogItemId);
-            $availableQuantity = (int) ($product['available_quantity'] ?? 0);
-            $sellableQuantity = max(0, $availableQuantity - (int) $product['safety_stock']);
-            $now = $this->clock->now()->format(DATE_ATOM);
+            $updatedOffers += $this->recalculateProductOffers($pdo, $product, $marketplaces, $rules, $ruleIds);
+        }
 
-            $updateProduct = $pdo->prepare(<<<'SQL'
+        return $updatedOffers;
+    }
+
+    /**
+     * @param array<string, mixed> $product
+     * @param list<array{id: int, code: string, business_status: string}> $marketplaces
+     * @param list<PricingRule> $rules
+     * @param array<string, int> $ruleIds
+     */
+    private function recalculateProductOffers(PDO $pdo, array $product, array $marketplaces, array $rules, array $ruleIds): int
+    {
+        $sellableQuantity = max(0, (int) $product['available_quantity'] - (int) $product['safety_stock']);
+        $now = $this->clock->now()->format(DATE_ATOM);
+        $updateProduct = $pdo->prepare(<<<'SQL'
 UPDATE catalog_items
 SET sellable_quantity = :sellable_quantity,
     offers_calculated_at = :calculated_at
 WHERE id = :id
 SQL);
-            $updateProduct->execute([
-                'sellable_quantity' => $sellableQuantity,
-                'calculated_at' => $now,
-                'id' => $catalogItemId,
-            ]);
-
-            foreach ($marketplaces as $marketplace) {
-                $price = null;
-                $appliedRuleId = null;
-                $calculationValid = false;
-                if ($product['purchase_cost_minor'] !== null && $product['offer_active']) {
-                    try {
-                        $calculated = $this->calculator->calculate(
-                            new Money((int) $product['purchase_cost_minor'], (string) $product['currency']),
-                            (string) $marketplace['code'],
-                            (string) $product['sku'],
-                            $rules,
-                        );
-                        if ($calculated->appliedRuleCode !== null) {
-                            $price = $calculated->sellingPrice->minorAmount;
-                            $appliedRuleId = $ruleIds[$calculated->appliedRuleCode] ?? null;
-                            $calculationValid = $appliedRuleId !== null;
-                        }
-                    } catch (Throwable) {
-                        $calculationValid = false;
-                    }
-                }
-
+        $updateProduct->execute(['sellable_quantity' => $sellableQuantity, 'calculated_at' => $now, 'id' => $product['id']]);
+        $updatedOffers = 0;
+        foreach ($marketplaces as $marketplace) {
+            [$price, $appliedRuleId, $calculationValid] = $this->calculateOffer($product, $marketplace, $rules, $ruleIds);
                 $eligible = $calculationValid
                     && $product['active']
                     && $product['onboarding_status'] === 'approved'
                     && in_array($marketplace['business_status'], ['pilot', 'active'], true);
-                $changedOffer = $this->saveOffer(
-                    $pdo,
-                    $product,
-                    $marketplace,
-                    $price,
-                    $sellableQuantity,
-                    $appliedRuleId,
-                    $eligible,
-                    $now,
-                );
-                if ($changedOffer !== null) {
-                    ++$updatedOffers;
-                    $this->requestPublication($pdo, $product, $marketplace, $changedOffer, $now);
-                }
+                $changedOffer = $this->saveOffer($pdo, $product, $marketplace, [
+                    'price' => $price,
+                    'quantity' => $sellableQuantity,
+                    'rule_id' => $appliedRuleId,
+                    'eligible' => $eligible,
+                    'now' => $now,
+                    'currency' => (string) $product['currency'],
+                ]);
+            if ($changedOffer !== null) {
+                ++$updatedOffers;
+                $this->requestPublication($pdo, $product, $marketplace, $changedOffer, $now);
             }
         }
-
         return $updatedOffers;
+    }
+
+    /**
+     * @param array<string,mixed> $product
+     * @param array{id:int,code:string,business_status:string} $marketplace
+     * @param list<PricingRule> $rules
+     * @param array<string,int> $ruleIds
+     * @return array{?int,?int,bool}
+     */
+    private function calculateOffer(array $product, array $marketplace, array $rules, array $ruleIds): array
+    {
+        if ($product['purchase_cost_minor'] === null || !$product['offer_active']) {
+            return [null, null, false];
+        }
+        try {
+            $calculated = $this->calculator->calculate(new Money((int) $product['purchase_cost_minor'], (string) $product['currency']), $marketplace['code'], (string) $product['sku'], $rules);
+            $ruleId = $calculated->appliedRuleCode === null ? null : ($ruleIds[$calculated->appliedRuleCode] ?? null);
+            return [$ruleId === null ? null : $calculated->sellingPrice->minorAmount, $ruleId, $ruleId !== null];
+        } catch (Throwable) {
+            return [null, null, false];
+        }
     }
 
     /** @return array<string, mixed> */
@@ -139,7 +144,7 @@ SQL);
         $statement->execute(['id' => $catalogItemId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         if (!is_array($row)) {
-            throw new RuntimeException('Prodotto HAPA non trovato per il ricalcolo offerte.');
+            throw new HapaRuntimeException('Prodotto HAPA non trovato per il ricalcolo offerte.');
         }
 
         return [
@@ -165,7 +170,7 @@ WHERE business_status <> 'retired'
 ORDER BY id
 SQL);
         if ($statement === false) {
-            throw new RuntimeException('Impossibile leggere i marketplace per il ricalcolo offerte.');
+            throw new HapaRuntimeException('Impossibile leggere i marketplace per il ricalcolo offerte.');
         }
 
         return array_values(array_map(static fn (array $row): array => [
@@ -216,18 +221,11 @@ SQL);
     /**
      * @param array<string, mixed> $product
      * @param array{id: int, code: string, business_status: string} $marketplace
+     * @param array{price:?int,quantity:int,rule_id:?int,eligible:bool,now:string,currency:string} $target
      * @return array<string, mixed>|null
      */
-    private function saveOffer(
-        PDO $pdo,
-        array $product,
-        array $marketplace,
-        ?int $price,
-        int $quantity,
-        ?int $appliedRuleId,
-        bool $eligible,
-        string $now,
-    ): ?array {
+    private function saveOffer(PDO $pdo, array $product, array $marketplace, array $target): ?array
+    {
         $existing = $pdo->prepare(<<<'SQL'
 SELECT id, desired_price_minor, currency, desired_quantity, applied_pricing_rule_id,
        source_version, status
@@ -242,9 +240,22 @@ SQL);
             'marketplace_id' => $marketplace['id'],
         ]);
         $row = $existing->fetch(PDO::FETCH_ASSOC);
-        $currency = (string) $product['currency'];
         if (!is_array($row)) {
-            $insert = $pdo->prepare(<<<'SQL'
+            return $this->insertOffer($pdo, $product, $marketplace, $target);
+        }
+
+        return $this->updateOffer($pdo, $row, $target);
+    }
+
+    /**
+     * @param array<string,mixed> $product
+     * @param array{id:int,code:string,business_status:string} $marketplace
+     * @param array{price:?int,quantity:int,rule_id:?int,eligible:bool,now:string,currency:string} $target
+     * @return array<string,mixed>
+     */
+    private function insertOffer(PDO $pdo, array $product, array $marketplace, array $target): array
+    {
+        $insert = $pdo->prepare(<<<'SQL'
 INSERT INTO marketplace_offers (
     catalog_item_id, marketplace_id, marketplace_account_id,
     desired_price_minor, currency, desired_quantity, applied_pricing_rule_id,
@@ -256,35 +267,39 @@ INSERT INTO marketplace_offers (
 )
 RETURNING id, source_version, status, desired_price_minor, currency, desired_quantity
 SQL);
-            $insert->execute([
+        $insert->execute([
                 'catalog_item_id' => $product['id'],
                 'marketplace_id' => $marketplace['id'],
-                'desired_price_minor' => $price,
-                'currency' => $currency,
-                'desired_quantity' => $quantity,
-                'applied_pricing_rule_id' => $appliedRuleId,
-                'status' => $eligible ? 'pending' : 'disabled',
-                'calculated_at' => $now,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'desired_price_minor' => $target['price'],
+                'currency' => $target['currency'],
+                'desired_quantity' => $target['quantity'],
+                'applied_pricing_rule_id' => $target['rule_id'],
+                'status' => $target['eligible'] ? 'pending' : 'disabled',
+                'calculated_at' => $target['now'],
+                'created_at' => $target['now'],
+                'updated_at' => $target['now'],
             ]);
 
-            $inserted = $insert->fetch(PDO::FETCH_ASSOC);
-            if (!is_array($inserted)) {
-                throw new RuntimeException('Offerta HAPA creata ma non recuperabile.');
-            }
-
-            return $inserted;
+        $inserted = $insert->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($inserted)) {
+            throw new HapaRuntimeException('Offerta HAPA creata ma non recuperabile.');
         }
+        return $inserted;
+    }
 
-        $targetChanged = self::nullableInt($row['desired_price_minor']) !== $price
-            || (string) $row['currency'] !== $currency
-            || (int) $row['desired_quantity'] !== $quantity
-            || self::nullableInt($row['applied_pricing_rule_id']) !== $appliedRuleId;
+    /**
+     * @param array<string,mixed> $row
+     * @param array{price:?int,quantity:int,rule_id:?int,eligible:bool,now:string,currency:string} $target
+     * @return array<string,mixed>|null
+     */
+    private function updateOffer(PDO $pdo, array $row, array $target): ?array
+    {
+        $targetChanged = self::nullableInt($row['desired_price_minor']) !== $target['price']
+            || (string) $row['currency'] !== $target['currency']
+            || (int) $row['desired_quantity'] !== $target['quantity']
+            || self::nullableInt($row['applied_pricing_rule_id']) !== $target['rule_id'];
         $currentStatus = (string) $row['status'];
-        $status = !$eligible
-            ? 'disabled'
-            : (($targetChanged || $currentStatus === 'disabled') ? 'pending' : $currentStatus);
+        $status = self::targetStatus($target['eligible'], $targetChanged, $currentStatus);
         $stateChanged = $targetChanged || $status !== $currentStatus;
         $update = $pdo->prepare(<<<'SQL'
 UPDATE marketplace_offers
@@ -301,16 +316,16 @@ WHERE id = :id
 RETURNING id, source_version, status, desired_price_minor, currency, desired_quantity
 SQL);
         $update->execute([
-            'desired_price_minor' => $price,
-            'currency' => $currency,
-            'desired_quantity' => $quantity,
-            'applied_pricing_rule_id' => $appliedRuleId,
+            'desired_price_minor' => $target['price'],
+            'currency' => $target['currency'],
+            'desired_quantity' => $target['quantity'],
+            'applied_pricing_rule_id' => $target['rule_id'],
             'version_increment' => $stateChanged ? 1 : 0,
             'status' => $status,
             'clear_error' => $stateChanged ? 1 : 0,
-            'calculated_at' => $now,
+            'calculated_at' => $target['now'],
             'state_changed' => $stateChanged ? 1 : 0,
-            'updated_at' => $now,
+            'updated_at' => $target['now'],
             'id' => (int) $row['id'],
         ]);
 
@@ -319,10 +334,18 @@ SQL);
         }
         $updated = $update->fetch(PDO::FETCH_ASSOC);
         if (!is_array($updated)) {
-            throw new RuntimeException('Offerta HAPA aggiornata ma non recuperabile.');
+            throw new HapaRuntimeException('Offerta HAPA aggiornata ma non recuperabile.');
         }
 
         return $updated;
+    }
+
+    private static function targetStatus(bool $eligible, bool $changed, string $current): string
+    {
+        if (!$eligible) {
+            return 'disabled';
+        }
+        return $changed || $current === 'disabled' ? 'pending' : $current;
     }
 
     /**
@@ -421,39 +444,44 @@ FOR SHARE OF account
 SQL);
         $statement->execute();
         foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $settings = json_decode((string) $row['settings'], true, 512, JSON_THROW_ON_ERROR);
-            if (!is_array($settings) || array_is_list($settings)) {
-                continue;
+            $account = $this->sellRapidoAccountFromRow($row, $marketplaceCode, $sku);
+            if ($account !== null) {
+                return $account;
             }
-            $downstream = strtolower(trim((string) ($settings['downstream_channel'] ?? '')));
-            if ($downstream !== strtolower($marketplaceCode)) {
-                continue;
-            }
-            $catalogId = $settings['catalog_id'] ?? null;
-            if (is_string($catalogId) && ctype_digit($catalogId)) {
-                $catalogId = (int) $catalogId;
-            }
-            if (!is_int($catalogId) || $catalogId < 1) {
-                continue;
-            }
-            if (($row['desired_status'] ?? null) === 'pilot') {
-                $pilotSkus = $settings['pilot_skus'] ?? [];
-                if (!is_array($pilotSkus) || !in_array($sku, $pilotSkus, true)) {
-                    continue;
-                }
-            }
-
-            $catalogUuid = $settings['catalog_uuid'] ?? null;
-
-            return [
-                'code' => (string) $row['code'],
-                'configuration_version' => (int) $row['configuration_version'],
-                'catalog_id' => $catalogId,
-                'catalog_uuid' => is_string($catalogUuid) && trim($catalogUuid) !== '' ? trim($catalogUuid) : null,
-            ];
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array{code:string,configuration_version:int,catalog_id:int,catalog_uuid:?string}|null
+     */
+    private function sellRapidoAccountFromRow(array $row, string $marketplaceCode, string $sku): ?array
+    {
+        $settings = json_decode((string) $row['settings'], true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($settings) || array_is_list($settings) || strtolower(trim((string) ($settings['downstream_channel'] ?? ''))) !== strtolower($marketplaceCode)) {
+            return null;
+        }
+        $catalogId = $settings['catalog_id'] ?? null;
+        $catalogId = is_string($catalogId) && ctype_digit($catalogId) ? (int) $catalogId : $catalogId;
+        if (!is_int($catalogId) || $catalogId < 1 || !$this->pilotAllowsSku($row, $settings, $sku)) {
+            return null;
+        }
+        $catalogUuid = $settings['catalog_uuid'] ?? null;
+        return ['code' => (string) $row['code'], 'configuration_version' => (int) $row['configuration_version'], 'catalog_id' => $catalogId, 'catalog_uuid' => is_string($catalogUuid) && trim($catalogUuid) !== '' ? trim($catalogUuid) : null];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $settings
+     */
+    private function pilotAllowsSku(array $row, array $settings, string $sku): bool
+    {
+        if (($row['desired_status'] ?? null) !== 'pilot') {
+            return true;
+        }
+        return is_array($settings['pilot_skus'] ?? null) && in_array($sku, $settings['pilot_skus'], true);
     }
 
     private static function nullableInt(mixed $value): ?int

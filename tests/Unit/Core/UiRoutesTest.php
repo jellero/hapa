@@ -102,17 +102,17 @@ final class UiRoutesTest extends TestCase
     {
         $basePath = dirname(__DIR__, 3);
         $configuration = ConfigurationLoader::load();
-        /** @var \Closure(UiController, ReadinessCheck, \Hapa\Core\Configuration\ApplicationConfig): RouteCollection $routeFactory */
+        /** @var \Closure(array<string,mixed>): RouteCollection $routeFactory */
         $routeFactory = require $basePath . '/config/routes.php';
 
-        return $routeFactory(
-            new UiController(new ViewRenderer($basePath . '/templates'), $configuration->application->name),
-            new ReadinessCheck(
+        return $routeFactory([
+            'ui' => new UiController(new ViewRenderer($basePath . '/templates'), $configuration->application->name),
+            'readiness' => new ReadinessCheck(
                 new ConnectionFactory($configuration->database),
                 $configuration->redis,
                 SchemaManifest::load($basePath . '/config/schema.php')->minimumVersion,
             ),
-            $configuration->application,
-        );
+            'application' => $configuration->application,
+        ]);
     }
 }

@@ -8,10 +8,12 @@ use Hapa\Core\Messaging\InboundMessageHandler;
 use Hapa\Core\Messaging\MessageEnvelope;
 use InvalidArgumentException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class MarketplaceOfferPublicationResultHandler implements InboundMessageHandler
 {
+    private const INVALID_FIELD = 'Campo %s non valido.';
+
     public function __construct(private PDO $pdo)
     {
     }
@@ -62,7 +64,7 @@ SQL);
         $exists->execute(['id' => $offerId]);
         $currentVersion = $exists->fetchColumn();
         if ($currentVersion === false) {
-            throw new RuntimeException('Offerta HAPA indicata dall\'esito SellRapido non trovata.');
+            throw new HapaRuntimeException('Offerta HAPA indicata dall\'esito SellRapido non trovata.');
         }
         // Un esito di una versione precedente non deve far regredire lo stato corrente.
         if ((int) $currentVersion < $version) {
@@ -75,7 +77,7 @@ SQL);
     {
         $value = $payload[$key] ?? null;
         if (!is_string($value) || !ctype_digit($value) || (int) $value < 1) {
-            throw new InvalidArgumentException(sprintf('Campo %s non valido.', $key));
+            throw new InvalidArgumentException(sprintf(self::INVALID_FIELD, $key));
         }
 
         return (int) $value;
@@ -86,7 +88,7 @@ SQL);
     {
         $value = $payload[$key] ?? null;
         if (!is_int($value) || $value < 1) {
-            throw new InvalidArgumentException(sprintf('Campo %s non valido.', $key));
+            throw new InvalidArgumentException(sprintf(self::INVALID_FIELD, $key));
         }
 
         return $value;
@@ -100,7 +102,7 @@ SQL);
             return null;
         }
         if (!is_string($value) || trim($value) !== $value || strlen($value) > $maximum) {
-            throw new InvalidArgumentException(sprintf('Campo %s non valido.', $key));
+            throw new InvalidArgumentException(sprintf(self::INVALID_FIELD, $key));
         }
 
         return $value;

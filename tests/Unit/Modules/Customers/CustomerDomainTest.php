@@ -39,26 +39,16 @@ final class CustomerDomainTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new CustomerProfile(
-            new CustomerCode('CUST-0002'),
-            CustomerStatus::Active,
-            CustomerType::Business,
-            'Cliente azienda',
-        );
+        new CustomerProfile(['code' => new CustomerCode('CUST-0002'), 'status' => CustomerStatus::Active, 'type' => CustomerType::Business, 'display_name' => 'Cliente azienda']);
     }
 
     public function testItBuildsACompleteCustomerProfile(): void
     {
-        $profile = new CustomerProfile(
-            new CustomerCode('CUST-0003'),
-            CustomerStatus::Active,
-            CustomerType::Business,
-            'Esempio S.r.l.',
-            companyName: ' Esempio S.r.l. ',
-            email: new EmailAddress('amministrazione@example.com'),
-            phone: ' +39 0123 456789 ',
-            vatNumber: 'IT00000000000',
-        );
+        $profile = new CustomerProfile([
+            'code' => new CustomerCode('CUST-0003'), 'status' => CustomerStatus::Active, 'type' => CustomerType::Business,
+            'display_name' => 'Esempio S.r.l.', 'company_name' => ' Esempio S.r.l. ',
+            'email' => new EmailAddress('amministrazione@example.com'), 'phone' => ' +39 0123 456789 ', 'vat_number' => 'IT00000000000',
+        ]);
 
         self::assertSame('Esempio S.r.l.', $profile->companyName);
         self::assertSame('+39 0123 456789', $profile->phone);
@@ -80,18 +70,11 @@ final class CustomerDomainTest extends TestCase
 
     public function testItNormalizesCustomerAddresses(): void
     {
-        $address = new CustomerAddress(
-            ' Casa ',
-            'Mario Rossi',
-            'Via Roma 1',
-            null,
-            '00100',
-            'Roma',
-            'RM',
-            'it',
-            null,
-            defaultShipping: true,
-        );
+        $address = new CustomerAddress([
+            'label' => ' Casa ', 'recipient' => 'Mario Rossi', 'address_line1' => 'Via Roma 1', 'address_line2' => null,
+            'postal_code' => '00100', 'city' => 'Roma', 'province' => 'RM', 'country_code' => 'it', 'phone' => null,
+            'default_shipping' => true,
+        ]);
 
         self::assertSame('Casa', $address->label);
         self::assertSame('IT', $address->countryCode);
@@ -102,18 +85,10 @@ final class CustomerDomainTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new CustomerAddress(
-            'Casa',
-            'Mario Rossi',
-            'Via Roma 1',
-            null,
-            '00100',
-            'Roma',
-            null,
-            'IT',
-            null,
-            active: false,
-            defaultBilling: true,
-        );
+        new CustomerAddress([
+            'label' => 'Casa', 'recipient' => 'Mario Rossi', 'address_line1' => 'Via Roma 1', 'address_line2' => null,
+            'postal_code' => '00100', 'city' => 'Roma', 'province' => null, 'country_code' => 'IT', 'phone' => null,
+            'active' => false, 'default_billing' => true,
+        ]);
     }
 }

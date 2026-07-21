@@ -10,7 +10,7 @@ use JsonException;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Wire\AMQPTable;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Throwable;
 
 final class RabbitMqReceiver implements MessageReceiver
@@ -21,7 +21,7 @@ final class RabbitMqReceiver implements MessageReceiver
     public function __construct(private readonly RabbitMqConsumerConfig $configuration)
     {
         if (!$configuration->enabled) {
-            throw new RuntimeException('Il consumer RabbitMQ HAPA è disabilitato.');
+            throw new HapaRuntimeException('Il consumer RabbitMQ HAPA è disabilitato.');
         }
 
         $this->connection = new AMQPStreamConnection(
@@ -77,6 +77,7 @@ final class RabbitMqReceiver implements MessageReceiver
                 $this->channel->close();
             }
         } catch (Throwable) {
+            // Resource cleanup is best effort during shutdown.
         }
 
         try {
@@ -84,6 +85,7 @@ final class RabbitMqReceiver implements MessageReceiver
                 $this->connection->close();
             }
         } catch (Throwable) {
+            // Resource cleanup is best effort during shutdown.
         }
     }
 

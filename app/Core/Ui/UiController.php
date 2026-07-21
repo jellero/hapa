@@ -18,6 +18,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 final readonly class UiController
 {
+    use UiControllerSupport;
+    private const MARKETPLACE_CHANNEL_KIND = 'Canale · ordini, prezzi e stock';
+    private const UNAVAILABLE = 'Non disponibile';
+
     public function __construct(
         private ViewRenderer $views,
         private string $environment,
@@ -271,36 +275,7 @@ final readonly class UiController
         $session = $request->attributes->get('security_session');
         $accounts = $this->integrationAccounts?->all() ?? [];
         foreach ($accounts as &$account) {
-            $account['update_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.update.' . (string) $account['id'])
-                : '';
-            $account['retire_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.retire.' . (string) $account['id'])
-                : '';
-            $account['replace_secrets_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.secrets.replace.' . (string) $account['id'])
-                : '';
-            $account['revoke_secrets_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.secrets.revoke.' . (string) $account['id'])
-                : '';
-            $account['sync_configuration_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.configuration.sync.' . (string) $account['id'])
-                : '';
-            $account['refresh_status_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.status.refresh.' . (string) $account['id'])
-                : '';
-            $account['change_status_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.status.change.' . (string) $account['id'])
-                : '';
-            $account['connection_test_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.connection-test.' . (string) $account['id'])
-                : '';
-            $account['orders_import_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.orders.import.' . (string) $account['id'])
-                : '';
-            $account['catalog_sync_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('integration.catalog.sync.' . (string) $account['id'])
-                : '';
+            $account = $this->decorateIntegrationAccount($account, $session);
             $account['secret_fields'] = $this->providerSecretFields?->forProvider((string) $account['provider_code']) ?? [];
         }
         unset($account);
@@ -318,9 +293,9 @@ final readonly class UiController
             'integrations' => [
                 ['name' => 'hapa-automation', 'kind' => 'Servizio separato · RabbitMQ · database proprio', 'code' => 'automation', 'status' => 'Operativo', 'tone' => 'success'],
                 ['name' => 'SellRapido', 'kind' => 'Connettore aggregatore · import ordini IBS', 'code' => 'sellrapido', 'status' => 'Operativo', 'tone' => 'success'],
-                ['name' => 'Amazon', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'eMAG', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
-                ['name' => 'Temu', 'kind' => 'Canale · ordini, prezzi e stock', 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Amazon', 'kind' => self::MARKETPLACE_CHANNEL_KIND, 'code' => 'amazon', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'eMAG', 'kind' => self::MARKETPLACE_CHANNEL_KIND, 'code' => 'emag', 'status' => 'Pianificato', 'tone' => 'neutral'],
+                ['name' => 'Temu', 'kind' => self::MARKETPLACE_CHANNEL_KIND, 'code' => 'temu', 'status' => 'Pianificato', 'tone' => 'neutral'],
                 ['name' => 'IBS', 'kind' => 'Canale · ordini tramite SellRapido', 'code' => 'ibs', 'status' => 'Disponibile via SellRapido', 'tone' => 'success'],
                 ['name' => 'Space', 'kind' => 'Sorgente prezzo e stock · destinazione ordini', 'code' => 'space', 'status' => 'Acquisti operativi', 'tone' => 'success'],
                 ['name' => 'GLS', 'kind' => 'Corriere · integrazione dedicata', 'code' => 'gls', 'status' => 'Contratto pronto', 'tone' => 'info'],
@@ -356,6 +331,32 @@ final readonly class UiController
             'emptyIcon' => 'users',
             'primaryAction' => 'Invita utente',
         ]);
+    }
+
+    /**
+     * @param array<string,mixed> $account
+     * @return array<string,mixed>
+     */
+    private function decorateIntegrationAccount(array $account, mixed $session): array
+    {
+        $id = (string) $account['id'];
+        $actions = [
+            'update_csrf_token' => 'integration.update.',
+            'retire_csrf_token' => 'integration.retire.',
+            'replace_secrets_csrf_token' => 'integration.secrets.replace.',
+            'revoke_secrets_csrf_token' => 'integration.secrets.revoke.',
+            'sync_configuration_csrf_token' => 'integration.configuration.sync.',
+            'refresh_status_csrf_token' => 'integration.status.refresh.',
+            'change_status_csrf_token' => 'integration.status.change.',
+            'connection_test_csrf_token' => 'integration.connection-test.',
+            'orders_import_csrf_token' => 'integration.orders.import.',
+            'catalog_sync_csrf_token' => 'integration.catalog.sync.',
+        ];
+        foreach ($actions as $field => $action) {
+            $account[$field] = $session instanceof WebSession ? $session->csrfToken($action . $id) : '';
+        }
+
+        return $account;
     }
 
     public function audit(Request $request): Response
@@ -414,9 +415,9 @@ final readonly class UiController
                     'title' => 'Identità',
                     'description' => 'I dati saranno disponibili dopo l’attivazione del contesto di autenticazione.',
                     'fields' => [
-                        ['label' => 'Nome', 'value' => 'Non disponibile'],
-                        ['label' => 'Email', 'value' => 'Non disponibile'],
-                        ['label' => 'Ruolo', 'value' => 'Non disponibile'],
+                        ['label' => 'Nome', 'value' => self::UNAVAILABLE],
+                        ['label' => 'Email', 'value' => self::UNAVAILABLE],
+                        ['label' => 'Ruolo', 'value' => self::UNAVAILABLE],
                     ],
                 ],
                 [
@@ -445,71 +446,4 @@ final readonly class UiController
         ], status: Response::HTTP_NOT_FOUND);
     }
 
-    /** @param array<string, mixed> $page */
-    private function collection(Request $request, string $active, array $page): Response
-    {
-        $page['query'] = trim($request->query->getString('q'));
-        $selectedFilter = $request->query->getString('status');
-        /** @var list<string> $filters */
-        $filters = $page['filters'];
-        $page['selectedFilter'] = in_array($selectedFilter, $filters, true) ? $selectedFilter : '';
-        $page['clearUrl'] = $request->getPathInfo();
-
-        return $this->operational($request, 'ui/collection', $active, $page);
-    }
-
-    private function can(Request $request, string $permission): bool
-    {
-        $user = $request->attributes->get('current_user');
-
-        return $user instanceof UserIdentity && $this->authorization?->allows($user, $permission) === true;
-    }
-
-    /** @param array<string, mixed> $page */
-    private function operational(Request $request, string $template, string $active, array $page): Response
-    {
-        $currentUser = $request->attributes->get('current_user');
-        $session = $request->attributes->get('security_session');
-
-        return $this->views->render($template, array_replace($page, [
-            'active' => $active,
-            'navigation' => $this->navigation(),
-            'environment' => $this->environment,
-            'correlationId' => $request->attributes->getString('correlation_id'),
-            'currentUser' => $currentUser instanceof UserIdentity ? $currentUser : null,
-            'logoutCsrfToken' => $session instanceof WebSession ? $session->csrfToken('logout') : '',
-        ]));
-    }
-
-    /** @return list<array{label: string, items: list<array{label: string, href: string, icon: string, active: string}>}> */
-    private function navigation(): array
-    {
-        return [
-            [
-                'label' => 'Operatività',
-                'items' => [
-                    ['label' => 'Dashboard', 'href' => '/ui', 'icon' => 'dashboard', 'active' => 'dashboard'],
-                    ['label' => 'Clienti', 'href' => '/ui/customers', 'icon' => 'customer', 'active' => 'customers'],
-                    ['label' => 'Ordini', 'href' => '/ui/orders', 'icon' => 'orders', 'active' => 'orders'],
-                    ['label' => 'Catalogo e prezzi', 'href' => '/ui/catalog', 'icon' => 'box', 'active' => 'catalog'],
-                    ['label' => 'Picking', 'href' => '/ui/picking', 'icon' => 'scan', 'active' => 'picking'],
-                    ['label' => 'Spedizioni', 'href' => '/ui/shipments', 'icon' => 'truck', 'active' => 'shipments'],
-                ],
-            ],
-            [
-                'label' => 'Controllo',
-                'items' => [
-                    ['label' => 'Integrazioni', 'href' => '/ui/integrations', 'icon' => 'integration', 'active' => 'integrations'],
-                    ['label' => 'Audit', 'href' => '/ui/audit', 'icon' => 'audit', 'active' => 'audit'],
-                ],
-            ],
-            [
-                'label' => 'Amministrazione',
-                'items' => [
-                    ['label' => 'Utenti e ruoli', 'href' => '/ui/users', 'icon' => 'users', 'active' => 'users'],
-                    ['label' => 'Impostazioni', 'href' => '/ui/settings', 'icon' => 'settings', 'active' => 'settings'],
-                ],
-            ],
-        ];
-    }
 }

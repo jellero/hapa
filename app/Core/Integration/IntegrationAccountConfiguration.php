@@ -66,6 +66,28 @@ final class IntegrationAccountConfiguration
         $displayName = trim($displayName);
         $environment = strtolower(trim($environment));
         $description = $description === null || trim($description) === '' ? null : trim($description);
+        $this->validateIdentity($provider, $code, $displayName, $environment, $description);
+        $normalizedCapabilities = $this->normalizeCapabilities($provider, $capabilities);
+        $settings = $this->normalizeSettings($provider, $environment, $settings);
+
+        return [
+            'provider' => $provider,
+            'code' => $code,
+            'display_name' => $displayName,
+            'environment' => $environment,
+            'description' => $description,
+            'capabilities' => $normalizedCapabilities,
+            'settings' => $settings,
+        ];
+    }
+
+    private function validateIdentity(
+        string $provider,
+        string $code,
+        string $displayName,
+        string $environment,
+        ?string $description,
+    ): void {
         if (!isset(self::CAPABILITIES[$provider])) {
             throw new InvalidArgumentException('Provider non supportato.');
         }
@@ -82,16 +104,33 @@ final class IntegrationAccountConfiguration
             throw new InvalidArgumentException('Descrizione account troppo lunga.');
         }
 
-        $normalizedCapabilities = [];
+    }
+
+    /**
+     * @param list<mixed> $capabilities
+     * @return list<string>
+     */
+    private function normalizeCapabilities(string $provider, array $capabilities): array
+    {
+        $normalized = [];
         foreach ($capabilities as $capability) {
             if (!is_string($capability) || !in_array($capability, self::CAPABILITIES[$provider], true)) {
                 throw new InvalidArgumentException('Capacità provider non consentita.');
             }
-            $normalizedCapabilities[] = $capability;
+            $normalized[] = $capability;
         }
-        $normalizedCapabilities = array_values(array_unique($normalizedCapabilities));
-        sort($normalizedCapabilities);
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
 
+        return $normalized;
+    }
+
+    /**
+     * @param array<string,mixed> $settings
+     * @return array<string,mixed>
+     */
+    private function normalizeSettings(string $provider, string $environment, array $settings): array
+    {
         foreach ($settings as $key => $value) {
             if (!is_string($key) || !in_array($key, self::SETTINGS[$provider], true)) {
                 throw new InvalidArgumentException(sprintf('Impostazione %s non consentita per %s.', (string) $key, $provider));
@@ -105,15 +144,7 @@ final class IntegrationAccountConfiguration
         }
         ksort($settings);
 
-        return [
-            'provider' => $provider,
-            'code' => $code,
-            'display_name' => $displayName,
-            'environment' => $environment,
-            'description' => $description,
-            'capabilities' => $normalizedCapabilities,
-            'settings' => $settings,
-        ];
+        return $settings;
     }
 
     /** @return array<string, list<string>> */

@@ -8,7 +8,7 @@ use Hapa\Core\Messaging\InboundMessageHandler;
 use Hapa\Core\Messaging\MessageEnvelope;
 use InvalidArgumentException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class SpacePurchaseOrderResultHandler implements InboundMessageHandler
 {
@@ -68,7 +68,7 @@ SQL);
             $exists = $this->pdo->prepare('SELECT 1 FROM supplier_purchase_orders WHERE id = :id');
             $exists->execute(['id' => $purchaseId]);
             if ($exists->fetchColumn() === false) {
-                throw new RuntimeException('Acquisto HAPA indicato dall\'esito Space non trovato.');
+                throw new HapaRuntimeException('Acquisto HAPA indicato dall\'esito Space non trovato.');
             }
         }
     }

@@ -41,101 +41,7 @@ final readonly class Kernel
     {
         $correlationId = $this->correlationId($request);
         $request->attributes->set('correlation_id', $correlationId);
-        $session = null;
-
-        try {
-            $context = new RequestContext();
-            $context->fromRequest($request);
-
-            $parameters = (new UrlMatcher($this->routes, $context))->matchRequest($request);
-            $controller = $parameters['_controller'] ?? null;
-
-            if (!is_callable($controller)) {
-                throw new LogicException('Controller non configurato.');
-            }
-
-            $public = ($parameters['_public'] ?? false) === true;
-            $requiresSession = ($parameters['_session'] ?? false) === true || !$public;
-            $permission = $parameters['_permission'] ?? null;
-            $csrfAction = $parameters['_csrf_action'] ?? null;
-
-            if ($requiresSession && $this->sessions !== null) {
-                $session = $this->sessions->open($request);
-                $request->attributes->set('security_session', $session);
-                $request->attributes->set('current_user', $session->user);
-            }
-
-            if (!$public && $this->sessions !== null && $this->authorization !== null) {
-                if (!$session instanceof WebSession || $session->user === null) {
-                    throw new AuthenticationRequired('Autenticazione richiesta.');
-                }
-                if (!is_string($permission) || $permission === '' || !$this->authorization->allows($session->user, $permission)) {
-                    throw new AccessDenied('Permesso negato.');
-                }
-            }
-
-            if (is_string($csrfAction) && $csrfAction !== '' && $this->sessions !== null) {
-                if (!$session instanceof WebSession) {
-                    throw new InvalidCsrfToken('Sessione CSRF non disponibile.');
-                }
-                foreach ($parameters as $name => $value) {
-                    if (is_string($name) && (is_string($value) || is_int($value))) {
-                        $csrfAction = str_replace('{' . $name . '}', (string) $value, $csrfAction);
-                    }
-                }
-                $providedToken = $request->headers->get('X-CSRF-Token', $request->request->getString('_csrf_token'));
-                $this->sessions->verifyCsrf($session, $csrfAction, is_string($providedToken) ? $providedToken : '');
-            }
-
-            unset(
-                $parameters['_controller'],
-                $parameters['_route'],
-                $parameters['_public'],
-                $parameters['_session'],
-                $parameters['_permission'],
-                $parameters['_csrf_action'],
-            );
-            $request->attributes->add($parameters);
-            $result = $controller($request);
-            $response = $result instanceof Response ? $result : new JsonResponse($result);
-        } catch (AuthenticationRequired) {
-            $next = rawurlencode($request->getPathInfo());
-            $response = str_starts_with($request->getPathInfo(), '/ui')
-                ? new RedirectResponse('/login?next=' . $next, Response::HTTP_SEE_OTHER)
-                : $this->problem('Autenticazione richiesta', Response::HTTP_UNAUTHORIZED);
-        } catch (AccessDenied) {
-            $response = $this->problem('Accesso negato', Response::HTTP_FORBIDDEN);
-        } catch (InvalidCsrfToken) {
-            $response = $this->problem('Richiesta scaduta o non valida', Response::HTTP_FORBIDDEN);
-        } catch (ResourceNotFoundException) {
-            $response = $this->problem('Risorsa non trovata', Response::HTTP_NOT_FOUND);
-        } catch (MethodNotAllowedException $exception) {
-            $response = $this->problem('Metodo non consentito', Response::HTTP_METHOD_NOT_ALLOWED);
-            $response->headers->set('Allow', implode(', ', $exception->getAllowedMethods()));
-        } catch (RequestUnexpectedValueException) {
-            $response = $this->problem('Richiesta non valida', Response::HTTP_BAD_REQUEST);
-        } catch (Throwable $exception) {
-            $logContext = [
-                'correlation_id' => $correlationId,
-                'exception' => $exception::class,
-                'exception_code' => (string) $exception->getCode(),
-                'method' => $request->getMethod(),
-                'path' => $request->getPathInfo(),
-            ];
-
-            if ($this->debug) {
-                $logContext['message'] = $exception->getMessage();
-            }
-
-            $this->logger->error('Errore applicativo non gestito.', $logContext);
-
-            $payload = ['error' => 'Errore applicativo'];
-            if ($this->debug) {
-                $payload['detail'] = $exception->getMessage();
-            }
-
-            $response = new JsonResponse($payload, Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        [$response, $session] = $this->dispatchSafely($request, $correlationId);
 
         $response = $this->finalize($response, $correlationId);
         if ($session instanceof WebSession && $this->sessions !== null) {
@@ -143,6 +49,141 @@ final readonly class Kernel
         }
 
         return $response;
+    }
+
+    /** @return array{Response, WebSession|null} */
+    private function dispatchSafely(Request $request, string $correlationId): array
+    {
+        $session = null;
+        try {
+            return [$this->dispatch($request, $session), $session];
+        } catch (Throwable $exception) {
+            return [$this->exceptionResponse($exception, $request, $correlationId), $session];
+        }
+    }
+
+    private function dispatch(Request $request, ?WebSession &$session): Response
+    {
+        $context = new RequestContext();
+        $context->fromRequest($request);
+        $parameters = (new UrlMatcher($this->routes, $context))->matchRequest($request);
+        $controller = $parameters['_controller'] ?? null;
+        if (!is_callable($controller)) {
+            throw new LogicException('Controller non configurato.');
+        }
+
+        $public = ($parameters['_public'] ?? false) === true;
+        $session = $this->openSession($request, ($parameters['_session'] ?? false) === true || !$public);
+        $this->authorize($session, $public, $parameters['_permission'] ?? null);
+        $this->verifyCsrf($request, $session, $parameters['_csrf_action'] ?? null, $parameters);
+        $this->addRouteAttributes($request, $parameters);
+        $result = $controller($request);
+
+        return $result instanceof Response ? $result : new JsonResponse($result);
+    }
+
+    private function openSession(Request $request, bool $required): ?WebSession
+    {
+        if (!$required || $this->sessions === null) {
+            return null;
+        }
+
+        $session = $this->sessions->open($request);
+        $request->attributes->set('security_session', $session);
+        $request->attributes->set('current_user', $session->user);
+
+        return $session;
+    }
+
+    private function authorize(?WebSession $session, bool $public, mixed $permission): void
+    {
+        if ($public || $this->sessions === null || $this->authorization === null) {
+            return;
+        }
+        if ($session?->user === null) {
+            throw new AuthenticationRequired('Autenticazione richiesta.');
+        }
+        if (!is_string($permission) || $permission === '' || !$this->authorization->allows($session->user, $permission)) {
+            throw new AccessDenied('Permesso negato.');
+        }
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function verifyCsrf(Request $request, ?WebSession $session, mixed $action, array $parameters): void
+    {
+        if (!is_string($action) || $action === '' || $this->sessions === null) {
+            return;
+        }
+        if ($session === null) {
+            throw new InvalidCsrfToken('Sessione CSRF non disponibile.');
+        }
+
+        foreach ($parameters as $name => $value) {
+            if (is_string($name) && (is_string($value) || is_int($value))) {
+                $action = str_replace('{' . $name . '}', (string) $value, $action);
+            }
+        }
+        $provided = $request->headers->get('X-CSRF-Token', $request->request->getString('_csrf_token'));
+        $this->sessions->verifyCsrf($session, $action, is_string($provided) ? $provided : '');
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function addRouteAttributes(Request $request, array $parameters): void
+    {
+        foreach (['_controller', '_route', '_public', '_session', '_permission', '_csrf_action'] as $internal) {
+            unset($parameters[$internal]);
+        }
+        $request->attributes->add($parameters);
+    }
+
+    private function exceptionResponse(Throwable $exception, Request $request, string $correlationId): Response
+    {
+        return match (true) {
+            $exception instanceof AuthenticationRequired => $this->authenticationRequired($request),
+            $exception instanceof AccessDenied => $this->problem('Accesso negato', Response::HTTP_FORBIDDEN),
+            $exception instanceof InvalidCsrfToken => $this->problem('Richiesta scaduta o non valida', Response::HTTP_FORBIDDEN),
+            $exception instanceof ResourceNotFoundException => $this->problem('Risorsa non trovata', Response::HTTP_NOT_FOUND),
+            $exception instanceof MethodNotAllowedException => $this->methodNotAllowed($exception),
+            $exception instanceof RequestUnexpectedValueException => $this->problem('Richiesta non valida', Response::HTTP_BAD_REQUEST),
+            default => $this->unexpectedError($exception, $request, $correlationId),
+        };
+    }
+
+    private function authenticationRequired(Request $request): Response
+    {
+        return str_starts_with($request->getPathInfo(), '/ui')
+            ? new RedirectResponse('/login?next=' . rawurlencode($request->getPathInfo()), Response::HTTP_SEE_OTHER)
+            : $this->problem('Autenticazione richiesta', Response::HTTP_UNAUTHORIZED);
+    }
+
+    private function methodNotAllowed(MethodNotAllowedException $exception): Response
+    {
+        $response = $this->problem('Metodo non consentito', Response::HTTP_METHOD_NOT_ALLOWED);
+        $response->headers->set('Allow', implode(', ', $exception->getAllowedMethods()));
+
+        return $response;
+    }
+
+    private function unexpectedError(Throwable $exception, Request $request, string $correlationId): Response
+    {
+        $context = [
+            'correlation_id' => $correlationId,
+            'exception' => $exception::class,
+            'exception_code' => (string) $exception->getCode(),
+            'method' => $request->getMethod(),
+            'path' => $request->getPathInfo(),
+        ];
+        if ($this->debug) {
+            $context['message'] = $exception->getMessage();
+        }
+        $this->logger->error('Errore applicativo non gestito.', $context);
+
+        return new JsonResponse(
+            $this->debug
+                ? ['error' => 'Errore applicativo', 'detail' => $exception->getMessage()]
+                : ['error' => 'Errore applicativo'],
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+        );
     }
 
     private function problem(string $message, int $status): JsonResponse

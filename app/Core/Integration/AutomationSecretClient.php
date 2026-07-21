@@ -6,7 +6,7 @@ namespace Hapa\Core\Integration;
 
 use Hapa\Core\Configuration\AutomationAdminConfig;
 use JsonException;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class AutomationSecretClient implements ProviderSecretGateway, ProviderConfigurationGateway
 {
@@ -105,16 +105,16 @@ final readonly class AutomationSecretClient implements ProviderSecretGateway, Pr
         $url = rtrim($this->configuration->baseUrl, '/') . '/internal/v1/provider-accounts/' . rawurlencode($account) . '/' . $resource;
         $response = @file_get_contents($url, false, $context);
         if (!is_string($response) || strlen($response) > 65536) {
-            throw new RuntimeException('Servizio credenziali Automation non disponibile.');
+            throw new HapaRuntimeException('Servizio credenziali Automation non disponibile.');
         }
         $status = $this->statusCode($http_response_header);
         $decoded = json_decode($response, true, 32, JSON_THROW_ON_ERROR);
         if (!is_array($decoded) || array_is_list($decoded)) {
-            throw new RuntimeException('Risposta Automation non valida.');
+            throw new HapaRuntimeException('Risposta Automation non valida.');
         }
         if ($status < 200 || $status >= 300) {
             $message = $decoded['error'] ?? null;
-            throw new RuntimeException(is_string($message) ? $message : 'Operazione credenziali rifiutata da Automation.');
+            throw new HapaRuntimeException(is_string($message) ? $message : 'Operazione credenziali rifiutata da Automation.');
         }
 
         return $decoded;
@@ -124,8 +124,8 @@ final readonly class AutomationSecretClient implements ProviderSecretGateway, Pr
     private function statusCode(array $headers): int
     {
         $first = $headers[0] ?? '';
-        if (preg_match('#^HTTP/\S+\s+([0-9]{3})#', $first, $matches) !== 1) {
-            throw new RuntimeException('Risposta HTTP Automation non valida.');
+        if (preg_match('#^HTTP/\S+\s+(\d{3})#', $first, $matches) !== 1) {
+            throw new HapaRuntimeException('Risposta HTTP Automation non valida.');
         }
 
         return (int) $matches[1];

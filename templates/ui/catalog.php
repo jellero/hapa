@@ -3,21 +3,18 @@ $formatMoney = static fn (?int $minor, ?string $currency): string => $minor === 
     ? '—'
     : number_format($minor / 100, 2, ',', '.') . ' ' . ($currency ?? 'EUR');
 $formatAge = static function (?int $seconds): string {
-    if ($seconds === null) {
-        return 'Mai sincronizzato';
-    }
-    if ($seconds < 60) {
-        return 'Meno di un minuto fa';
-    }
-    if ($seconds < 3600) {
-        return sprintf('%d min fa', intdiv($seconds, 60));
-    }
-    if ($seconds < 86400) {
-        return sprintf('%d h fa', intdiv($seconds, 3600));
-    }
-
-    return sprintf('%d g fa', intdiv($seconds, 86400));
+    return match (true) {
+        $seconds === null => 'Mai sincronizzato',
+        $seconds < 60 => 'Meno di un minuto fa',
+        $seconds < 3600 => sprintf('%d min fa', intdiv($seconds, 60)),
+        $seconds < 86400 => sprintf('%d h fa', intdiv($seconds, 3600)),
+        default => sprintf('%d g fa', intdiv($seconds, 86400)),
+    };
 };
+$selected = static fn (bool $condition): string => $condition ? ' selected' : '';
+$ruleTone = static fn (array $rule): string => match (true) { $rule['retired_at'] !== null => 'neutral', $rule['enabled'] => 'success', default => 'warning' };
+$ruleStatus = static fn (array $rule): string => match (true) { $rule['retired_at'] !== null => 'ritirata', $rule['enabled'] => 'attiva', default => 'disabilitata' };
+$onboardingTone = static fn (string $status): string => match ($status) { 'approved' => 'success', 'rejected' => 'danger', default => 'warning' };
 ?>
 <header class="page-header">
     <div>
@@ -35,11 +32,11 @@ $formatAge = static function (?int $seconds): string {
     </div>
 </header>
 
-<?php if (($pricingSaved ?? false) === true): ?><div class="inline-notice inline-notice--info" role="status"><div><strong>Regola salvata</strong><span>La nuova versione è auditata; non abilita automaticamente alcun provider.</span></div></div><?php endif; ?>
+<?php if (($pricingSaved ?? false) === true): ?><output class="inline-notice inline-notice--info"><div><strong>Regola salvata</strong><span>La nuova versione è auditata; non abilita automaticamente alcun provider.</span></div></output><?php endif; ?>
 <?php if (($pricingError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Regola non salvata</strong><span><?= $e($pricingError) ?></span></div></div><?php endif; ?>
-<?php if (($reviewSaved ?? false) === true): ?><div class="inline-notice inline-notice--info" role="status"><div><strong>Revisione registrata</strong><span>La decisione sul prodotto Space è versionata e presente nell’audit.</span></div></div><?php endif; ?>
+<?php if (($reviewSaved ?? false) === true): ?><output class="inline-notice inline-notice--info"><div><strong>Revisione registrata</strong><span>La decisione sul prodotto Space è versionata e presente nell’audit.</span></div></output><?php endif; ?>
 <?php if (($reviewError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Revisione non registrata</strong><span><?= $e($reviewError) ?></span></div></div><?php endif; ?>
-<?php if (($availabilitySaved ?? false) === true): ?><div class="inline-notice inline-notice--info" role="status"><div><strong>Disponibilità ricalcolata</strong><span>HAPA ha aggiornato la quantità vendibile e tutte le offerte marketplace.</span></div></div><?php endif; ?>
+<?php if (($availabilitySaved ?? false) === true): ?><output class="inline-notice inline-notice--info"><div><strong>Disponibilità ricalcolata</strong><span>HAPA ha aggiornato la quantità vendibile e tutte le offerte marketplace.</span></div></output><?php endif; ?>
 <?php if (($availabilityError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Disponibilità non aggiornata</strong><span><?= $e($availabilityError) ?></span></div></div><?php endif; ?>
 
 <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
@@ -73,18 +70,19 @@ $formatAge = static function (?int $seconds): string {
     <?php else: ?>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Regola</th><th>Ambito</th><th>Destinazione</th><th>Ricarico</th><th>Limiti</th><th>Priorità</th><th>Versione</th><th>Stato</th></tr></thead><tbody>
     <?php foreach ($pricingRules as $rule): ?>
-        <tr><td><strong><?= $e($rule['name']) ?></strong><small><?= $e($rule['code']) ?></small></td><td><?= $e($rule['scope']) ?></td><td><?= $e($rule['marketplace_code'] ?? '—') ?><small><?= $e($rule['sku'] ?? '—') ?></small></td><td><?= $e($rule['adjustment_type']) ?><small><?= $e((string) $rule['adjustment_value']) ?> <?= $e($rule['currency']) ?></small></td><td><?= $e($formatMoney($rule['minimum_price_minor'], $rule['currency'])) ?> / <?= $e($formatMoney($rule['maximum_price_minor'], $rule['currency'])) ?></td><td><?= $e((string) $rule['priority']) ?></td><td><?= $e((string) $rule['version']) ?></td><td><span class="status-badge status-badge--<?= $rule['retired_at'] !== null ? 'neutral' : ($rule['enabled'] ? 'success' : 'warning') ?>"><?= $e($rule['retired_at'] !== null ? 'ritirata' : ($rule['enabled'] ? 'attiva' : 'disabilitata')) ?></span></td></tr>
+        <tr><td><strong><?= $e($rule['name']) ?></strong><small><?= $e($rule['code']) ?></small></td><td><?= $e($rule['scope']) ?></td><td><?= $e($rule['marketplace_code'] ?? '—') ?><small><?= $e($rule['sku'] ?? '—') ?></small></td><td><?= $e($rule['adjustment_type']) ?><small><?= $e((string) $rule['adjustment_value']) ?> <?= $e($rule['currency']) ?></small></td><td><?= $e($formatMoney($rule['minimum_price_minor'], $rule['currency'])) ?> / <?= $e($formatMoney($rule['maximum_price_minor'], $rule['currency'])) ?></td><td><?= $e((string) $rule['priority']) ?></td><td><?= $e((string) $rule['version']) ?></td><td><span class="status-badge status-badge--<?= $e($ruleTone($rule)) ?>"><?= $e($ruleStatus($rule)) ?></span></td></tr>
         <?php if (($currentUser?->role ?? '') === 'administrator' && $rule['retired_at'] === null): ?>
         <tr><td colspan="8"><details><summary>Modifica versione <?= $e((string) $rule['version']) ?></summary>
+            <?php $pricingFieldPrefix = 'pricing-rule-' . (string) $rule['id']; ?>
             <form class="auth-form" action="/ui/catalog/pricing-rules/<?= $e((string) $rule['id']) ?>" method="post">
                 <input type="hidden" name="_csrf_token" value="<?= $e($rule['update_csrf_token']) ?>"><input type="hidden" name="version" value="<?= $e((string) $rule['version']) ?>">
-                <div class="field"><label>Codice</label><input name="code" value="<?= $e($rule['code']) ?>" required maxlength="96"></div><div class="field"><label>Nome</label><input name="name" value="<?= $e($rule['name']) ?>" required maxlength="160"></div>
-                <div class="field"><label>Ambito</label><select name="scope"><?php foreach (['global','marketplace','sku','marketplace_sku'] as $scope): ?><option value="<?= $e($scope) ?>"<?= $rule['scope'] === $scope ? ' selected' : '' ?>><?= $e($scope) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>Marketplace</label><select name="marketplace_id"><option value="">Nessuno</option><?php foreach (($marketplaces ?? []) as $marketplace): ?><option value="<?= $e((string) $marketplace['id']) ?>"<?= $rule['marketplace_id'] === $marketplace['id'] ? ' selected' : '' ?>><?= $e($marketplace['name']) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>SKU</label><input name="sku" value="<?= $e($rule['sku'] ?? '') ?>" maxlength="160"></div><div class="field"><label>Tipo</label><select name="adjustment_type"><?php foreach (['percentage','fixed_amount','fixed_price'] as $type): ?><option value="<?= $e($type) ?>"<?= $rule['adjustment_type'] === $type ? ' selected' : '' ?>><?= $e($type) ?></option><?php endforeach; ?></select></div>
-                <div class="field"><label>Valore</label><input type="number" name="adjustment_value" min="0" value="<?= $e((string) $rule['adjustment_value']) ?>" required></div><div class="field"><label>Valuta</label><input name="currency" value="<?= $e($rule['currency']) ?>" pattern="[A-Z]{3}" maxlength="3" required></div>
-                <div class="field"><label>Prezzo minimo</label><input type="number" name="minimum_price_minor" min="0" value="<?= $e($rule['minimum_price_minor'] === null ? '' : (string) $rule['minimum_price_minor']) ?>"></div><div class="field"><label>Prezzo massimo</label><input type="number" name="maximum_price_minor" min="0" value="<?= $e($rule['maximum_price_minor'] === null ? '' : (string) $rule['maximum_price_minor']) ?>"></div>
-                <div class="field"><label>Priorità</label><input type="number" name="priority" min="0" max="100000" value="<?= $e((string) $rule['priority']) ?>" required></div><div class="field"><label>Valida dal</label><input type="datetime-local" name="valid_from" value="<?= $e($rule['valid_from'] === null ? '' : substr(str_replace(' ', 'T', $rule['valid_from']), 0, 16)) ?>"></div><div class="field"><label>Valida fino al</label><input type="datetime-local" name="valid_until" value="<?= $e($rule['valid_until'] === null ? '' : substr(str_replace(' ', 'T', $rule['valid_until']), 0, 16)) ?>"></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-code">Codice</label><input id="<?= $e($pricingFieldPrefix) ?>-code" name="code" value="<?= $e($rule['code']) ?>" required maxlength="96"></div><div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-name">Nome</label><input id="<?= $e($pricingFieldPrefix) ?>-name" name="name" value="<?= $e($rule['name']) ?>" required maxlength="160"></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-scope">Ambito</label><select id="<?= $e($pricingFieldPrefix) ?>-scope" name="scope"><?php foreach (['global','marketplace','sku','marketplace_sku'] as $scope): ?><option value="<?= $e($scope) ?>"<?= $selected($rule['scope'] === $scope) ?>><?= $e($scope) ?></option><?php endforeach; ?></select></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-marketplace">Marketplace</label><select id="<?= $e($pricingFieldPrefix) ?>-marketplace" name="marketplace_id"><option value="">Nessuno</option><?php foreach (($marketplaces ?? []) as $marketplace): ?><option value="<?= $e((string) $marketplace['id']) ?>"<?= $selected($rule['marketplace_id'] === $marketplace['id']) ?>><?= $e($marketplace['name']) ?></option><?php endforeach; ?></select></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-sku">SKU</label><input id="<?= $e($pricingFieldPrefix) ?>-sku" name="sku" value="<?= $e($rule['sku'] ?? '') ?>" maxlength="160"></div><div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-type">Tipo</label><select id="<?= $e($pricingFieldPrefix) ?>-type" name="adjustment_type"><?php foreach (['percentage','fixed_amount','fixed_price'] as $type): ?><option value="<?= $e($type) ?>"<?= $selected($rule['adjustment_type'] === $type) ?>><?= $e($type) ?></option><?php endforeach; ?></select></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-value">Valore</label><input id="<?= $e($pricingFieldPrefix) ?>-value" type="number" name="adjustment_value" min="0" value="<?= $e((string) $rule['adjustment_value']) ?>" required></div><div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-currency">Valuta</label><input id="<?= $e($pricingFieldPrefix) ?>-currency" name="currency" value="<?= $e($rule['currency']) ?>" pattern="[A-Z]{3}" maxlength="3" required></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-minimum">Prezzo minimo</label><input id="<?= $e($pricingFieldPrefix) ?>-minimum" type="number" name="minimum_price_minor" min="0" value="<?= $e($rule['minimum_price_minor'] === null ? '' : (string) $rule['minimum_price_minor']) ?>"></div><div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-maximum">Prezzo massimo</label><input id="<?= $e($pricingFieldPrefix) ?>-maximum" type="number" name="maximum_price_minor" min="0" value="<?= $e($rule['maximum_price_minor'] === null ? '' : (string) $rule['maximum_price_minor']) ?>"></div>
+                <div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-priority">Priorità</label><input id="<?= $e($pricingFieldPrefix) ?>-priority" type="number" name="priority" min="0" max="100000" value="<?= $e((string) $rule['priority']) ?>" required></div><div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-valid-from">Valida dal</label><input id="<?= $e($pricingFieldPrefix) ?>-valid-from" type="datetime-local" name="valid_from" value="<?= $e($rule['valid_from'] === null ? '' : substr(str_replace(' ', 'T', $rule['valid_from']), 0, 16)) ?>"></div><div class="field"><label for="<?= $e($pricingFieldPrefix) ?>-valid-until">Valida fino al</label><input id="<?= $e($pricingFieldPrefix) ?>-valid-until" type="datetime-local" name="valid_until" value="<?= $e($rule['valid_until'] === null ? '' : substr(str_replace(' ', 'T', $rule['valid_until']), 0, 16)) ?>"></div>
                 <label><input type="checkbox" name="enabled" value="1"<?= $rule['enabled'] ? ' checked' : '' ?>> Regola abilitata</label><button class="button button--secondary" type="submit">Salva nuova versione</button>
             </form>
             <form action="/ui/catalog/pricing-rules/<?= $e((string) $rule['id']) ?>/retire" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($rule['retire_csrf_token']) ?>"><input type="hidden" name="version" value="<?= $e((string) $rule['version']) ?>"><button class="button button--ghost" type="submit">Ritira regola</button></form>
@@ -175,9 +173,10 @@ $formatAge = static function (?int $seconds): string {
         <span class="status-badge status-badge--success">Read model collegato</span>
     </div>
     <form class="data-toolbar" method="get" action="/ui/catalog">
-        <label class="search-field">
+        <label class="search-field" for="catalog-query">
+            <span class="sr-only">Cerca nel catalogo</span>
             <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg>
-            <input type="search" name="q" value="<?= $e($query ?? '') ?>" placeholder="Cerca SKU, EAN o nome prodotto">
+            <input id="catalog-query" type="search" name="q" value="<?= $e($query ?? '') ?>" placeholder="Cerca SKU, EAN o nome prodotto">
         </label>
         <button class="button button--secondary" type="submit">Cerca</button>
     </form>
@@ -189,7 +188,7 @@ $formatAge = static function (?int $seconds): string {
                 <tr><td colspan="11"><div class="empty-state"><span class="empty-state__icon" aria-hidden="true"><svg class="icon"><use href="/assets/icons.svg#box"></use></svg></span><h3>Nessun prodotto trovato</h3><p>Il catalogo si popola con le osservazioni versionate ricevute da Space tramite hapa-automation.</p></div></td></tr>
             <?php else: ?>
                 <?php foreach ($catalogItems as $item): ?>
-                    <?php $statusTone = $item['onboarding_status'] === 'approved' ? 'success' : ($item['onboarding_status'] === 'rejected' ? 'danger' : 'warning'); ?>
+                    <?php $statusTone = $onboardingTone($item['onboarding_status']); ?>
                     <tr>
                         <td><strong><?= $e($item['sku']) ?></strong><?php if ($item['ean'] !== null): ?><small><?= $e($item['ean']) ?></small><?php endif; ?></td>
                         <td><?= $e($item['name'] ?? 'Senza nome') ?></td>

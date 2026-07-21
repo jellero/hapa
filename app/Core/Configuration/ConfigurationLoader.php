@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Configuration;
 
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final class ConfigurationLoader
 {
@@ -79,7 +79,7 @@ final class ConfigurationLoader
         $automationAdmin = new AutomationAdminConfig(
             EnvironmentReader::value(
                 'AUTOMATION_ADMIN_API_URL',
-                $application->isProduction() ? 'https://hapa-automation-admin-api' : 'http://hapa-automation-admin-api:8091',
+                'https://hapa-automation-admin-api',
             ),
             EnvironmentReader::secret('AUTOMATION_ADMIN_API_TOKEN', 'hapa-automation-local-admin-token-change-me'),
             self::decimal('AUTOMATION_ADMIN_API_TIMEOUT', '10.0'),
@@ -88,7 +88,7 @@ final class ConfigurationLoader
 
         if ($application->isProduction()) {
             if ($proxy->trustedProxies === []) {
-                throw new RuntimeException('TRUSTED_PROXIES deve essere configurato in produzione.');
+                throw new HapaRuntimeException('TRUSTED_PROXIES deve essere configurato in produzione.');
             }
 
             self::assertProductionSecret('DB_PASSWORD', $database->password);
@@ -123,7 +123,7 @@ final class ConfigurationLoader
         $value = trim(EnvironmentReader::value($name, $default));
         $boolean = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
         if ($boolean === null) {
-            throw new RuntimeException(sprintf('%s non è un booleano valido.', $name));
+            throw new HapaRuntimeException(sprintf('%s non è un booleano valido.', $name));
         }
 
         return $boolean;
@@ -132,8 +132,8 @@ final class ConfigurationLoader
     private static function integer(string $name, string $default): int
     {
         $value = trim(EnvironmentReader::value($name, $default));
-        if (!preg_match('/^-?[0-9]+$/D', $value)) {
-            throw new RuntimeException(sprintf('%s deve essere un numero intero.', $name));
+        if (!preg_match('/^-?\d+$/D', $value)) {
+            throw new HapaRuntimeException(sprintf('%s deve essere un numero intero.', $name));
         }
 
         return (int) $value;
@@ -143,12 +143,12 @@ final class ConfigurationLoader
     {
         $value = trim(EnvironmentReader::value($name, $default));
         if (!is_numeric($value)) {
-            throw new RuntimeException(sprintf('%s deve essere numerico.', $name));
+            throw new HapaRuntimeException(sprintf('%s deve essere numerico.', $name));
         }
 
         $number = (float) $value;
         if (!is_finite($number)) {
-            throw new RuntimeException(sprintf('%s non è finito.', $name));
+            throw new HapaRuntimeException(sprintf('%s non è finito.', $name));
         }
 
         return $number;
@@ -168,12 +168,12 @@ final class ConfigurationLoader
         $normalized = strtolower($value);
         foreach (['replace_with_secret', 'change-me', 'changeme', 'local'] as $forbidden) {
             if (str_contains($normalized, $forbidden)) {
-                throw new RuntimeException(sprintf('%s contiene un valore non ammesso in produzione.', $name));
+                throw new HapaRuntimeException(sprintf('%s contiene un valore non ammesso in produzione.', $name));
             }
         }
 
         if (strlen($value) < 16) {
-            throw new RuntimeException(sprintf('%s deve contenere almeno 16 caratteri in produzione.', $name));
+            throw new HapaRuntimeException(sprintf('%s deve contenere almeno 16 caratteri in produzione.', $name));
         }
     }
 }

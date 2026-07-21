@@ -48,24 +48,34 @@ final class InboxConsumeCommand extends Command
             return self::INVALID;
         }
 
+        $this->consume($watch, $pollSeconds, $output);
+
+        return self::SUCCESS;
+    }
+
+    private function consume(bool $watch, int $pollSeconds, OutputInterface $output): void
+    {
         $consumer = $this->consumers->create();
         do {
             $report = $consumer->runOnce();
             if (!$watch || $report->consumed) {
-                $output->writeln(sprintf(
-                    'consumed=%d processed=%d duplicate=%d',
-                    $report->consumed ? 1 : 0,
-                    $report->processed ? 1 : 0,
-                    $report->duplicate ? 1 : 0,
-                ));
+                $this->writeReport($report, $output);
             }
 
             if ($watch && !$report->consumed) {
                 usleep($pollSeconds * 1_000_000);
             }
         } while ($watch);
+    }
 
-        return self::SUCCESS;
+    private function writeReport(\Hapa\Core\Messaging\InboxConsumerReport $report, OutputInterface $output): void
+    {
+        $output->writeln(sprintf(
+            'consumed=%d processed=%d duplicate=%d',
+            $report->consumed ? 1 : 0,
+            $report->processed ? 1 : 0,
+            $report->duplicate ? 1 : 0,
+        ));
     }
 
     private function pollSeconds(InputInterface $input, OutputInterface $output): ?int

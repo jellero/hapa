@@ -19,14 +19,14 @@ final readonly class PricingRuleController
 
     public function create(Request $request): Response
     {
-        return $this->mutate($request, function () use ($request): void {
+        return $this->mutate(function () use ($request): void {
             $this->rules->create($this->input($request), $this->actor($request), $this->correlationId($request));
         });
     }
 
     public function update(Request $request): Response
     {
-        return $this->mutate($request, function () use ($request): void {
+        return $this->mutate(function () use ($request): void {
             $this->rules->update(
                 $request->attributes->getInt('ruleId'),
                 $request->request->getInt('version'),
@@ -39,7 +39,7 @@ final readonly class PricingRuleController
 
     public function retire(Request $request): Response
     {
-        return $this->mutate($request, function () use ($request): void {
+        return $this->mutate(function () use ($request): void {
             $this->rules->retire(
                 $request->attributes->getInt('ruleId'),
                 $request->request->getInt('version'),
@@ -50,7 +50,7 @@ final readonly class PricingRuleController
     }
 
     /** @param callable(): void $operation */
-    private function mutate(Request $request, callable $operation): Response
+    private function mutate(callable $operation): Response
     {
         try {
             $operation();

@@ -61,23 +61,21 @@ final readonly class ReadinessCheck
                 $this->redis->connectTimeout,
             );
 
-            if (!$connected) {
-                return false;
-            }
-
-            $password = $this->redis->password;
-            if ($password !== '' && !$redis->auth($password)) {
-                return false;
-            }
-
-            return $redis->ping() !== false;
+            $authenticated = $connected && $this->authenticateRedis($redis);
+            return $authenticated && $redis->ping() !== false;
         } catch (Throwable) {
             return false;
         } finally {
             try {
                 $redis->close();
             } catch (Throwable) {
+                // Closing a failed or already closed health-check connection is best effort.
             }
         }
+    }
+
+    private function authenticateRedis(Redis $redis): bool
+    {
+        return $this->redis->password === '' || $redis->auth($this->redis->password);
     }
 }

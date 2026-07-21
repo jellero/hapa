@@ -8,6 +8,20 @@ final class SeparateBusinessSubdomains extends AbstractMigration
 {
     public function up(): void
     {
+        $this->migratePart1();
+        $this->migratePart2();
+        $this->migratePart3();
+    }
+
+
+    private function migratePart1(): void
+    {
+        $this->migratePart1A();
+        $this->migratePart1B();
+    }
+
+    private function migratePart1A(): void
+    {
         $this->execute(<<<'SQL'
 ALTER TABLE marketplaces
     ADD COLUMN business_status VARCHAR(24) NOT NULL DEFAULT 'planned',
@@ -107,6 +121,10 @@ CREATE TABLE customer_history (
     )
 )
 SQL);
+    }
+
+    private function migratePart1B(): void
+    {
         $this->execute('CREATE INDEX customer_history_timeline_idx ON customer_history (customer_id, occurred_at DESC, id DESC)');
 
         $this->execute(<<<'SQL'
@@ -198,6 +216,10 @@ ALTER TABLE order_lines
         AND (line_total_minor IS NULL OR line_total_minor >= 0)
     )
 SQL);
+    }
+
+    private function migratePart2(): void
+    {
         $this->execute('CREATE INDEX order_lines_catalog_item_idx ON order_lines (catalog_item_id) WHERE catalog_item_id IS NOT NULL');
 
         $this->execute(<<<'SQL'
@@ -350,6 +372,10 @@ SQL);
         $this->execute('ALTER TABLE outbox_messages ALTER COLUMN routing_key SET NOT NULL');
         $this->execute("ALTER TABLE outbox_messages ADD CONSTRAINT outbox_routing_key_check CHECK (btrim(routing_key) <> '')");
 
+    }
+
+    private function migratePart3(): void
+    {
         $this->execute("COMMENT ON COLUMN catalog_items.space_price_minor IS 'Legacy: usare supplier_catalog_items.purchase_cost_minor'");
         $this->execute("COMMENT ON COLUMN catalog_items.space_available_quantity IS 'Legacy: usare supplier_catalog_items.available_quantity'");
         $this->execute('ALTER TABLE external_deliveries RENAME TO legacy_external_deliveries');

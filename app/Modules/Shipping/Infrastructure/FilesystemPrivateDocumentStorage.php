@@ -7,7 +7,7 @@ namespace Hapa\Modules\Shipping\Infrastructure;
 use Hapa\Modules\Shipping\Contract\PrivateDocumentStorage;
 use Hapa\Modules\Shipping\Contract\StoredDocument;
 use InvalidArgumentException;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class FilesystemPrivateDocumentStorage implements PrivateDocumentStorage
 {
@@ -19,11 +19,11 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
             throw new InvalidArgumentException('Dimensione massima documento non valida.');
         }
         if (!is_dir($root) && !mkdir($root, 0700, true) && !is_dir($root)) {
-            throw new RuntimeException('Impossibile creare lo storage documenti privato.');
+            throw new HapaRuntimeException('Impossibile creare lo storage documenti privato.');
         }
         $resolved = realpath($root);
         if ($resolved === false) {
-            throw new RuntimeException('Impossibile risolvere lo storage documenti privato.');
+            throw new HapaRuntimeException('Impossibile risolvere lo storage documenti privato.');
         }
         $this->root = rtrim($resolved, DIRECTORY_SEPARATOR);
     }
@@ -46,7 +46,7 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
         $relativeDirectory = sprintf('%s/%s', $scope, gmdate('Y/m'));
         $directory = $this->root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDirectory);
         if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
-            throw new RuntimeException('Impossibile creare la directory documento.');
+            throw new HapaRuntimeException('Impossibile creare la directory documento.');
         }
 
         $name = bin2hex(random_bytes(16)) . '.' . $format;
@@ -56,12 +56,12 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
         $written = file_put_contents($temporary, $content, LOCK_EX);
         if ($written !== $bytes) {
             @unlink($temporary);
-            throw new RuntimeException('Scrittura documento incompleta.');
+            throw new HapaRuntimeException('Scrittura documento incompleta.');
         }
         chmod($temporary, 0600);
         if (!rename($temporary, $destination)) {
             @unlink($temporary);
-            throw new RuntimeException('Pubblicazione atomica del documento fallita.');
+            throw new HapaRuntimeException('Pubblicazione atomica del documento fallita.');
         }
 
         return new StoredDocument($reference, hash('sha256', $content), $bytes, strtoupper($format));
@@ -72,11 +72,11 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
         $path = $this->resolve($reference);
         $content = file_get_contents($path);
         if (!is_string($content)) {
-            throw new RuntimeException('Documento privato non leggibile.');
+            throw new HapaRuntimeException('Documento privato non leggibile.');
         }
         if (preg_match('/^[0-9a-f]{64}$/D', $expectedChecksum) !== 1
             || !hash_equals($expectedChecksum, hash('sha256', $content))) {
-            throw new RuntimeException('Checksum documento non valido.');
+            throw new HapaRuntimeException('Checksum documento non valido.');
         }
 
         return $content;
@@ -86,19 +86,19 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
     {
         $path = $this->resolve($reference);
         if (!unlink($path)) {
-            throw new RuntimeException('Impossibile eliminare il documento privato.');
+            throw new HapaRuntimeException('Impossibile eliminare il documento privato.');
         }
     }
 
     private function resolve(string $reference): string
     {
-        if (preg_match('#^[a-z0-9][a-z0-9_-]{1,63}/[0-9]{4}/[0-9]{2}/[0-9a-f]{32}\.(pdf|zpl|png)$#D', $reference) !== 1) {
+        if (preg_match('#^[a-z0-9][a-z0-9_-]{1,63}/\d{4}/\d{2}/[0-9a-f]{32}\.(pdf|zpl|png)$#D', $reference) !== 1) {
             throw new InvalidArgumentException('Riferimento documento non valido.');
         }
         $candidate = $this->root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $reference);
         $resolved = realpath($candidate);
         if ($resolved === false || !str_starts_with($resolved, $this->root . DIRECTORY_SEPARATOR) || !is_file($resolved)) {
-            throw new RuntimeException('Documento privato non trovato.');
+            throw new HapaRuntimeException('Documento privato non trovato.');
         }
 
         return $resolved;

@@ -6,7 +6,7 @@ $basePath = dirname(__DIR__);
 $errors = [];
 
 /** @var mixed $rawModuleDependencies */
-$rawModuleDependencies = require $basePath . '/config/module-dependencies.php';
+$rawModuleDependencies = require_once $basePath . '/config/module-dependencies.php';
 /** @var array<string, list<string>> $moduleDependencies */
 $moduleDependencies = [];
 

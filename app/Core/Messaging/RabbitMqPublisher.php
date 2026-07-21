@@ -8,7 +8,7 @@ use Hapa\Core\Configuration\RabbitMqConfig;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 use Throwable;
 
 final class RabbitMqPublisher implements MessagePublisher
@@ -23,15 +23,15 @@ final class RabbitMqPublisher implements MessagePublisher
     public function publish(string $exchangeName, string $routingKey, MessageEnvelope $message): void
     {
         if (!$this->configuration->enabled) {
-            throw new RuntimeException('Il relay RabbitMQ è disabilitato.');
+            throw new HapaRuntimeException('Il relay RabbitMQ è disabilitato.');
         }
 
         if (!in_array($exchangeName, ['hapa.events', 'hapa.commands'], true)) {
-            throw new RuntimeException('Exchange RabbitMQ non supportato.');
+            throw new HapaRuntimeException('Exchange RabbitMQ non supportato.');
         }
 
         if (trim($routingKey) === '') {
-            throw new RuntimeException('La routing key RabbitMQ è obbligatoria.');
+            throw new HapaRuntimeException('La routing key RabbitMQ è obbligatoria.');
         }
 
         $channel = $this->channel();
@@ -65,6 +65,7 @@ final class RabbitMqPublisher implements MessagePublisher
                 $this->channel->close();
             }
         } catch (Throwable) {
+            // Resource cleanup is best effort during shutdown.
         }
 
         try {
@@ -72,6 +73,7 @@ final class RabbitMqPublisher implements MessagePublisher
                 $this->connection->close();
             }
         } catch (Throwable) {
+            // Resource cleanup is best effort during shutdown.
         }
 
         $this->channel = null;

@@ -13,6 +13,7 @@ final readonly class ClaimedOutboxMessage
      */
     public function __construct(
         public int $id,
+        public string $messageId,
         public string $aggregateType,
         public string $aggregateId,
         public string $eventType,

@@ -8,6 +8,10 @@ use InvalidArgumentException;
 
 final readonly class CustomerProfile
 {
+    public CustomerCode $code;
+    public CustomerStatus $status;
+    public CustomerType $type;
+    public ?EmailAddress $email;
     public string $displayName;
     public ?string $firstName;
     public ?string $lastName;
@@ -17,20 +21,16 @@ final readonly class CustomerProfile
     public ?string $vatNumber;
     public string $locale;
 
-    public function __construct(
-        public CustomerCode $code,
-        public CustomerStatus $status,
-        public CustomerType $type,
-        string $displayName,
-        string|null $firstName = null,
-        string|null $lastName = null,
-        string|null $companyName = null,
-        public ?EmailAddress $email = null,
-        string|null $phone = null,
-        string|null $taxIdentifier = null,
-        string|null $vatNumber = null,
-        string $locale = 'it-IT',
-    ) {
+    /** @param array{code:CustomerCode,status:CustomerStatus,type:CustomerType,display_name:string,first_name?:?string,last_name?:?string,company_name?:?string,email?:?EmailAddress,phone?:?string,tax_identifier?:?string,vat_number?:?string,locale?:string} $data */
+    public function __construct(array $data)
+    {
+        $this->code = $data['code'];
+        $this->status = $data['status'];
+        $this->type = $data['type'];
+        $this->email = $data['email'] ?? null;
+        $displayName = $data['display_name']; $firstName = $data['first_name'] ?? null; $lastName = $data['last_name'] ?? null;
+        $companyName = $data['company_name'] ?? null; $phone = $data['phone'] ?? null;
+        $taxIdentifier = $data['tax_identifier'] ?? null; $vatNumber = $data['vat_number'] ?? null; $locale = $data['locale'] ?? 'it-IT';
         $this->displayName = self::required($displayName, 'nome visualizzato', 240);
         $this->firstName = self::optional($firstName, 'nome', 120);
         $this->lastName = self::optional($lastName, 'cognome', 120);
@@ -44,7 +44,7 @@ final readonly class CustomerProfile
             throw new InvalidArgumentException('La locale cliente non è valida.');
         }
 
-        if ($type === CustomerType::Business && $this->companyName === null) {
+        if ($this->type === CustomerType::Business && $this->companyName === null) {
             throw new InvalidArgumentException('La ragione sociale è obbligatoria per un cliente azienda.');
         }
 

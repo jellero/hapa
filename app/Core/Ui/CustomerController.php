@@ -13,6 +13,8 @@ use Throwable;
 
 final readonly class CustomerController
 {
+    private const CUSTOMERS_PATH = '/ui/customers';
+
     public function __construct(private CustomerManagement $customers)
     {
     }
@@ -22,11 +24,11 @@ final readonly class CustomerController
         try {
             $code = $this->customers->create($this->input($request), $this->actor($request), $this->correlationId($request));
 
-            return new RedirectResponse('/ui/customers/' . rawurlencode($code) . '?saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse(self::CUSTOMERS_PATH . '/' . rawurlencode($code) . '?saved=1', Response::HTTP_SEE_OTHER);
         } catch (InvalidArgumentException | CustomerConflict $exception) {
-            return $this->error('/ui/customers', $exception->getMessage());
+            return $this->error(self::CUSTOMERS_PATH, $exception->getMessage());
         } catch (Throwable) {
-            return $this->error('/ui/customers', 'Impossibile creare il cliente.');
+            return $this->error(self::CUSTOMERS_PATH, 'Impossibile creare il cliente.');
         }
     }
 
@@ -44,9 +46,9 @@ final readonly class CustomerController
 
             return $this->saved($code);
         } catch (InvalidArgumentException | CustomerConflict $exception) {
-            return $this->error('/ui/customers/' . rawurlencode($code), $exception->getMessage());
+            return $this->error($this->customerPath($code), $exception->getMessage());
         } catch (Throwable) {
-            return $this->error('/ui/customers/' . rawurlencode($code), 'Impossibile aggiornare il cliente.');
+            return $this->error($this->customerPath($code), 'Impossibile aggiornare il cliente.');
         }
     }
 
@@ -63,9 +65,9 @@ final readonly class CustomerController
 
             return $this->saved($code);
         } catch (InvalidArgumentException | CustomerConflict $exception) {
-            return $this->error('/ui/customers/' . rawurlencode($code), $exception->getMessage());
+            return $this->error($this->customerPath($code), $exception->getMessage());
         } catch (Throwable) {
-            return $this->error('/ui/customers/' . rawurlencode($code), 'Impossibile archiviare il cliente.');
+            return $this->error($this->customerPath($code), 'Impossibile archiviare il cliente.');
         }
     }
 
@@ -105,7 +107,12 @@ final readonly class CustomerController
 
     private function saved(string $code): RedirectResponse
     {
-        return new RedirectResponse('/ui/customers/' . rawurlencode($code) . '?saved=1', Response::HTTP_SEE_OTHER);
+        return new RedirectResponse($this->customerPath($code) . '?saved=1', Response::HTTP_SEE_OTHER);
+    }
+
+    private function customerPath(string $code): string
+    {
+        return self::CUSTOMERS_PATH . '/' . rawurlencode($code);
     }
 
     private function error(string $path, string $message): RedirectResponse

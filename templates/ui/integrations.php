@@ -15,28 +15,28 @@
 </header>
 
 <?php if (($saved ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Configurazione salvata</strong><span>Sincronizza la nuova versione con Automation; i job vengono attivati soltanto quando l’account entra in pilot o attivo.</span></div></div>
+    <output class="inline-notice inline-notice--info"><div><strong>Configurazione salvata</strong><span>Sincronizza la nuova versione con Automation; i job vengono attivati soltanto quando l’account entra in pilot o attivo.</span></div></output>
 <?php endif; ?>
 <?php if (($configurationError ?? '') !== ''): ?>
     <div class="inline-notice inline-notice--warning" role="alert"><div><strong>Configurazione non salvata</strong><span><?= $e($configurationError) ?></span></div></div>
 <?php endif; ?>
 <?php if (($secretsSaved ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Credenziali aggiornate</strong><span>I valori sono stati cifrati in HAPA Automation e non possono essere riletti dall’interfaccia.</span></div></div>
+    <output class="inline-notice inline-notice--info"><div><strong>Credenziali aggiornate</strong><span>I valori sono stati cifrati in HAPA Automation e non possono essere riletti dall’interfaccia.</span></div></output>
 <?php endif; ?>
 <?php if (($secretsRevoked ?? false) === true): ?>
-    <div class="inline-notice inline-notice--warning" role="status"><div><strong>Credenziali revocate</strong><span>Il ciphertext è stato eliminato e l’account dovrà essere riconfigurato prima dell’uso.</span></div></div>
+    <output class="inline-notice inline-notice--warning"><div><strong>Credenziali revocate</strong><span>Il ciphertext è stato eliminato e l’account dovrà essere riconfigurato prima dell’uso.</span></div></output>
 <?php endif; ?>
 <?php if (($configurationSynced ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Configurazione sincronizzata</strong><span>Automation ha applicato la stessa versione non segreta visibile in HAPA.</span></div></div>
+    <output class="inline-notice inline-notice--info"><div><strong>Configurazione sincronizzata</strong><span>Automation ha applicato la stessa versione non segreta visibile in HAPA.</span></div></output>
 <?php endif; ?>
 <?php if (($statusRefreshed ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Stato tecnico aggiornato</strong><span>Versioni e stato credenziali sono stati riletti direttamente da Automation.</span></div></div>
+    <output class="inline-notice inline-notice--info"><div><strong>Stato tecnico aggiornato</strong><span>Versioni e stato credenziali sono stati riletti direttamente da Automation.</span></div></output>
 <?php endif; ?>
 <?php if (($connectionTested ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Connessione provider verificata</strong><span>Credenziali ed endpoint configurati risultano raggiungibili.</span></div></div>
+    <output class="inline-notice inline-notice--info"><div><strong>Connessione provider verificata</strong><span>Credenziali ed endpoint configurati risultano raggiungibili.</span></div></output>
 <?php endif; ?>
 <?php if (($ordersImported ?? false) === true): ?>
-    <div class="inline-notice inline-notice--info" role="status"><div><strong>Import SellRapido completato</strong><span><?= $e((string) ($ordersPublished ?? 0)) ?> osservazioni ordine pubblicate verso HAPA.</span></div></div>
+    <output class="inline-notice inline-notice--info"><div><strong>Import SellRapido completato</strong><span><?= $e((string) ($ordersPublished ?? 0)) ?> osservazioni ordine pubblicate verso HAPA.</span></div></output>
 <?php endif; ?>
 
 <div class="inline-notice inline-notice--warning" role="note">
@@ -79,14 +79,15 @@
             </tr>
             <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
             <tr><td colspan="8"><details><summary>Gestisci account v<?= $e((string) $account['configuration_version']) ?></summary>
+                <?php $accountFieldPrefix = 'integration-' . (string) $account['id']; ?>
                 <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>" method="post">
                     <input type="hidden" name="_csrf_token" value="<?= $e($account['update_csrf_token']) ?>"><input type="hidden" name="configuration_version" value="<?= $e((string) $account['configuration_version']) ?>">
                     <input type="hidden" name="provider" value="<?= $e($account['provider_code']) ?>"><input type="hidden" name="code" value="<?= $e($account['code']) ?>">
-                    <div class="field"><label>Nome visualizzato</label><input name="display_name" value="<?= $e($account['display_name']) ?>" required maxlength="160"></div>
-                    <div class="field"><label>Ambiente</label><select name="environment"><option value="sandbox"<?= $account['environment'] === 'sandbox' ? ' selected' : '' ?>>Sandbox</option><option value="production"<?= $account['environment'] === 'production' ? ' selected' : '' ?>>Produzione</option></select></div>
-                    <div class="field"><label>Capacità</label><input name="capabilities" value="<?= $e(implode(', ', $account['capabilities'])) ?>"></div>
-                    <div class="field"><label>Impostazioni non segrete (JSON)</label><textarea name="settings_json" rows="6"><?= $e(json_encode($account['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></textarea></div>
-                    <div class="field"><label>Descrizione</label><textarea name="description" rows="3" maxlength="1000"><?= $e($account['description'] ?? '') ?></textarea></div>
+                    <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-name">Nome visualizzato</label><input id="<?= $e($accountFieldPrefix) ?>-name" name="display_name" value="<?= $e($account['display_name']) ?>" required maxlength="160"></div>
+                    <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-environment">Ambiente</label><select id="<?= $e($accountFieldPrefix) ?>-environment" name="environment"><option value="sandbox"<?= $account['environment'] === 'sandbox' ? ' selected' : '' ?>>Sandbox</option><option value="production"<?= $account['environment'] === 'production' ? ' selected' : '' ?>>Produzione</option></select></div>
+                    <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-capabilities">Capacità</label><input id="<?= $e($accountFieldPrefix) ?>-capabilities" name="capabilities" value="<?= $e(implode(', ', $account['capabilities'])) ?>"></div>
+                    <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-settings">Impostazioni non segrete (JSON)</label><textarea id="<?= $e($accountFieldPrefix) ?>-settings" name="settings_json" rows="6"><?= $e(json_encode($account['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></textarea></div>
+                    <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-description">Descrizione</label><textarea id="<?= $e($accountFieldPrefix) ?>-description" name="description" rows="3" maxlength="1000"><?= $e($account['description'] ?? '') ?></textarea></div>
                     <button class="button button--secondary" type="submit">Salva nuova versione</button>
                 </form>
                 <div class="auth-form">
@@ -129,7 +130,7 @@
                 <?php if ($account['desired_status'] !== 'retired'): ?>
                 <form class="auth-form" action="/ui/integrations/<?= $e((string) $account['id']) ?>/status" method="post">
                     <input type="hidden" name="_csrf_token" value="<?= $e($account['change_status_csrf_token']) ?>"><input type="hidden" name="configuration_version" value="<?= $e((string) $account['configuration_version']) ?>">
-                    <div class="field"><label>Stato desiderato</label><select name="target_status"><option value="disabled">Disabilitato</option><option value="suspended">Sospeso</option><option value="pilot">Pilot</option><option value="active">Attivo</option></select><small>Pilot e attivo richiedono credenziali, test connessione superato e versione Automation allineata.</small></div>
+                    <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-status">Stato desiderato</label><select id="<?= $e($accountFieldPrefix) ?>-status" name="target_status"><option value="disabled">Disabilitato</option><option value="suspended">Sospeso</option><option value="pilot">Pilot</option><option value="active">Attivo</option></select><small>Pilot e attivo richiedono credenziali, test connessione superato e versione Automation allineata.</small></div>
                     <?php if ($account['environment'] === 'production'): ?><label><input type="checkbox" name="confirm_production" value="yes"> Confermo esplicitamente l'attivazione in produzione</label><?php endif; ?>
                     <button class="button button--secondary" type="submit">Aggiorna stato desiderato</button>
                 </form>

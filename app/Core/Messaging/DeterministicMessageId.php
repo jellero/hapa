@@ -22,13 +22,14 @@ final class DeterministicMessageId
             throw new InvalidArgumentException('Namespace UUID non valido.');
         }
 
-        $hash = sha1($namespace . 'hapa:outbox:' . $normalized);
+        $hash = hash('sha256', $namespace . 'hapa:outbox:' . $normalized);
         $bytes = hex2bin(substr($hash, 0, 32));
         if ($bytes === false) {
             throw new InvalidArgumentException('Impossibile generare il message ID.');
         }
 
-        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x50);
+        // UUIDv8 identifies this as an application-defined, SHA-256 based UUID.
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x80);
         $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
         $hex = bin2hex($bytes);
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Configuration;
 
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final class EnvironmentReader
 {
@@ -21,7 +21,7 @@ final class EnvironmentReader
         }
 
         if ($default === null) {
-            throw new RuntimeException(sprintf('Variabile ambiente obbligatoria assente: %s', $name));
+            throw new HapaRuntimeException(sprintf('Variabile ambiente obbligatoria assente: %s', $name));
         }
 
         return $default;
@@ -35,12 +35,12 @@ final class EnvironmentReader
         }
 
         if (!is_file($file) || !is_readable($file)) {
-            throw new RuntimeException(sprintf('Secret file non leggibile per %s.', $name));
+            throw new HapaRuntimeException(sprintf('Secret file non leggibile per %s.', $name));
         }
 
         $contents = file_get_contents($file);
         if ($contents === false) {
-            throw new RuntimeException(sprintf('Impossibile leggere il secret file per %s.', $name));
+            throw new HapaRuntimeException(sprintf('Impossibile leggere il secret file per %s.', $name));
         }
 
         $secret = rtrim($contents, "\r\n");
@@ -49,7 +49,7 @@ final class EnvironmentReader
         }
 
         if ($default === null) {
-            throw new RuntimeException(sprintf('Secret file vuoto per %s.', $name));
+            throw new HapaRuntimeException(sprintf('Secret file vuoto per %s.', $name));
         }
 
         return $default;

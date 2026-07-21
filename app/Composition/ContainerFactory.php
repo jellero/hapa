@@ -112,6 +112,16 @@ final readonly class ContainerFactory
         $container = new ContainerBuilder();
         $container->setParameter('hapa.base_path', $basePath);
 
+        $this->registerConfiguration($container, $configuration);
+        $this->registerInfrastructure($container);
+        $this->registerBusinessServices($container);
+        $this->registerApplicationServices($container, $basePath, $configuration);
+        $this->registerCommands($container);
+
+        return $container;
+    }
+    private function registerConfiguration(ContainerBuilder $container, ConfigurationSet $configuration): void
+    {
         $container->setDefinition(ApplicationConfig::class, new Definition(ApplicationConfig::class, [
             $configuration->application->name,
             $configuration->application->debug,
@@ -187,6 +197,10 @@ final readonly class ContainerFactory
             $configuration->application->isProduction(),
         ]));
 
+    }
+
+    private function registerInfrastructure(ContainerBuilder $container): void
+    {
         $container->register(SystemClock::class);
         $container->setAlias(Clock::class, SystemClock::class)->setPublic(false);
         $container->register(ConnectionFactory::class)
@@ -237,6 +251,10 @@ final readonly class ContainerFactory
                 new Reference(RabbitMqConsumerConfig::class),
             ]);
 
+    }
+
+    private function registerBusinessServices(ContainerBuilder $container): void
+    {
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
         $container->register(MarketplaceOfferRecalculator::class)
@@ -323,6 +341,10 @@ final readonly class ContainerFactory
             ]);
         $container->setAlias(SpacePurchaseManagement::class, SpacePurchaseGenerationService::class)->setPublic(false);
 
+    }
+
+    private function registerApplicationServices(ContainerBuilder $container, string $basePath, ConfigurationSet $configuration): void
+    {
         $container->register(ReadinessCheck::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),
@@ -435,6 +457,10 @@ final readonly class ContainerFactory
             ->setFactory([new Reference(KernelFactory::class), 'create'])
             ->setArguments([$basePath])
             ->setPublic(true));
+    }
+
+    private function registerCommands(ContainerBuilder $container): void
+    {
         $container->register(SystemCheckCommand::class)
             ->setArguments([new Reference(ReadinessCheck::class)])
             ->setPublic(true);
@@ -460,6 +486,6 @@ final readonly class ContainerFactory
             ->setArguments([new Reference(SpacePurchaseManagement::class)])
             ->setPublic(true);
 
-        return $container;
     }
+
 }

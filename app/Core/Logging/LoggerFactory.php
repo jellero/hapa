@@ -11,7 +11,7 @@ use Monolog\Level;
 use Monolog\Logger;
 use Monolog\LogRecord;
 use Psr\Log\LoggerInterface;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class LoggerFactory
 {
@@ -49,7 +49,7 @@ final readonly class LoggerFactory
             'critical' => Level::Critical,
             'alert' => Level::Alert,
             'emergency' => Level::Emergency,
-            default => throw new RuntimeException(sprintf('LOG_LEVEL non valido: %s', $value)),
+            default => throw new HapaRuntimeException(sprintf('LOG_LEVEL non valido: %s', $value)),
         };
     }
 }

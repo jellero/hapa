@@ -8,6 +8,13 @@ final class CreateCatalogSynchronization extends AbstractMigration
 {
     public function up(): void
     {
+        $this->migratePart1();
+        $this->migratePart2();
+    }
+
+
+    private function migratePart1(): void
+    {
         $this->execute(<<<'SQL'
 CREATE TABLE catalog_items (
     id BIGSERIAL PRIMARY KEY,
@@ -92,6 +99,10 @@ CREATE TABLE pricing_rules (
     CONSTRAINT pricing_rules_validity_check CHECK (valid_from IS NULL OR valid_until IS NULL OR valid_from < valid_until)
 )
 SQL);
+    }
+
+    private function migratePart2(): void
+    {
         $this->execute(<<<'SQL'
 CREATE INDEX pricing_rules_match_idx
     ON pricing_rules (marketplace_id, sku, priority DESC, id)

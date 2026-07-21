@@ -13,6 +13,12 @@ use Hapa\Modules\Orders\Domain\Event\OrderStatusChanged;
 
 final class Order
 {
+    use OrderAccessors;
+    use OrderWorkflow;
+    use OrderInternals;
+    use OrderValidation;
+
+    private const LINE_REQUIRED = 'Un ordine deve contenere almeno una riga.';
     public readonly OrderNumber $number;
     public readonly OrderOrigin $origin;
     public readonly string $externalOrderId;
@@ -36,111 +42,27 @@ final class Order
     /** @var list<OrderEvent> */
     private array $events = [];
 
-    /**
-     * @param list<OrderLine> $lines
-     * @param list<OrderTransition> $transitions
-     */
-    private function __construct(
-        OrderNumber $number,
-        OrderOrigin $origin,
-        string $externalOrderId,
-        ?int $marketplaceId,
-        ?string $originReference,
-        string $currency,
-        OrderStatus $status,
-        int $version,
-        array $lines,
-        ?OrderAddress $shippingAddress,
-        ?OrderAddress $billingAddress,
-        DateTimeImmutable $lastOccurredAt,
-        ?OrderStatus $statusBeforeManualReview,
-        array $transitions,
-        bool $recordCreation,
-    ) {
+    /** @param array{number:OrderNumber,origin:OrderOrigin,external_order_id:string,marketplace_id:?int,origin_reference:?string,currency:string,status:OrderStatus,version:int,lines:list<OrderLine>,shipping_address:?OrderAddress,billing_address:?OrderAddress,last_occurred_at:DateTimeImmutable,status_before_manual_review:?OrderStatus,transitions:list<OrderTransition>} $state */
+    private function __construct(array $state, bool $recordCreation)
+    {
+        ['number' => $number, 'origin' => $origin, 'external_order_id' => $externalOrderId,
+            'marketplace_id' => $marketplaceId, 'origin_reference' => $originReference, 'currency' => $currency,
+            'status' => $status, 'version' => $version, 'lines' => $lines, 'shipping_address' => $shippingAddress,
+            'billing_address' => $billingAddress, 'last_occurred_at' => $lastOccurredAt,
+            'status_before_manual_review' => $statusBeforeManualReview, 'transitions' => $transitions] = $state;
         $this->number = $number;
         $this->origin = $origin;
         $this->externalOrderId = self::required($externalOrderId, 'ID ordine esterno', 160);
         $this->marketplaceId = $marketplaceId;
         $this->originReference = self::optional($originReference, 'riferimento origine', 160);
 
-        if (!preg_match('/^[A-Z]{3}$/D', $currency)) {
-            throw new OrderDomainException('La valuta deve rispettare il formato ISO 4217 di tre lettere maiuscole.');
-        }
-
+        self::assertCurrency($currency);
         $this->currency = $currency;
         self::assertSource($origin, $marketplaceId, $this->originReference);
-
-        if ($version < 1) {
-            throw new OrderDomainException('La versione ordine deve essere positiva.');
-        }
-
-        foreach ($lines as $line) {
-            if (isset($this->lines[$line->lineNumber])) {
-                throw new OrderDomainException(sprintf('Il numero riga %d è duplicato.', $line->lineNumber));
-            }
-
-            $this->lines[$line->lineNumber] = $line;
-        }
-
-        if ($this->lines === []) {
-            throw new OrderDomainException('Un ordine deve contenere almeno una riga.');
-        }
-
-        ksort($this->lines);
-
-        if ($status === OrderStatus::ManualReview && $statusBeforeManualReview === null) {
-            throw new OrderDomainException('Un ordine in revisione manuale deve conservare lo stato precedente.');
-        }
-
-        if ($status === OrderStatus::ManualReview && $statusBeforeManualReview !== null) {
-            OrderStateMachine::assertCanTransition(OrderStatus::ManualReview, $statusBeforeManualReview);
-        }
-
-        if ($status !== OrderStatus::ManualReview && $statusBeforeManualReview !== null) {
-            throw new OrderDomainException('Lo stato precedente è ammesso soltanto durante la revisione manuale.');
-        }
-
-        $previousTransitionVersion = 1;
-        $previousTransitionAt = null;
-        $expectedFrom = self::initialStatus($origin);
-        $lastTransitionFrom = null;
-        foreach ($transitions as $transition) {
-            if ($transition->version <= $previousTransitionVersion || $transition->version > $version) {
-                throw new OrderDomainException('Lo storico transizioni non è ordinato rispetto alla versione ordine.');
-            }
-
-            if ($transition->from !== $expectedFrom) {
-                throw new OrderDomainException('Lo storico transizioni non forma una catena di stati coerente.');
-            }
-
-            OrderStateMachine::assertCanTransition($transition->from, $transition->to);
-
-            if ($previousTransitionAt !== null && $transition->occurredAt < $previousTransitionAt) {
-                throw new OrderDomainException('Lo storico transizioni non è ordinato temporalmente.');
-            }
-
-            if ($transition->occurredAt > $lastOccurredAt) {
-                throw new OrderDomainException('Lo storico contiene una transizione successiva all’ultimo aggiornamento ordine.');
-            }
-
-            $previousTransitionVersion = $transition->version;
-            $previousTransitionAt = $transition->occurredAt;
-            $lastTransitionFrom = $transition->from;
-            $expectedFrom = $transition->to;
-        }
-
-        if ($transitions !== [] && $expectedFrom !== $status) {
-            throw new OrderDomainException('Lo stato corrente non coincide con l’ultima transizione registrata.');
-        }
-
-        if (
-            $status === OrderStatus::ManualReview
-            && $statusBeforeManualReview !== null
-            && $lastTransitionFrom !== null
-            && $lastTransitionFrom !== $statusBeforeManualReview
-        ) {
-            throw new OrderDomainException('Lo stato da ripristinare dopo la revisione manuale non è coerente.');
-        }
+        self::assertVersion($version);
+        $this->lines = self::indexLines($lines);
+        self::assertManualReviewState($status, $statusBeforeManualReview);
+        self::assertTransitionHistory($origin, $status, $statusBeforeManualReview, $version, $lastOccurredAt, $transitions);
 
         $this->status = $status;
         $this->version = $version;
@@ -170,26 +92,13 @@ final class Order
         OrderLine ...$lines,
     ): self {
         if ($lines === []) {
-            throw new OrderDomainException('Un ordine deve contenere almeno una riga.');
+            throw new OrderDomainException(self::LINE_REQUIRED);
         }
 
-        return new self(
-            $number,
-            OrderOrigin::Marketplace,
-            $externalOrderId,
-            $marketplaceId,
-            null,
-            $currency,
-            OrderStatus::Imported,
-            1,
-            array_values($lines),
-            null,
-            null,
-            $occurredAt,
-            null,
-            [],
-            true,
-        );
+        return new self(self::initialState([
+            'number' => $number, 'origin' => OrderOrigin::Marketplace, 'external_order_id' => $externalOrderId,
+            'marketplace_id' => $marketplaceId, 'origin_reference' => null, 'currency' => $currency, 'status' => OrderStatus::Imported,
+        ], $occurredAt, array_values($lines)), true);
     }
 
     public static function b2c(
@@ -201,550 +110,32 @@ final class Order
         OrderLine ...$lines,
     ): self {
         if ($lines === []) {
-            throw new OrderDomainException('Un ordine deve contenere almeno una riga.');
+            throw new OrderDomainException(self::LINE_REQUIRED);
         }
 
-        return new self(
-            $number,
-            OrderOrigin::B2cEcommerce,
-            $externalOrderId,
-            null,
-            $storefrontReference,
-            $currency,
-            OrderStatus::New,
-            1,
-            array_values($lines),
-            null,
-            null,
-            $occurredAt,
-            null,
-            [],
-            true,
-        );
+        return new self(self::initialState([
+            'number' => $number, 'origin' => OrderOrigin::B2cEcommerce, 'external_order_id' => $externalOrderId,
+            'marketplace_id' => null, 'origin_reference' => $storefrontReference, 'currency' => $currency, 'status' => OrderStatus::New,
+        ], $occurredAt, array_values($lines)), true);
+    }
+
+    /** @param array{number:OrderNumber,origin:OrderOrigin,external_order_id:string,marketplace_id:?int,origin_reference:?string,currency:string,status:OrderStatus,version:int,lines:list<OrderLine>,shipping_address:?OrderAddress,billing_address:?OrderAddress,last_occurred_at:DateTimeImmutable,status_before_manual_review:?OrderStatus,transitions:list<OrderTransition>} $state */
+    public static function reconstitute(array $state): self
+    {
+        return new self($state, false);
     }
 
     /**
-     * @param non-empty-list<OrderLine> $lines
-     * @param list<OrderTransition> $transitions
+     * @param array{number:OrderNumber,origin:OrderOrigin,external_order_id:string,marketplace_id:?int,origin_reference:?string,currency:string,status:OrderStatus} $identity
+     * @param list<OrderLine> $lines
+     * @return array{number:OrderNumber,origin:OrderOrigin,external_order_id:string,marketplace_id:?int,origin_reference:?string,currency:string,status:OrderStatus,version:int,lines:list<OrderLine>,shipping_address:null,billing_address:null,last_occurred_at:DateTimeImmutable,status_before_manual_review:null,transitions:list<OrderTransition>}
      */
-    public static function reconstitute(
-        OrderNumber $number,
-        OrderOrigin $origin,
-        string $externalOrderId,
-        ?int $marketplaceId,
-        ?string $originReference,
-        string $currency,
-        OrderStatus $status,
-        int $version,
-        array $lines,
-        ?OrderAddress $shippingAddress,
-        ?OrderAddress $billingAddress,
-        DateTimeImmutable $lastOccurredAt,
-        ?OrderStatus $statusBeforeManualReview = null,
-        array $transitions = [],
-    ): self {
-        return new self(
-            $number,
-            $origin,
-            $externalOrderId,
-            $marketplaceId,
-            $originReference,
-            $currency,
-            $status,
-            $version,
-            $lines,
-            $shippingAddress,
-            $billingAddress,
-            $lastOccurredAt,
-            $statusBeforeManualReview,
-            $transitions,
-            false,
-        );
-    }
-
-    public function status(): OrderStatus
+    private static function initialState(array $identity, DateTimeImmutable $occurredAt, array $lines): array
     {
-        return $this->status;
+        return [...$identity, 'version' => 1,
+            'lines' => array_values($lines), 'shipping_address' => null, 'billing_address' => null,
+            'last_occurred_at' => $occurredAt, 'status_before_manual_review' => null, 'transitions' => []];
     }
 
-    public function version(): int
-    {
-        return $this->version;
-    }
 
-    public function lastOccurredAt(): DateTimeImmutable
-    {
-        return $this->lastOccurredAt;
-    }
-
-    public function shippingAddress(): ?OrderAddress
-    {
-        return $this->shippingAddress;
-    }
-
-    public function billingAddress(): ?OrderAddress
-    {
-        return $this->billingAddress;
-    }
-
-    /** @return non-empty-list<OrderLine> */
-    public function lines(): array
-    {
-        $lines = array_values($this->lines);
-        if ($lines === []) {
-            throw new OrderDomainException('Un ordine deve contenere almeno una riga.');
-        }
-
-        return $lines;
-    }
-
-    /** @return list<OrderTransition> */
-    public function transitions(): array
-    {
-        return $this->transitions;
-    }
-
-    /** @return list<OrderEvent> */
-    public function releaseEvents(): array
-    {
-        $events = $this->events;
-        $this->events = [];
-
-        return $events;
-    }
-
-    /** @return list<OrderEvent> */
-    public function pendingEvents(): array
-    {
-        return $this->events;
-    }
-
-    public function clearEvents(): void
-    {
-        $this->events = [];
-    }
-
-    public function assertExpectedVersion(int $expectedVersion): void
-    {
-        if ($expectedVersion !== $this->version) {
-            throw new StaleOrderVersion($expectedVersion, $this->version);
-        }
-    }
-
-    public function accept(DateTimeImmutable $occurredAt): void
-    {
-        if ($this->status === OrderStatus::WaitingAddress && $this->shippingAddress === null) {
-            throw new OrderDomainException('L’ordine resta in attesa finché non viene acquisito un indirizzo di spedizione.');
-        }
-
-        $this->changeStatus(OrderStatus::Accepted, $occurredAt);
-    }
-
-    public function waitForAddress(DateTimeImmutable $occurredAt): void
-    {
-        if ($this->shippingAddress !== null) {
-            throw new OrderDomainException('Un ordine con indirizzo di spedizione non può entrare in attesa indirizzo.');
-        }
-
-        $this->changeStatus(OrderStatus::WaitingAddress, $occurredAt);
-    }
-
-    public function attachShippingAddress(OrderAddress $address, DateTimeImmutable $occurredAt): void
-    {
-        $this->assertAddressCanChange();
-        $this->assertTimestamp($occurredAt);
-        $this->shippingAddress = $address;
-
-        if ($this->status === OrderStatus::WaitingAddress) {
-            $this->changeStatus(OrderStatus::Accepted, $occurredAt);
-        } else {
-            $this->advanceVersion($occurredAt);
-        }
-
-        $this->events[] = new OrderAddressChanged(
-            (string) $this->number,
-            $this->version,
-            $occurredAt,
-            OrderAddressType::Shipping,
-        );
-    }
-
-    public function attachBillingAddress(OrderAddress $address, DateTimeImmutable $occurredAt): void
-    {
-        $this->assertAddressCanChange();
-        $this->assertTimestamp($occurredAt);
-        $this->billingAddress = $address;
-        $this->advanceVersion($occurredAt);
-        $this->events[] = new OrderAddressChanged(
-            (string) $this->number,
-            $this->version,
-            $occurredAt,
-            OrderAddressType::Billing,
-        );
-    }
-
-    public function submitToSpace(DateTimeImmutable $occurredAt): void
-    {
-        if ($this->shippingAddress === null) {
-            throw new OrderDomainException('L’indirizzo di spedizione è obbligatorio prima dell’invio a Space.');
-        }
-
-        $this->changeStatus(OrderStatus::SentToSpace, $occurredAt);
-    }
-
-    public function waitForGoods(DateTimeImmutable $occurredAt): void
-    {
-        $this->changeStatus(OrderStatus::WaitingGoods, $occurredAt);
-    }
-
-    public function recordAvailability(
-        DateTimeImmutable $occurredAt,
-        OrderLineAvailability ...$availability,
-    ): void {
-        if (!in_array($this->status, [
-            OrderStatus::WaitingGoods,
-            OrderStatus::GoodsAvailable,
-            OrderStatus::PartialAvailable,
-        ], true)) {
-            throw new InvalidOrderTransition($this->status, OrderStatus::PartialAvailable);
-        }
-
-        $this->assertTimestamp($occurredAt);
-        $updates = [];
-        foreach ($availability as $lineAvailability) {
-            if (isset($updates[$lineAvailability->lineNumber])) {
-                throw new OrderDomainException(sprintf(
-                    'La disponibilità della riga %d è duplicata.',
-                    $lineAvailability->lineNumber,
-                ));
-            }
-
-            if (!isset($this->lines[$lineAvailability->lineNumber])) {
-                throw new OrderDomainException(sprintf(
-                    'La riga %d non appartiene all’ordine.',
-                    $lineAvailability->lineNumber,
-                ));
-            }
-
-            $updates[$lineAvailability->lineNumber] = $lineAvailability->quantityAvailable;
-        }
-
-        if (count($updates) !== count($this->lines)) {
-            throw new OrderDomainException('La disponibilità deve includere tutte le righe dell’ordine.');
-        }
-
-        $newLines = [];
-        $quantityOrdered = 0;
-        $quantityAvailable = 0;
-        $allFullyAvailable = true;
-
-        foreach ($this->lines as $lineNumber => $line) {
-            $updatedLine = $line->withAvailability($updates[$lineNumber]);
-            $newLines[$lineNumber] = $updatedLine;
-            $quantityOrdered += $updatedLine->quantityOrdered;
-            $quantityAvailable += $updatedLine->quantityAvailable;
-            $allFullyAvailable = $allFullyAvailable && $updatedLine->isFullyAvailable();
-        }
-
-        if ($allFullyAvailable) {
-            foreach ($newLines as $lineNumber => $line) {
-                $newLines[$lineNumber] = $line->withFullFulfilment();
-            }
-            $targetStatus = OrderStatus::GoodsAvailable;
-        } elseif ($quantityAvailable > 0) {
-            $targetStatus = OrderStatus::PartialAvailable;
-        } else {
-            $targetStatus = OrderStatus::WaitingGoods;
-        }
-
-        if ($targetStatus !== $this->status) {
-            OrderStateMachine::assertCanTransition($this->status, $targetStatus);
-        }
-
-        $this->lines = $newLines;
-
-        if ($targetStatus === $this->status) {
-            $this->advanceVersion($occurredAt);
-        } else {
-            $this->changeStatus($targetStatus, $occurredAt);
-        }
-
-        $this->events[] = new OrderAvailabilityChanged(
-            (string) $this->number,
-            $this->version,
-            $occurredAt,
-            $quantityOrdered,
-            $quantityAvailable,
-            $targetStatus,
-        );
-    }
-
-    public function confirmPartial(
-        DateTimeImmutable $occurredAt,
-        OrderLineDecision ...$decisions,
-    ): void {
-        if ($this->status !== OrderStatus::PartialAvailable) {
-            throw new InvalidOrderTransition($this->status, OrderStatus::PartialConfirmed);
-        }
-
-        $this->assertTimestamp($occurredAt);
-        $decisionsByLine = [];
-        foreach ($decisions as $decision) {
-            if (isset($decisionsByLine[$decision->lineNumber])) {
-                throw new OrderDomainException(sprintf(
-                    'La decisione della riga %d è duplicata.',
-                    $decision->lineNumber,
-                ));
-            }
-
-            if (!isset($this->lines[$decision->lineNumber])) {
-                throw new OrderDomainException(sprintf(
-                    'La riga %d non appartiene all’ordine.',
-                    $decision->lineNumber,
-                ));
-            }
-
-            $decisionsByLine[$decision->lineNumber] = $decision;
-        }
-
-        if (count($decisionsByLine) !== count($this->lines)) {
-            throw new OrderDomainException('La decisione parziale deve includere tutte le righe dell’ordine.');
-        }
-
-        $newLines = [];
-        $quantityToShip = 0;
-        $quantityToCancel = 0;
-        foreach ($this->lines as $lineNumber => $line) {
-            $decision = $decisionsByLine[$lineNumber];
-            $updatedLine = $line->withDecision(
-                $decision->quantityToShip,
-                $decision->quantityToCancel,
-            );
-            $newLines[$lineNumber] = $updatedLine;
-            $quantityToShip += $updatedLine->quantityToShip;
-            $quantityToCancel += $updatedLine->quantityToCancel;
-        }
-
-        if ($quantityToShip < 1 || $quantityToCancel < 1) {
-            throw new OrderDomainException('Un parziale richiede quantità sia da spedire sia da annullare.');
-        }
-
-        OrderStateMachine::assertCanTransition($this->status, OrderStatus::PartialConfirmed);
-        $this->lines = $newLines;
-        $this->changeStatus(OrderStatus::PartialConfirmed, $occurredAt);
-    }
-
-    public function startPicking(DateTimeImmutable $occurredAt): void
-    {
-        $this->assertFulfilmentPlan();
-        $this->changeStatus(OrderStatus::Picking, $occurredAt);
-    }
-
-    public function completePicking(DateTimeImmutable $occurredAt): void
-    {
-        $this->assertFulfilmentPlan();
-        $this->changeStatus(OrderStatus::ReadyForCarrier, $occurredAt);
-    }
-
-    public function registerLabel(DateTimeImmutable $occurredAt): void
-    {
-        $this->changeStatus(OrderStatus::LabelAvailable, $occurredAt);
-    }
-
-    public function markTrackingSent(DateTimeImmutable $occurredAt): void
-    {
-        $this->changeStatus(OrderStatus::TrackingSent, $occurredAt);
-    }
-
-    public function completeFulfilment(DateTimeImmutable $occurredAt): void
-    {
-        $targetStatus = $this->hasCancelledQuantities()
-            ? OrderStatus::CompletedPartial
-            : OrderStatus::FulfilmentCompleted;
-        $this->changeStatus($targetStatus, $occurredAt);
-    }
-
-    public function cancel(string $reason, DateTimeImmutable $occurredAt): void
-    {
-        $this->changeStatus(OrderStatus::Cancelled, $occurredAt, self::reason($reason));
-    }
-
-    public function placeInManualReview(string $reason, DateTimeImmutable $occurredAt): void
-    {
-        if ($this->status === OrderStatus::ManualReview || OrderStateMachine::isTerminal($this->status)) {
-            throw new InvalidOrderTransition($this->status, OrderStatus::ManualReview);
-        }
-
-        $previousStatus = $this->status;
-        $this->changeStatus(OrderStatus::ManualReview, $occurredAt, self::reason($reason));
-        $this->statusBeforeManualReview = $previousStatus;
-    }
-
-    public function resolveManualReview(string $reason, DateTimeImmutable $occurredAt): void
-    {
-        if ($this->status !== OrderStatus::ManualReview || $this->statusBeforeManualReview === null) {
-            throw new OrderDomainException('L’ordine non contiene una revisione manuale risolvibile.');
-        }
-
-        $targetStatus = $this->statusBeforeManualReview;
-        $this->changeStatus($targetStatus, $occurredAt, self::reason($reason));
-        $this->statusBeforeManualReview = null;
-    }
-
-    private function changeStatus(
-        OrderStatus $targetStatus,
-        DateTimeImmutable $occurredAt,
-        ?string $reason = null,
-    ): void {
-        $this->assertTimestamp($occurredAt);
-        OrderStateMachine::assertCanTransition($this->status, $targetStatus);
-
-        $fromStatus = $this->status;
-        $nextVersion = $this->version + 1;
-        $transition = new OrderTransition(
-            $fromStatus,
-            $targetStatus,
-            $nextVersion,
-            $occurredAt,
-            $reason,
-        );
-
-        $this->status = $targetStatus;
-        $this->version = $nextVersion;
-        $this->lastOccurredAt = $occurredAt;
-        $this->transitions[] = $transition;
-        $this->events[] = new OrderStatusChanged(
-            (string) $this->number,
-            $nextVersion,
-            $occurredAt,
-            $fromStatus,
-            $targetStatus,
-            $transition->reason,
-        );
-    }
-
-    private function advanceVersion(DateTimeImmutable $occurredAt): void
-    {
-        $this->version++;
-        $this->lastOccurredAt = $occurredAt;
-    }
-
-    private function assertTimestamp(DateTimeImmutable $occurredAt): void
-    {
-        if ($occurredAt < $this->lastOccurredAt) {
-            throw new OrderDomainException('Un evento ordine non può precedere l’ultimo aggiornamento registrato.');
-        }
-    }
-
-    private function assertAddressCanChange(): void
-    {
-        if (!in_array($this->status, [
-            OrderStatus::New,
-            OrderStatus::Imported,
-            OrderStatus::Accepted,
-            OrderStatus::WaitingAddress,
-        ], true)) {
-            throw new OrderDomainException('Gli indirizzi ordine non sono modificabili nello stato corrente.');
-        }
-    }
-
-    private function assertFulfilmentPlan(): void
-    {
-        $quantityToShip = 0;
-        foreach ($this->lines as $line) {
-            if (!$line->isFulfilmentPlanned()) {
-                throw new OrderDomainException(sprintf(
-                    'La riga %d non contiene una decisione di fulfilment completa.',
-                    $line->lineNumber,
-                ));
-            }
-
-            $quantityToShip += $line->quantityToShip;
-        }
-
-        if ($quantityToShip < 1) {
-            throw new OrderDomainException('Il picking richiede almeno una unità da spedire.');
-        }
-    }
-
-    private function hasCancelledQuantities(): bool
-    {
-        foreach ($this->lines as $line) {
-            if ($line->isPartial()) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static function assertSource(
-        OrderOrigin $origin,
-        ?int $marketplaceId,
-        ?string $originReference,
-    ): void {
-        if (
-            $origin === OrderOrigin::Marketplace
-            && ($marketplaceId === null || $marketplaceId < 1 || $originReference !== null)
-        ) {
-            throw new OrderDomainException('Un ordine marketplace richiede marketplace e vieta il riferimento storefront.');
-        }
-
-        if (
-            $origin === OrderOrigin::B2cEcommerce
-            && ($marketplaceId !== null || $originReference === null)
-        ) {
-            throw new OrderDomainException('Un ordine B2C richiede il riferimento storefront e vieta il marketplace.');
-        }
-    }
-
-    private static function initialStatus(OrderOrigin $origin): OrderStatus
-    {
-        return match ($origin) {
-            OrderOrigin::Marketplace => OrderStatus::Imported,
-            OrderOrigin::B2cEcommerce => OrderStatus::New,
-        };
-    }
-
-    private static function required(string $value, string $field, int $maximumLength): string
-    {
-        $normalized = trim($value);
-        if ($normalized === '' || strlen($normalized) > $maximumLength) {
-            throw new OrderDomainException(sprintf(
-                'Il campo %s è obbligatorio e non può superare %d caratteri.',
-                $field,
-                $maximumLength,
-            ));
-        }
-
-        return $normalized;
-    }
-
-    private static function optional(?string $value, string $field, int $maximumLength): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        $normalized = trim($value);
-        if ($normalized === '' || strlen($normalized) > $maximumLength) {
-            throw new OrderDomainException(sprintf(
-                'Il campo %s non può essere vuoto o superare %d caratteri.',
-                $field,
-                $maximumLength,
-            ));
-        }
-
-        return $normalized;
-    }
-
-    private static function reason(string $reason): string
-    {
-        $normalized = trim($reason);
-        if ($normalized === '' || strlen($normalized) > 255) {
-            throw new OrderDomainException('La motivazione è obbligatoria e non può superare 255 caratteri.');
-        }
-
-        return $normalized;
-    }
 }

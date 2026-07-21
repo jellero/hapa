@@ -19,10 +19,12 @@ use Hapa\Modules\Orders\Domain\OrderTransition;
 use Hapa\Modules\Orders\Domain\StaleOrderVersion;
 use JsonException;
 use PDO;
-use RuntimeException;
+use Hapa\Core\Exception\HapaRuntimeException;
 
 final readonly class PostgresOrderRepository implements OrderRepository
 {
+    private const DATABASE_TIMESTAMP = 'Y-m-d H:i:s.uP';
+
     public function __construct(
         private PDO $pdo,
         private TransactionManager $transactions,
@@ -50,22 +52,15 @@ final readonly class PostgresOrderRepository implements OrderRepository
             $statusBeforeManualReview = $transitions[array_key_last($transitions)]->from;
         }
 
-        return Order::reconstitute(
-            new OrderNumber((string) $row['order_number']),
-            OrderOrigin::from((string) $row['origin']),
-            (string) $row['external_order_id'],
-            $row['marketplace_id'] === null ? null : (int) $row['marketplace_id'],
-            $row['origin_reference'] === null ? null : (string) $row['origin_reference'],
-            (string) $row['currency'],
-            $status,
-            (int) $row['version'],
-            $lines,
-            $this->decodeAddress($row['shipping_address']),
-            $this->decodeAddress($row['billing_address']),
-            new DateTimeImmutable((string) $row['updated_at']),
-            $statusBeforeManualReview,
-            $transitions,
-        );
+        return Order::reconstitute([
+            'number' => new OrderNumber((string) $row['order_number']), 'origin' => OrderOrigin::from((string) $row['origin']),
+            'external_order_id' => (string) $row['external_order_id'], 'marketplace_id' => $row['marketplace_id'] === null ? null : (int) $row['marketplace_id'],
+            'origin_reference' => $row['origin_reference'] === null ? null : (string) $row['origin_reference'], 'currency' => (string) $row['currency'],
+            'status' => $status, 'version' => (int) $row['version'], 'lines' => $lines,
+            'shipping_address' => $this->decodeAddress($row['shipping_address']), 'billing_address' => $this->decodeAddress($row['billing_address']),
+            'last_occurred_at' => new DateTimeImmutable((string) $row['updated_at']), 'status_before_manual_review' => $statusBeforeManualReview,
+            'transitions' => $transitions,
+        ]);
     }
 
     public function save(Order $order, int $expectedVersion): void
@@ -107,7 +102,7 @@ SQL);
         $statement->execute($this->orderParameters($order));
         $id = $statement->fetchColumn();
         if ($id === false) {
-            throw new RuntimeException('Inserimento ordine non riuscito.');
+            throw new HapaRuntimeException('Inserimento ordine non riuscito.');
         }
 
         return (int) $id;
@@ -146,7 +141,7 @@ SQL);
     /** @return array<string, int|string|null> */
     private function orderParameters(Order $order): array
     {
-        $occurredAt = $order->lastOccurredAt()->format('Y-m-d H:i:s.uP');
+        $occurredAt = $order->lastOccurredAt()->format(self::DATABASE_TIMESTAMP);
 
         return [
             'marketplace_id' => $order->marketplaceId,
@@ -178,7 +173,7 @@ INSERT INTO order_lines (
     :quantity_available, :quantity_to_ship, :quantity_to_cancel, :created_at, :updated_at
 )
 SQL);
-        $timestamp = $order->lastOccurredAt()->format('Y-m-d H:i:s.uP');
+        $timestamp = $order->lastOccurredAt()->format(self::DATABASE_TIMESTAMP);
         foreach ($order->lines() as $line) {
             $insert->execute([
                 'order_id' => $orderId,
@@ -211,7 +206,7 @@ SQL);
                 continue;
             }
 
-            $occurredAt = $transition->occurredAt->format('Y-m-d H:i:s.uP');
+            $occurredAt = $transition->occurredAt->format(self::DATABASE_TIMESTAMP);
             $statement->execute([
                 'order_id' => $orderId,
                 'from_status' => $transition->from->value,
@@ -234,7 +229,7 @@ SQL);
         /** @var list<array<string, mixed>> $rows */
         $rows = $statement->fetchAll();
         if ($rows === []) {
-            throw new RuntimeException('L’ordine persistito non contiene righe.');
+            throw new HapaRuntimeException('L’ordine persistito non contiene righe.');
         }
 
         return array_map(static fn (array $row): OrderLine => new OrderLine(
@@ -304,23 +299,19 @@ SQL);
         try {
             $data = json_decode((string) $value, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw new RuntimeException('Snapshot indirizzo ordine non decodificabile.', 0, $exception);
+            throw new HapaRuntimeException('Snapshot indirizzo ordine non decodificabile.', 0, $exception);
         }
 
         if (!is_array($data)) {
-            throw new RuntimeException('Snapshot indirizzo ordine non valido.');
+            throw new HapaRuntimeException('Snapshot indirizzo ordine non valido.');
         }
 
-        return new OrderAddress(
-            self::stringValue($data, 'recipient'),
-            self::stringValue($data, 'address_line1'),
-            self::nullableStringValue($data, 'address_line2'),
-            self::stringValue($data, 'postal_code'),
-            self::stringValue($data, 'city'),
-            self::nullableStringValue($data, 'province'),
-            self::stringValue($data, 'country_code'),
-            self::nullableStringValue($data, 'phone'),
-        );
+        return new OrderAddress([
+            'recipient' => self::stringValue($data, 'recipient'), 'address_line1' => self::stringValue($data, 'address_line1'),
+            'address_line2' => self::nullableStringValue($data, 'address_line2'), 'postal_code' => self::stringValue($data, 'postal_code'),
+            'city' => self::stringValue($data, 'city'), 'province' => self::nullableStringValue($data, 'province'),
+            'country_code' => self::stringValue($data, 'country_code'), 'phone' => self::nullableStringValue($data, 'phone'),
+        ]);
     }
 
     /** @param array<mixed> $data */
@@ -328,7 +319,7 @@ SQL);
     {
         $value = $data[$key] ?? null;
         if (!is_string($value)) {
-            throw new RuntimeException(sprintf('Campo indirizzo "%s" non valido.', $key));
+            throw new HapaRuntimeException(sprintf('Campo indirizzo "%s" non valido.', $key));
         }
 
         return $value;
@@ -339,7 +330,7 @@ SQL);
     {
         $value = $data[$key] ?? null;
         if ($value !== null && !is_string($value)) {
-            throw new RuntimeException(sprintf('Campo indirizzo "%s" non valido.', $key));
+            throw new HapaRuntimeException(sprintf('Campo indirizzo "%s" non valido.', $key));
         }
 
         return $value;
