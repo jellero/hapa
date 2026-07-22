@@ -71,7 +71,7 @@ jobs:
         run: vendor/bin/phpunit --testsuite Unit --log-junit unit-junit.xml
       - name: Upload unit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-junit
           path: unit-junit.xml
@@ -84,7 +84,7 @@ jobs:
         run: vendor/bin/phpunit --testsuite Integration --log-junit integration-junit.xml
       - name: Upload integration report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-junit
           path: integration-junit.xml
@@ -131,7 +131,7 @@ jobs:
             | tee production-build.log
       - name: Upload production build report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: production-build-report
           path: production-build.log
@@ -153,7 +153,7 @@ jobs:
             | tee production-migration.log
       - name: Upload production migration report
         if: always() && steps.production-build.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: production-migration-report
           path: production-migration.log
