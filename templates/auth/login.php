@@ -2,9 +2,8 @@
     <span class="auth-heading__icon" aria-hidden="true">
         <svg class="icon"><use href="/assets/icons.svg#lock"></use></svg>
     </span>
-    <p class="eyebrow">Centro operativo</p>
-    <h2>Accedi a HAPA</h2>
-    <p>Usa le credenziali del tuo account operativo.</p>
+    <h1>Accedi</h1>
+    <p>Inserisci le credenziali del tuo account aziendale.</p>
 </div>
 
 <?php if (($error ?? '') !== ''): ?>
@@ -19,7 +18,7 @@
     <input type="hidden" name="next" value="<?= $e($next ?? '/ui') ?>">
     <fieldset>
         <div class="field">
-            <label for="email">Email di lavoro</label>
+            <label for="email">Email aziendale</label>
             <div class="input-shell">
                 <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mail"></use></svg>
                 <input id="email" name="email" type="email" autocomplete="username" placeholder="nome@azienda.it" value="<?= $e($email ?? '') ?>" required maxlength="254">
@@ -53,5 +52,5 @@
 </form>
 
 <div class="auth-support">
-    <span>Per problemi di accesso contatta l’amministratore di sistema.</span>
+    <span>Per problemi di accesso, contatta l’amministratore di sistema.</span>
 </div>

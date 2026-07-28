@@ -48,18 +48,63 @@
 </div>
 
 <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
-<section class="panel" id="new-integration-account" aria-labelledby="new-integration-title">
-    <div class="panel__header"><div><p class="eyebrow">Amministrazione</p><h2 id="new-integration-title">Nuovo account tecnico</h2></div><span class="status-badge status-badge--warning">Nasce disabilitato</span></div>
-    <form class="auth-form" action="/ui/integrations" method="post">
+<section class="panel integration-create" id="new-integration-account" aria-labelledby="new-integration-title">
+    <div class="panel__header integration-create__header">
+        <div>
+            <p class="eyebrow">Configurazione provider</p>
+            <h2 id="new-integration-title">Collega un nuovo account</h2>
+            <p class="integration-create__intro">Definisci il canale e le funzioni che HAPA potrà utilizzare. Le credenziali verranno inserite in un passaggio separato e protetto.</p>
+        </div>
+        <span class="status-badge status-badge--neutral">Configurazione iniziale</span>
+    </div>
+    <form class="integration-create__form" action="/ui/integrations" method="post">
         <input type="hidden" name="_csrf_token" value="<?= $e($createIntegrationCsrfToken ?? '') ?>">
-        <div class="field"><label for="integration-provider">Provider</label><select id="integration-provider" name="provider" required><?php foreach (array_keys($availableCapabilities) as $provider): ?><option value="<?= $e($provider) ?>"><?= $e(strtoupper($provider)) ?></option><?php endforeach; ?></select></div>
-        <div class="field"><label for="integration-code">Codice account</label><input id="integration-code" name="code" required maxlength="96" placeholder="sellrapido-primary"></div>
-        <div class="field"><label for="integration-name">Nome visualizzato</label><input id="integration-name" name="display_name" required maxlength="160" placeholder="SellRapido principale"></div>
-        <div class="field"><label for="integration-environment">Ambiente</label><select id="integration-environment" name="environment"><option value="sandbox">Sandbox</option><option value="production">Produzione</option></select></div>
-        <div class="field"><label for="integration-capabilities">Capacità abilitate</label><input id="integration-capabilities" name="capabilities" placeholder="products.read, orders.read"><small>Valori separati da virgola; devono appartenere al provider scelto.</small></div>
-        <div class="field"><label for="integration-settings">Impostazioni non segrete (JSON)</label><textarea id="integration-settings" name="settings_json" rows="6">{}</textarea><small>Password, token, API key e cookie vengono rifiutati.</small></div>
-        <div class="field"><label for="integration-description">Descrizione</label><textarea id="integration-description" name="description" rows="3" maxlength="1000"></textarea></div>
-        <button class="button button--primary" type="submit">Crea account disabilitato</button>
+        <div class="integration-create__grid">
+            <div class="field">
+                <label for="integration-provider">Provider</label>
+                <select id="integration-provider" name="provider" required><?php foreach (array_keys($availableCapabilities) as $provider): ?><option value="<?= $e($provider) ?>"><?= $e(ucfirst($provider)) ?></option><?php endforeach; ?></select>
+                <small>Il servizio esterno da collegare.</small>
+            </div>
+            <div class="field">
+                <label for="integration-environment">Ambiente</label>
+                <select id="integration-environment" name="environment"><option value="sandbox">Sandbox — prove</option><option value="production">Produzione — dati reali</option></select>
+                <small>Usa Sandbox finché la configurazione non è validata.</small>
+            </div>
+            <div class="field">
+                <label for="integration-code">Codice identificativo</label>
+                <input id="integration-code" name="code" required maxlength="96" placeholder="es. sellrapido-primary">
+                <small>Un codice stabile, senza spazi.</small>
+            </div>
+            <div class="field">
+                <label for="integration-name">Nome account</label>
+                <input id="integration-name" name="display_name" required maxlength="160" placeholder="es. SellRapido principale">
+                <small>Il nome mostrato agli operatori.</small>
+            </div>
+            <div class="field integration-create__wide">
+                <label for="integration-capabilities">Funzioni abilitate</label>
+                <input id="integration-capabilities" name="capabilities" placeholder="products.read, orders.read">
+                <small>Inserisci le funzioni separate da virgola. Devono essere supportate dal provider selezionato.</small>
+            </div>
+            <div class="field integration-create__wide">
+                <label for="integration-description">Note interne <span class="field__optional">facoltative</span></label>
+                <textarea id="integration-description" name="description" rows="3" maxlength="1000" placeholder="Scopo dell’account, referente o altre informazioni utili"></textarea>
+            </div>
+        </div>
+        <details class="integration-create__advanced">
+            <summary>Configurazione avanzata</summary>
+            <div class="field">
+                <label for="integration-settings">Impostazioni tecniche in formato JSON</label>
+                <textarea id="integration-settings" name="settings_json" rows="6" spellcheck="false">{}</textarea>
+                <small>Non inserire password, token, API key o cookie: vengono gestiti separatamente e cifrati.</small>
+            </div>
+        </details>
+        <div class="integration-create__footer">
+            <div>
+                <strong>Nessuna pubblicazione immediata</strong>
+                <span>L’account viene creato inattivo e potrà essere verificato prima dell’attivazione.</span>
+            </div>
+            <button class="button button--primary" type="submit">Crea account</button>
+        </div>
     </form>
 </section>
 <?php endif; ?>
