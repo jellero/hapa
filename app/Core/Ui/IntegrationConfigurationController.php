@@ -38,10 +38,35 @@ final readonly class IntegrationConfigurationController
     {
         try {
             $configuration = $this->configuration($request);
-            $this->accounts->create($configuration, $this->actor($request), $request->attributes->getString('correlation_id'));
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $spaceToken = $configuration['provider'] === 'space'
+                ? trim($request->request->getString('space_bearer_token'))
+                : '';
+            if ($configuration['provider'] === 'space' && $spaceToken === '') {
+                throw new InvalidArgumentException('Inserire il token Bearer Space.');
+            }
+            $accountId = $this->accounts->create($configuration, $actor, $correlationId);
+            $redirect = self::SAVED_PATH;
 
-            return new RedirectResponse(self::SAVED_PATH, Response::HTTP_SEE_OTHER);
-        } catch (InvalidArgumentException | JsonException $exception) {
+            if ($configuration['provider'] === 'space') {
+                $account = $this->accounts->find($accountId);
+                $configurationStatus = $this->configurationGateway->apply($account, $actor->id, $correlationId);
+                $this->accounts->recordAutomationConfigurationStatus($accountId, $configurationStatus, $actor, $correlationId);
+
+                $secretStatus = $this->secretGateway->replace(
+                    (string) $account['code'],
+                    'space',
+                    ['api_key' => $spaceToken],
+                    $actor->id,
+                    $correlationId,
+                );
+                $this->accounts->recordSecretStatus($accountId, $secretStatus, $actor, $correlationId);
+                $redirect = '/ui/integrations?saved=1&configuration_synced=1&secrets_saved=1';
+            }
+
+            return new RedirectResponse($redirect, Response::HTTP_SEE_OTHER);
+        } catch (InvalidArgumentException | JsonException | RuntimeException $exception) {
             return new RedirectResponse(
                 self::ERROR_PATH . rawurlencode($exception->getMessage()),
                 Response::HTTP_SEE_OTHER,
@@ -264,6 +289,9 @@ final readonly class IntegrationConfigurationController
             explode(',', $request->request->getString('capabilities')),
         ), static fn (string $value): bool => $value !== ''));
         $settingsJson = trim($request->request->getString('settings_json', '{}'));
+        if ($settingsJson === '') {
+            $settingsJson = '{}';
+        }
         $settings = json_decode($settingsJson, true, 512, JSON_THROW_ON_ERROR);
         if (!is_array($settings) || array_is_list($settings)) {
             throw new InvalidArgumentException('Le impostazioni devono essere un oggetto JSON.');

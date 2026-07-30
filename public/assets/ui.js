@@ -92,6 +92,8 @@
 
   const providerSelect = document.querySelector('#integration-provider');
   const spaceFeedConfiguration = document.querySelector('[data-space-feed-config]');
+  const genericProviderSettings = document.querySelector('[data-generic-provider-settings]');
+  const genericSettingsInput = document.querySelector('#integration-settings');
   const capabilityInput = document.querySelector('#integration-capabilities');
   const synchronizeProviderForm = () => {
     if (!(providerSelect instanceof HTMLSelectElement)
@@ -100,6 +102,12 @@
     const isSpace = providerSelect.value === 'space';
     spaceFeedConfiguration.hidden = !isSpace;
     spaceFeedConfiguration.disabled = !isSpace;
+    if (genericProviderSettings instanceof HTMLDetailsElement) {
+      genericProviderSettings.hidden = isSpace;
+    }
+    if (genericSettingsInput instanceof HTMLTextAreaElement) {
+      genericSettingsInput.disabled = isSpace;
+    }
     if (isSpace && capabilityInput instanceof HTMLInputElement && capabilityInput.value.trim() === '') {
       capabilityInput.value = 'catalog.read';
     }

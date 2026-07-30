@@ -39,21 +39,13 @@
     <output class="inline-notice inline-notice--info"><div><strong>Import SellRapido completato</strong><span><?= $e((string) ($ordersPublished ?? 0)) ?> osservazioni ordine pubblicate verso HAPA.</span></div></output>
 <?php endif; ?>
 
-<div class="inline-notice inline-notice--warning" role="note">
-    <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
-    <div>
-        <strong>Confini di integrazione espliciti</strong>
-        <span>Per ogni account-canale resta attivo un solo percorso per ordini e offerte; Space alimenta prezzo e stock base, mentre HAPA pubblica ricarichi e quantità vendibili senza sovrascrivere la sorgente.</span>
-    </div>
-</div>
-
 <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
 <section class="panel integration-create" id="new-integration-account" aria-labelledby="new-integration-title">
     <div class="panel__header integration-create__header">
         <div>
             <p class="eyebrow">Configurazione provider</p>
             <h2 id="new-integration-title">Collega un nuovo account</h2>
-            <p class="integration-create__intro">Definisci il canale e le funzioni che HAPA potrà utilizzare. Le credenziali verranno inserite in un passaggio separato e protetto.</p>
+            <p class="integration-create__intro">Seleziona il servizio da collegare e completa i parametri richiesti. Per Space puoi configurare feed, pianificazione e token nello stesso modulo.</p>
         </div>
         <span class="status-badge status-badge--neutral">Configurazione iniziale</span>
     </div>
@@ -92,8 +84,13 @@
         </div>
         <fieldset class="integration-create__advanced" data-space-feed-config hidden disabled>
             <legend>Feed incrementale Space</legend>
-            <p class="integration-create__intro">Questi campi vengono applicati soltanto quando il provider selezionato è Space. Il token Bearer si inserisce dopo la creazione dell’account.</p>
+            <p class="integration-create__intro">Configura endpoint, pianificazione e token in un solo passaggio. Il token viene inviato direttamente ad Automation, cifrato e mai salvato nel database HAPA.</p>
             <div class="integration-create__grid">
+                <div class="field integration-create__wide">
+                    <label for="space-bearer-token">Token Bearer Space</label>
+                    <input id="space-bearer-token" name="space_bearer_token" type="password" required maxlength="8192" autocomplete="new-password" spellcheck="false" placeholder="Incolla il token fornito da Space">
+                    <small>Campo write-only: dopo il salvataggio non sarà più leggibile.</small>
+                </div>
                 <div class="field integration-create__wide">
                     <label for="space-base-url">Server Space</label>
                     <input id="space-base-url" name="space_base_url" type="url" value="https://admin.space1999.com">
@@ -142,7 +139,7 @@
                 <li><span>04</span><strong>Ripete automaticamente</strong><small>Lo scheduler usa la frequenza selezionata</small></li>
             </ol>
         </fieldset>
-        <details class="integration-create__advanced">
+        <details class="integration-create__advanced" data-generic-provider-settings>
             <summary>Configurazione avanzata</summary>
             <div class="field">
                 <label for="integration-settings">Impostazioni tecniche in formato JSON</label>

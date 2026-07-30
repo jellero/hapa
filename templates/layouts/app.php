@@ -8,7 +8,7 @@
     <meta name="description" content="<?= $e($description ?? 'Centro operativo HAPA') ?>">
     <title><?= $e($title ?? 'HAPA') ?> · HAPA</title>
     <link rel="stylesheet" href="/assets/ui.css?v=7">
-    <script defer src="/assets/ui.js?v=6"></script>
+    <script defer src="/assets/ui.js?v=7"></script>
 </head>
 <body class="app-body" data-ui-shell>
     <a class="skip-link" href="#main-content">Vai al contenuto</a>
