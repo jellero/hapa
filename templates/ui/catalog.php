@@ -38,6 +38,8 @@ $onboardingTone = static fn (string $status): string => match ($status) { 'appro
 <?php if (($reviewError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Revisione non registrata</strong><span><?= $e($reviewError) ?></span></div></div><?php endif; ?>
 <?php if (($availabilitySaved ?? false) === true): ?><output class="inline-notice inline-notice--info"><div><strong>Disponibilità ricalcolata</strong><span>HAPA ha aggiornato la quantità vendibile e tutte le offerte marketplace.</span></div></output><?php endif; ?>
 <?php if (($availabilityError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Disponibilità non aggiornata</strong><span><?= $e($availabilityError) ?></span></div></div><?php endif; ?>
+<?php if (($publicationRuleSaved ?? false) === true): ?><output class="inline-notice inline-notice--info"><div><strong>Filtro catalogo salvato</strong><span>La regola verrà applicata al calcolo delle offerte marketplace.</span></div></output><?php endif; ?>
+<?php if (($publicationRuleError ?? '') !== ''): ?><div class="inline-notice inline-notice--warning" role="alert"><div><strong>Filtro non salvato</strong><span><?= $e($publicationRuleError) ?></span></div></div><?php endif; ?>
 
 <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
 <section class="panel" id="new-pricing-rule" aria-labelledby="new-pricing-rule-title">
@@ -89,6 +91,39 @@ $onboardingTone = static fn (string $status): string => match ($status) { 'appro
         </details></td></tr>
         <?php endif; ?>
     <?php endforeach; ?>
+    </tbody></table></div>
+    <?php endif; ?>
+</section>
+
+<section class="panel data-panel" id="publication-rules" aria-labelledby="publication-rules-title">
+    <div class="panel__header">
+        <div><p class="eyebrow">Perimetro marketplace</p><h2 id="publication-rules-title">Regole di inclusione ed esclusione</h2><p>Filtra l’intero catalogo per SKU, suffisso filiale, artista, titolo, formato, delivery o stock.</p></div>
+        <span class="section-heading__meta"><?= $e((string) count($publicationRules ?? [])) ?> regole</span>
+    </div>
+    <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
+    <form class="integration-create__form" action="/ui/catalog/publication-rules" method="post">
+        <input type="hidden" name="_csrf_token" value="<?= $e($createPublicationRuleCsrfToken ?? '') ?>">
+        <div class="integration-create__grid">
+            <div class="field"><label for="publication-code">Codice</label><input id="publication-code" name="code" required maxlength="100" placeholder="exclude-branch-a25"></div>
+            <div class="field"><label for="publication-name">Nome</label><input id="publication-name" name="name" required maxlength="180" placeholder="Escludi filiale A25"></div>
+            <div class="field"><label for="publication-action">Azione</label><select id="publication-action" name="action"><option value="exclude">Escludi</option><option value="include">Includi</option></select></div>
+            <div class="field"><label for="publication-marketplace">Marketplace</label><select id="publication-marketplace" name="marketplace_id"><option value="">Tutti</option><?php foreach (($marketplaces ?? []) as $marketplace): ?><option value="<?= $e((string) $marketplace['id']) ?>"><?= $e($marketplace['name']) ?></option><?php endforeach; ?></select></div>
+            <div class="field"><label for="publication-field">Campo</label><select id="publication-field" name="field"><option value="sku">SKU completo</option><option value="branch_suffix">Suffisso filiale</option><option value="artist">Artista</option><option value="title">Titolo</option><option value="format">Formato</option><option value="label">Etichetta</option><option value="category">Categoria</option><option value="family">Famiglia</option><option value="group">Gruppo</option><option value="delivery_time_days">Tempo di consegna</option><option value="available_quantity">Quantità disponibile</option></select></div>
+            <div class="field"><label for="publication-operator">Confronto</label><select id="publication-operator" name="operator"><option value="contains">Contiene</option><option value="equals">Uguale a</option><option value="starts_with">Inizia con</option><option value="ends_with">Finisce con</option><option value="minimum">Almeno</option><option value="maximum">Al massimo</option></select></div>
+            <div class="field"><label for="publication-value">Valore</label><input id="publication-value" name="match_value" required maxlength="500" placeholder="A25 oppure 2"></div>
+            <div class="field"><label for="publication-priority">Priorità</label><input id="publication-priority" type="number" name="priority" value="100" min="0" required></div>
+        </div>
+        <div class="integration-create__footer"><span>Le regole vengono valutate per priorità; l’esclusione prevale a parità.</span><button class="button button--primary" type="submit">Crea filtro catalogo</button></div>
+    </form>
+    <?php endif; ?>
+    <?php if (($publicationRules ?? []) !== []): ?>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>Regola</th><th>Azione</th><th>Campo</th><th>Confronto</th><th>Valore</th><th>Marketplace</th><th>Priorità</th><th></th></tr></thead><tbody>
+    <?php foreach ($publicationRules as $rule): ?><tr>
+        <td><strong><?= $e($rule['name']) ?></strong><small><?= $e($rule['code']) ?></small></td>
+        <td><span class="status-badge status-badge--<?= $e($rule['action'] === 'include' ? 'success' : 'warning') ?>"><?= $e($rule['action']) ?></span></td>
+        <td><?= $e($rule['field']) ?></td><td><?= $e($rule['operator']) ?></td><td><?= $e($rule['match_value']) ?></td><td><?= $e($rule['marketplace_code'] ?? 'Tutti') ?></td><td><?= $e((string) $rule['priority']) ?></td>
+        <td><?php if (($currentUser?->role ?? '') === 'administrator'): ?><form action="/ui/catalog/publication-rules/<?= $e((string) $rule['id']) ?>/retire" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($rule['retire_csrf_token']) ?>"><button class="button button--ghost" type="submit">Disattiva</button></form><?php endif; ?></td>
+    </tr><?php endforeach; ?>
     </tbody></table></div>
     <?php endif; ?>
 </section>

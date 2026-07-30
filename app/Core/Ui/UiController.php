@@ -37,6 +37,7 @@ final readonly class UiController
         private ?PricingPreview $pricingPreview = null,
         private ?ShipmentOverview $shipmentReadModel = null,
         private ?ProviderSecretFields $providerSecretFields = null,
+        private ?CatalogPublicationRuleManagement $publicationRules = null,
     ) {
     }
 
@@ -192,6 +193,13 @@ final readonly class UiController
                 : '';
         }
         unset($rule);
+        $publicationRules = $this->publicationRules?->all() ?? [];
+        foreach ($publicationRules as &$rule) {
+            $rule['retire_csrf_token'] = $session instanceof WebSession
+                ? $session->csrfToken('catalog.publication-rule.retire.' . (string) $rule['id'])
+                : '';
+        }
+        unset($rule);
 
         return $this->operational($request, 'ui/catalog', 'catalog', [
             'title' => 'Anagrafica prodotti, prezzi e stock',
@@ -209,6 +217,10 @@ final readonly class UiController
             'reviewError' => $request->query->getString('review_error'),
             'availabilitySaved' => $request->query->getBoolean('availability_saved'),
             'availabilityError' => $request->query->getString('availability_error'),
+            'publicationRules' => $publicationRules,
+            'createPublicationRuleCsrfToken' => $session instanceof WebSession ? $session->csrfToken('catalog.publication-rule.create') : '',
+            'publicationRuleSaved' => $request->query->getBoolean('publication_rule_saved'),
+            'publicationRuleError' => $request->query->getString('publication_rule_error'),
         ]);
     }
 

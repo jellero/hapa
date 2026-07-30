@@ -292,11 +292,17 @@ SQL);
 INSERT INTO supplier_catalog_items (
     supplier_id, catalog_item_id, external_item_id, supplier_sku,
     purchase_cost_minor, currency, available_quantity, source_version,
-    observed_at, active, created_at, updated_at
+    observed_at, active, feed_name, artist, title, format, label, category,
+    family, group_name, branch_suffix, delivery_time_days, source_status,
+    precision_score, product_url, image_url, release_date, weight, weight_unit,
+    missing_from_source, temu_sync_enabled, source_attributes, created_at, updated_at
 ) VALUES (
     :supplier_id, :catalog_item_id, :external_item_id, :supplier_sku,
     :purchase_cost_minor, :currency, :available_quantity, :source_version,
-    :observed_at, TRUE, NOW(), NOW()
+    :observed_at, TRUE, :feed_name, :artist, :title, :format, :label, :category,
+    :family, :group_name, :branch_suffix, :delivery_time_days, :source_status,
+    :precision_score, :product_url, :image_url, :release_date, :weight, :weight_unit,
+    :missing_from_source, :temu_sync_enabled, CAST(:source_attributes AS JSONB), NOW(), NOW()
 )
 ON CONFLICT (supplier_id, catalog_item_id) DO UPDATE
 SET external_item_id = EXCLUDED.external_item_id,
@@ -306,6 +312,26 @@ SET external_item_id = EXCLUDED.external_item_id,
     available_quantity = EXCLUDED.available_quantity,
     source_version = EXCLUDED.source_version,
     observed_at = EXCLUDED.observed_at,
+    feed_name = EXCLUDED.feed_name,
+    artist = EXCLUDED.artist,
+    title = EXCLUDED.title,
+    format = EXCLUDED.format,
+    label = EXCLUDED.label,
+    category = EXCLUDED.category,
+    family = EXCLUDED.family,
+    group_name = EXCLUDED.group_name,
+    branch_suffix = EXCLUDED.branch_suffix,
+    delivery_time_days = EXCLUDED.delivery_time_days,
+    source_status = EXCLUDED.source_status,
+    precision_score = EXCLUDED.precision_score,
+    product_url = EXCLUDED.product_url,
+    image_url = EXCLUDED.image_url,
+    release_date = EXCLUDED.release_date,
+    weight = EXCLUDED.weight,
+    weight_unit = EXCLUDED.weight_unit,
+    missing_from_source = EXCLUDED.missing_from_source,
+    temu_sync_enabled = EXCLUDED.temu_sync_enabled,
+    source_attributes = EXCLUDED.source_attributes,
     active = TRUE,
     updated_at = NOW()
 SQL);
@@ -322,6 +348,26 @@ SET supplier_sku = :supplier_sku,
     available_quantity = :available_quantity,
     source_version = :source_version,
     observed_at = :observed_at,
+    feed_name = :feed_name,
+    artist = :artist,
+    title = :title,
+    format = :format,
+    label = :label,
+    category = :category,
+    family = :family,
+    group_name = :group_name,
+    branch_suffix = :branch_suffix,
+    delivery_time_days = :delivery_time_days,
+    source_status = :source_status,
+    precision_score = :precision_score,
+    product_url = :product_url,
+    image_url = :image_url,
+    release_date = :release_date,
+    weight = :weight,
+    weight_unit = :weight_unit,
+    missing_from_source = :missing_from_source,
+    temu_sync_enabled = :temu_sync_enabled,
+    source_attributes = CAST(:source_attributes AS JSONB),
     active = TRUE,
     updated_at = NOW()
 WHERE id = :id
@@ -334,10 +380,10 @@ SQL);
             'source_version' => $observation->sourceVersion,
             'observed_at' => $observation->observedAt->format(self::DATABASE_TIMESTAMP),
             'id' => $offerId,
-        ]);
+        ] + $this->feedParameters($observation));
     }
 
-    /** @return array<string, int|string|null> */
+    /** @return array<string, int|float|string|null> */
     private function offerParameters(
         int $supplierId,
         int $catalogItemId,
@@ -353,7 +399,57 @@ SQL);
             'available_quantity' => $observation->availableQuantity,
             'source_version' => $observation->sourceVersion,
             'observed_at' => $observation->observedAt->format(self::DATABASE_TIMESTAMP),
+        ] + $this->feedParameters($observation);
+    }
+
+    /** @return array<string, int|float|string|null> */
+    private function feedParameters(SpaceCatalogObservation $observation): array
+    {
+        $a = $observation->attributes;
+        $external = (string) ($a['idspace'] ?? $observation->externalItemId);
+        $full = (string) ($a['idspacefull'] ?? $observation->supplierSku);
+        $suffix = str_starts_with($full, $external) ? substr($full, strlen($external)) : null;
+
+        return [
+            'feed_name' => $this->attributeString($a, 'feed_name', 80),
+            'artist' => $this->attributeString($a, 'artista', 255),
+            'title' => $this->attributeString($a, 'titolo', 255),
+            'format' => $this->attributeString($a, 'format', 80),
+            'label' => $this->attributeString($a, 'label', 255),
+            'category' => $this->attributeString($a, 'categoria', 160),
+            'family' => $this->attributeString($a, 'famiglia', 160),
+            'group_name' => $this->attributeString($a, 'gruppo', 160),
+            'branch_suffix' => $suffix === '' ? null : substr((string) $suffix, 0, 40),
+            'delivery_time_days' => $this->attributeInt($a, 'delitime'),
+            'source_status' => $this->attributeInt($a, 'status'),
+            'precision_score' => $this->attributeInt($a, 'precisione'),
+            'product_url' => $this->attributeString($a, 'url', 2048),
+            'image_url' => $this->attributeString($a, 'url_img', 2048),
+            'release_date' => $this->attributeString($a, 'uscita', 20),
+            'weight' => is_numeric($a['peso'] ?? null) ? (float) $a['peso'] : null,
+            'weight_unit' => $this->attributeString($a, 'weight_unit', 16),
+            'missing_from_source' => filter_var($a['missing_from_source'] ?? false, FILTER_VALIDATE_BOOL) ? 1 : 0,
+            'temu_sync_enabled' => filter_var($a['temu_sync_enabled'] ?? false, FILTER_VALIDATE_BOOL) ? 1 : 0,
+            'source_attributes' => json_encode($a === [] ? (object) [] : $a, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function attributeString(array $attributes, string $key, int $maximum): ?string
+    {
+        $value = $attributes[$key] ?? null;
+        if (!is_string($value) && !is_int($value)) {
+            return null;
+        }
+        $value = trim((string) $value);
+        return $value === '' ? null : mb_substr($value, 0, $maximum);
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function attributeInt(array $attributes, string $key): ?int
+    {
+        $value = $attributes[$key] ?? null;
+        return is_int($value) || is_string($value) && preg_match('/^-?[0-9]+$/D', $value) === 1 ? (int) $value : null;
     }
 
     private function identityConflict(int $observationId, string $reason): SpaceCatalogIngestionResult

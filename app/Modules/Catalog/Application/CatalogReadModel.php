@@ -32,6 +32,9 @@ SELECT item.id, item.sku, item.ean, item.name, item.onboarding_status, item.acti
        item.safety_stock, item.sellable_quantity, item.offers_calculated_at,
        offer.purchase_cost_minor, offer.currency, offer.available_quantity,
        offer.source_version, offer.observed_at,
+       offer.feed_name, offer.artist, offer.title, offer.format, offer.label,
+       offer.category, offer.family, offer.group_name, offer.branch_suffix,
+       offer.delivery_time_days, offer.source_status, offer.product_url, offer.image_url,
        COUNT(marketplace_offer.id) AS marketplace_offer_count
 FROM catalog_items AS item
 LEFT JOIN supplier_catalog_items AS offer
@@ -88,6 +91,19 @@ SQL);
                 'observed_at' => $observedAt?->format(DATE_ATOM),
                 'age_seconds' => $observedAt === null ? null : max(0, time() - $observedAt->getTimestamp()),
                 'marketplace_offer_count' => (int) $row['marketplace_offer_count'],
+                'feed_name' => is_string($row['feed_name']) ? $row['feed_name'] : null,
+                'artist' => is_string($row['artist']) ? $row['artist'] : null,
+                'title' => is_string($row['title']) ? $row['title'] : null,
+                'format' => is_string($row['format']) ? $row['format'] : null,
+                'label' => is_string($row['label']) ? $row['label'] : null,
+                'category' => is_string($row['category']) ? $row['category'] : null,
+                'family' => is_string($row['family']) ? $row['family'] : null,
+                'group' => is_string($row['group_name']) ? $row['group_name'] : null,
+                'branch_suffix' => is_string($row['branch_suffix']) ? $row['branch_suffix'] : null,
+                'delivery_time_days' => self::nullableInt($row['delivery_time_days']),
+                'source_status' => self::nullableInt($row['source_status']),
+                'product_url' => is_string($row['product_url']) ? $row['product_url'] : null,
+                'image_url' => is_string($row['image_url']) ? $row['image_url'] : null,
             ];
     }
 

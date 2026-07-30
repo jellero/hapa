@@ -91,6 +91,7 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
     $catalogReview = $services['catalog_review'] ?? null;
     $customers = $services['customers'] ?? null;
     $spacePurchases = $services['space_purchases'] ?? null;
+    $publicationRules = $services['publication_rules'] ?? null;
     $routes = new RouteCollection();
     $positiveId = '[1-9][0-9]*'; $customerId = '[A-Za-z0-9._-]{3,64}'; $orderId = '[^/]{1,160}';
     $unavailableAuthentication = static fn (): JsonResponse => new JsonResponse(
@@ -123,6 +124,8 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
     $createPricingController = $resolveController($pricingRules, 'create');
     $updatePricingController = $resolveController($pricingRules, 'update');
     $retirePricingController = $resolveController($pricingRules, 'retire');
+    $createPublicationRuleController = $resolveController($publicationRules, 'create');
+    $retirePublicationRuleController = $resolveController($publicationRules, 'retire');
     $reviewCatalogController = $resolveController($catalogReview, 'review');
     $updateCatalogAvailabilityController = $resolveController($catalogReview, 'updateAvailability');
     $createCustomerController = $resolveController($customers, 'create');
@@ -194,6 +197,16 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
         '_controller' => $retirePricingController,
         '_permission' => 'catalog.manage',
         '_csrf_action' => 'pricing.retire.{ruleId}',
+    ], requirements: ['ruleId' => $positiveId], methods: ['POST']));
+    $routes->add('ui_publication_rule_create', new Route('/ui/catalog/publication-rules', [
+        '_controller' => $createPublicationRuleController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'catalog.publication-rule.create',
+    ], methods: ['POST']));
+    $routes->add('ui_publication_rule_retire', new Route('/ui/catalog/publication-rules/{ruleId}/retire', [
+        '_controller' => $retirePublicationRuleController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'catalog.publication-rule.retire.{ruleId}',
     ], requirements: ['ruleId' => $positiveId], methods: ['POST']));
     $routes->add('ui_catalog_review', new Route('/ui/catalog/items/{itemId}/review', [
         '_controller' => $reviewCatalogController,

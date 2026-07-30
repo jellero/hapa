@@ -75,7 +75,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
         self::assertSame('DENY', $response->headers->get('X-Frame-Options'));
-        self::assertStringContainsString('Centro operativo', (string) $response->getContent());
+        self::assertStringContainsString('Accesso ai servizi aziendali', (string) $response->getContent());
     }
 
     public function testTheKernelProtectsCustomerMasterDataPages(): void

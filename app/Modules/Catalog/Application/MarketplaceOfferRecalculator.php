@@ -89,6 +89,7 @@ SQL);
                 $eligible = $calculationValid
                     && $product['active']
                     && $product['onboarding_status'] === 'approved'
+                    && $this->publicationAllows($pdo, $product, $marketplace['id'])
                     && in_array($marketplace['business_status'], ['pilot', 'active'], true);
                 $changedOffer = $this->saveOffer($pdo, $product, $marketplace, [
                     'price' => $price,
@@ -133,7 +134,9 @@ SQL);
         $statement = $pdo->prepare(<<<'SQL'
 SELECT item.id, item.sku, item.onboarding_status, item.active, item.safety_stock,
        offer.purchase_cost_minor, COALESCE(offer.currency, item.currency) AS currency,
-       offer.available_quantity, COALESCE(offer.active, FALSE) AS offer_active
+       offer.available_quantity, COALESCE(offer.active, FALSE) AS offer_active,
+       offer.branch_suffix, offer.artist, offer.title, offer.format, offer.label,
+       offer.category, offer.family, offer.group_name, offer.delivery_time_days
 FROM catalog_items AS item
 LEFT JOIN supplier_catalog_items AS offer
   ON offer.catalog_item_id = item.id
@@ -157,7 +160,68 @@ SQL);
             'currency' => (string) $row['currency'],
             'available_quantity' => $row['available_quantity'] === null ? 0 : (int) $row['available_quantity'],
             'offer_active' => filter_var($row['offer_active'], FILTER_VALIDATE_BOOL),
+            'branch_suffix' => $row['branch_suffix'],
+            'artist' => $row['artist'],
+            'title' => $row['title'],
+            'format' => $row['format'],
+            'label' => $row['label'],
+            'category' => $row['category'],
+            'family' => $row['family'],
+            'group' => $row['group_name'],
+            'delivery_time_days' => $row['delivery_time_days'] === null ? null : (int) $row['delivery_time_days'],
         ];
+    }
+
+    /** @param array<string, mixed> $product */
+    private function publicationAllows(PDO $pdo, array $product, int $marketplaceId): bool
+    {
+        $statement = $pdo->prepare(<<<'SQL'
+SELECT action, field, operator, match_value
+FROM catalog_publication_rules
+WHERE enabled AND retired_at IS NULL
+  AND (marketplace_id IS NULL OR marketplace_id = :marketplace_id)
+ORDER BY priority, CASE action WHEN 'exclude' THEN 0 ELSE 1 END, id
+SQL);
+        $statement->execute(['marketplace_id' => $marketplaceId]);
+        $hasInclude = false;
+        $included = false;
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $rule) {
+            $matches = $this->publicationRuleMatches($product, $rule);
+            if ((string) $rule['action'] === 'exclude' && $matches) {
+                return false;
+            }
+            if ((string) $rule['action'] === 'include') {
+                $hasInclude = true;
+                $included = $included || $matches;
+            }
+        }
+        return !$hasInclude || $included;
+    }
+
+    /**
+     * @param array<string, mixed> $product
+     * @param array<string, mixed> $rule
+     */
+    private function publicationRuleMatches(array $product, array $rule): bool
+    {
+        $field = (string) $rule['field'];
+        $actual = $field === 'available_quantity' ? $product['available_quantity'] : ($product[$field] ?? null);
+        $expected = (string) $rule['match_value'];
+        $operator = (string) $rule['operator'];
+        if (in_array($operator, ['minimum', 'maximum'], true)) {
+            if (!is_int($actual) && !is_numeric($actual)) {
+                return false;
+            }
+            return $operator === 'minimum' ? (int) $actual >= (int) $expected : (int) $actual <= (int) $expected;
+        }
+        $actual = mb_strtolower(trim((string) $actual));
+        $expected = mb_strtolower(trim($expected));
+        return match ($operator) {
+            'equals' => $actual === $expected,
+            'starts_with' => str_starts_with($actual, $expected),
+            'ends_with' => str_ends_with($actual, $expected),
+            default => str_contains($actual, $expected),
+        };
     }
 
     /** @return list<array{id: int, code: string, business_status: string}> */

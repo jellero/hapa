@@ -24,6 +24,8 @@ final readonly class SpaceCatalogObservation
         public int $availableQuantity,
         public string $sourceVersion,
         public DateTimeImmutable $observedAt,
+        /** @var array<string, mixed> */
+        public array $attributes,
         public array $payload,
     ) {
     }
@@ -63,8 +65,23 @@ final readonly class SpaceCatalogObservation
             $quantity,
             self::requiredString($payload, 'source_version', 200),
             new DateTimeImmutable(self::requiredString($payload, 'observed_at')),
+            self::attributes($payload),
             $payload,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private static function attributes(array $payload): array
+    {
+        $attributes = $payload['attributes'] ?? [];
+        if (!is_array($attributes) || ($attributes !== [] && array_is_list($attributes))) {
+            throw new InvalidArgumentException('Attributi feed Space non validi.');
+        }
+
+        return $attributes;
     }
 
     /** @param array<string, mixed> $payload */

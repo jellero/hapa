@@ -30,7 +30,9 @@ final class IntegrationAccountConfiguration
             'request_timeout_seconds', 'maximum_response_bytes',
         ],
         'space' => [
-            'base_url', 'health_path', 'catalog_items_path', 'purchase_orders_path', 'credential_header',
+            'base_url', 'health_path', 'catalog_items_path', 'catalog_incremental_path',
+            'catalog_confirmation_path', 'catalog_incremental_action', 'catalog_confirmation_action',
+            'catalog_entity', 'authentication_scheme', 'purchase_orders_path', 'credential_header',
             'request_timeout_seconds', 'maximum_response_bytes', 'timeout_seconds',
             'poll_interval_seconds', 'catalog_page_size', 'maximum_catalog_pages_per_run',
             'overlap_seconds', 'state_mapping_version',

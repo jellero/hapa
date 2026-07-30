@@ -25,7 +25,7 @@ final class UiControllerTest extends TestCase
         self::assertSame(Response::HTTP_OK, $response->getStatusCode());
         self::assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
         self::assertSame('no-store, private', $response->headers->get('Cache-Control'));
-        self::assertStringContainsString('<h2>Accedi a HAPA</h2>', (string) $response->getContent());
+        self::assertStringContainsString('<h1>Accedi</h1>', (string) $response->getContent());
         self::assertStringContainsString('action="/login" method="post"', (string) $response->getContent());
         self::assertStringNotContainsString('<fieldset disabled>', (string) $response->getContent());
     }
