@@ -268,6 +268,25 @@ final readonly class IntegrationConfigurationController
         if (!is_array($settings) || array_is_list($settings)) {
             throw new InvalidArgumentException('Le impostazioni devono essere un oggetto JSON.');
         }
+        if (strtolower($request->request->getString('provider')) === 'space'
+            && $request->request->has('space_base_url')) {
+            $spaceSettings = [
+                'base_url' => $request->request->getString('space_base_url'),
+                'health_path' => $request->request->getString('space_health_path'),
+                'catalog_incremental_path' => $request->request->getString('space_catalog_incremental_path'),
+                'catalog_confirmation_path' => $request->request->getString('space_catalog_confirmation_path'),
+                'catalog_entity' => $request->request->getString('space_catalog_entity'),
+                'poll_interval_seconds' => $request->request->getInt('space_poll_interval_seconds'),
+                'catalog_page_size' => $request->request->getInt('space_catalog_page_size'),
+                'maximum_catalog_pages_per_run' => $request->request->getInt('space_maximum_catalog_pages_per_run'),
+                'authentication_scheme' => 'bearer',
+            ];
+            foreach ($spaceSettings as $key => $value) {
+                if ($value !== '' && $value !== 0) {
+                    $settings[$key] = $value;
+                }
+            }
+        }
 
         return $this->validator->validate(
             $request->request->getString('provider'),

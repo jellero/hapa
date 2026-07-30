@@ -11,7 +11,7 @@ final class ProviderSecretFields
     /** @var array<string, array<string, string>> */
     private const FIELDS = [
         'sellrapido' => ['username' => 'Username API', 'password' => 'Password API'],
-        'space' => ['api_key' => 'Chiave API', 'username' => 'Username', 'password' => 'Password'],
+        'space' => ['api_key' => 'Token Bearer Space'],
         'gls' => ['password' => 'Password cliente GLS'],
         'brt' => ['api_key' => 'Chiave API', 'username' => 'Username', 'password' => 'Password'],
         'amazon' => [

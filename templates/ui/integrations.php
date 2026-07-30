@@ -82,14 +82,66 @@
             </div>
             <div class="field integration-create__wide">
                 <label for="integration-capabilities">Funzioni abilitate</label>
-                <input id="integration-capabilities" name="capabilities" placeholder="products.read, orders.read">
-                <small>Inserisci le funzioni separate da virgola. Devono essere supportate dal provider selezionato.</small>
+                <input id="integration-capabilities" name="capabilities" placeholder="Per Space: catalog.read">
+                <small>Per sincronizzare il feed Space inserisci <strong>catalog.read</strong>.</small>
             </div>
             <div class="field integration-create__wide">
                 <label for="integration-description">Note interne <span class="field__optional">facoltative</span></label>
                 <textarea id="integration-description" name="description" rows="3" maxlength="1000" placeholder="Scopo dell’account, referente o altre informazioni utili"></textarea>
             </div>
         </div>
+        <fieldset class="integration-create__advanced" data-space-feed-config hidden disabled>
+            <legend>Feed incrementale Space</legend>
+            <p class="integration-create__intro">Questi campi vengono applicati soltanto quando il provider selezionato è Space. Il token Bearer si inserisce dopo la creazione dell’account.</p>
+            <div class="integration-create__grid">
+                <div class="field integration-create__wide">
+                    <label for="space-base-url">Server Space</label>
+                    <input id="space-base-url" name="space_base_url" type="url" value="https://admin.space1999.com">
+                    <small>Dominio base, senza token e senza parametri query.</small>
+                </div>
+                <div class="field">
+                    <label for="space-incremental-path">Percorso feed</label>
+                    <input id="space-incremental-path" name="space_catalog_incremental_path" value="/apih/index.php">
+                </div>
+                <div class="field">
+                    <label for="space-confirmation-path">Percorso conferma</label>
+                    <input id="space-confirmation-path" name="space_catalog_confirmation_path" value="/apih/index.php">
+                </div>
+                <div class="field">
+                    <label for="space-health-path">Percorso verifica</label>
+                    <input id="space-health-path" name="space_health_path" value="/apih/index.php?action=help">
+                </div>
+                <div class="field">
+                    <label for="space-entity">Entità feed</label>
+                    <input id="space-entity" name="space_catalog_entity" value="feed">
+                    <small>Diventerà entity=feed nella chiamata incrementale.</small>
+                </div>
+                <div class="field">
+                    <label for="space-frequency">Frequenza sincronizzazione</label>
+                    <select id="space-frequency" name="space_poll_interval_seconds">
+                        <option value="60">Ogni minuto</option>
+                        <option value="300" selected>Ogni 5 minuti</option>
+                        <option value="600">Ogni 10 minuti</option>
+                        <option value="1800">Ogni 30 minuti</option>
+                        <option value="3600">Ogni ora</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="space-page-size">Prodotti per pagina</label>
+                    <input id="space-page-size" name="space_catalog_page_size" type="number" min="1" max="500" value="500">
+                </div>
+                <div class="field">
+                    <label for="space-max-pages">Pagine massime per esecuzione</label>
+                    <input id="space-max-pages" name="space_maximum_catalog_pages_per_run" type="number" min="1" max="1000" value="20">
+                </div>
+            </div>
+            <ol class="gate-grid">
+                <li><span>01</span><strong>Legge incremental</strong><small>after_id e limit vengono gestiti da Automation</small></li>
+                <li><span>02</span><strong>Mappa il record</strong><small>idspace, barcode, prezzo, stock e metadati diventano catalogo HAPA</small></li>
+                <li><span>03</span><strong>Conferma il lotto</strong><small>Il cursore avanza solo dopo la conferma a Space</small></li>
+                <li><span>04</span><strong>Ripete automaticamente</strong><small>Lo scheduler usa la frequenza selezionata</small></li>
+            </ol>
+        </fieldset>
         <details class="integration-create__advanced">
             <summary>Configurazione avanzata</summary>
             <div class="field">

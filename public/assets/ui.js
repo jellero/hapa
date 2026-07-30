@@ -89,4 +89,21 @@
       button.setAttribute('aria-label', reveal ? 'Nascondi password' : 'Mostra password');
     });
   });
+
+  const providerSelect = document.querySelector('#integration-provider');
+  const spaceFeedConfiguration = document.querySelector('[data-space-feed-config]');
+  const capabilityInput = document.querySelector('#integration-capabilities');
+  const synchronizeProviderForm = () => {
+    if (!(providerSelect instanceof HTMLSelectElement)
+      || !(spaceFeedConfiguration instanceof HTMLFieldSetElement)) return;
+
+    const isSpace = providerSelect.value === 'space';
+    spaceFeedConfiguration.hidden = !isSpace;
+    spaceFeedConfiguration.disabled = !isSpace;
+    if (isSpace && capabilityInput instanceof HTMLInputElement && capabilityInput.value.trim() === '') {
+      capabilityInput.value = 'catalog.read';
+    }
+  };
+  providerSelect?.addEventListener('change', synchronizeProviderForm);
+  synchronizeProviderForm();
 })();
