@@ -284,20 +284,23 @@ final readonly class IntegrationConfigurationController
     /** @return array<string, mixed> @throws JsonException */
     private function configuration(Request $request): array
     {
+        $provider = strtolower(trim($request->request->getString('provider')));
         $capabilities = array_values(array_filter(array_map(
             static fn (string $value): string => trim($value),
             explode(',', $request->request->getString('capabilities')),
         ), static fn (string $value): bool => $value !== ''));
-        $settingsJson = trim($request->request->getString('settings_json', '{}'));
-        if ($settingsJson === '') {
-            $settingsJson = '{}';
+        $settings = [];
+        if ($provider !== 'space') {
+            $settingsJson = trim($request->request->getString('settings_json', '{}'));
+            if ($settingsJson === '') {
+                $settingsJson = '{}';
+            }
+            $settings = json_decode($settingsJson, true, 512, JSON_THROW_ON_ERROR);
+            if (!is_array($settings) || array_is_list($settings)) {
+                throw new InvalidArgumentException('Le impostazioni devono essere un oggetto JSON.');
+            }
         }
-        $settings = json_decode($settingsJson, true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($settings) || array_is_list($settings)) {
-            throw new InvalidArgumentException('Le impostazioni devono essere un oggetto JSON.');
-        }
-        if (strtolower($request->request->getString('provider')) === 'space'
-            && $request->request->has('space_base_url')) {
+        if ($provider === 'space' && $request->request->has('space_base_url')) {
             $spaceSettings = [
                 'base_url' => $request->request->getString('space_base_url'),
                 'health_path' => $request->request->getString('space_health_path'),
@@ -326,7 +329,7 @@ final readonly class IntegrationConfigurationController
         }
 
         return $this->validator->validate(
-            $request->request->getString('provider'),
+            $provider,
             $request->request->getString('code'),
             $request->request->getString('display_name'),
             $request->request->getString('environment'),
