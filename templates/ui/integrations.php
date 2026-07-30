@@ -240,42 +240,6 @@
     <?php endif; ?>
 </section>
 
-<section aria-labelledby="integrations-grid-title">
-    <div class="section-heading">
-        <div>
-            <p class="eyebrow">Portafoglio</p>
-            <h2 id="integrations-grid-title">Canali, servizi e corrieri</h2>
-        </div>
-        <span class="section-heading__meta"><?= $e(count($integrations)) ?> integrazioni censite</span>
-    </div>
-
-    <div class="integration-grid">
-        <?php foreach ($integrations as $integration): ?>
-            <article class="integration-card">
-                <div class="integration-card__top">
-                    <span class="integration-logo integration-logo--<?= $e($integration['code']) ?>" aria-hidden="true">
-                        <?= $e(strtoupper(substr($integration['name'], 0, 2))) ?>
-                    </span>
-                    <span class="status-badge status-badge--<?= $e($integration['tone']) ?>"><?= $e($integration['status']) ?></span>
-                </div>
-                <div class="integration-card__copy">
-                    <h3><?= $e($integration['name']) ?></h3>
-                    <p><?= $e($integration['kind']) ?></p>
-                </div>
-                <div class="integration-card__meta">
-                    <?php $integrationAccountCount = (int) (($accountCounts ?? [])[$integration['code']] ?? 0); ?>
-                    <span><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#integration"></use></svg> <?= $e((string) $integrationAccountCount) ?> account configurati</span>
-                </div>
-                <?php if (array_key_exists($integration['code'], $availableCapabilities ?? [])): ?>
-                    <a class="button button--ghost button--wide" href="#new-integration-account">Configura</a>
-                <?php else: ?>
-                    <button class="button button--ghost button--wide" type="button" disabled>Non disponibile</button>
-                <?php endif; ?>
-            </article>
-        <?php endforeach; ?>
-    </div>
-</section>
-
 <section class="panel discovery-panel" aria-labelledby="discovery-title">
     <div class="panel__header">
         <div>
