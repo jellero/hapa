@@ -21,6 +21,7 @@ final class PricingRuleManagementTest extends TestCase
     private PDO $pdo;
     private PricingRuleService $rules;
     private UserIdentity $actor;
+    private ?int $catalogId = null;
     private ?int $ruleId = null;
 
     protected function setUp(): void
@@ -41,6 +42,19 @@ final class PricingRuleManagementTest extends TestCase
                 $clock,
                 new MarketplaceOfferRecalculator(new PriceCalculator(), $clock),
             );
+            $catalog = $this->pdo->prepare(<<<'SQL'
+INSERT INTO commercial_catalogs (
+    code, name, description, enabled, created_by, created_at, updated_at
+) VALUES (
+    :code, 'Catalogo prezzi test', 'Perimetro isolato dei test prezzi', TRUE, :created_by, NOW(), NOW()
+)
+RETURNING id
+SQL);
+            $catalog->execute([
+                'code' => 'pricing-test-' . bin2hex(random_bytes(6)),
+                'created_by' => $this->actor->id,
+            ]);
+            $this->catalogId = (int) $catalog->fetchColumn();
         } catch (Throwable $exception) {
             self::markTestSkipped('PostgreSQL HAPA non disponibile: ' . $exception->getMessage());
         }
@@ -56,6 +70,9 @@ final class PricingRuleManagementTest extends TestCase
             $this->pdo->prepare("DELETE FROM audit_logs WHERE entity_type = 'pricing_rule' AND entity_id = :id")->execute(['id' => (string) $this->ruleId]);
             $this->pdo->prepare('DELETE FROM pricing_rules WHERE id = :id')->execute(['id' => $this->ruleId]);
         }
+        if ($this->catalogId !== null) {
+            $this->pdo->prepare('DELETE FROM commercial_catalogs WHERE id = :id')->execute(['id' => $this->catalogId]);
+        }
         $this->pdo->prepare('DELETE FROM app_users WHERE id = :id')->execute(['id' => $this->actor->id]);
     }
 
@@ -63,6 +80,7 @@ final class PricingRuleManagementTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(6));
         $this->ruleId = $this->rules->create([
+            'commercial_catalog_id' => $this->catalogId,
             'code' => 'global-' . $suffix,
             'name' => 'Ricarico globale test',
             'scope' => 'global',
@@ -74,6 +92,7 @@ final class PricingRuleManagementTest extends TestCase
         ], $this->actor, 'pricing-create');
 
         $this->rules->update($this->ruleId, 1, [
+            'commercial_catalog_id' => $this->catalogId,
             'code' => 'global-' . $suffix,
             'name' => 'Ricarico globale aggiornato',
             'scope' => 'global',

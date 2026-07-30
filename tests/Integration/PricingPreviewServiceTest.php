@@ -19,6 +19,7 @@ final class PricingPreviewServiceTest extends TestCase
     private PDO $pdo;
     private PricingPreviewService $service;
     private int $marketplaceId;
+    private int $commercialCatalogId;
     private int $catalogItemId;
     private int $ruleId;
     private string $marketplaceCode;
@@ -105,6 +106,19 @@ final class PricingPreviewServiceTest extends TestCase
              VALUES (:code, :name, :adapter, TRUE, :business_status, NOW(), NOW()) RETURNING id',
             ['code' => $this->marketplaceCode, 'name' => 'Preview test', 'adapter' => 'test', 'business_status' => 'active'],
         );
+        $this->commercialCatalogId = $this->insertAndReturnId(
+            'INSERT INTO commercial_catalogs (code, name, enabled, priority, version, created_at, updated_at)
+             VALUES (:code, :name, TRUE, 100, 1, NOW(), NOW()) RETURNING id',
+            ['code' => 'preview-' . $suffix, 'name' => 'Catalogo preview'],
+        );
+        $catalogMarketplace = $this->pdo->prepare(
+            'INSERT INTO commercial_catalog_marketplaces (commercial_catalog_id, marketplace_id, created_at)
+             VALUES (:commercial_catalog_id, :marketplace_id, NOW())',
+        );
+        $catalogMarketplace->execute([
+            'commercial_catalog_id' => $this->commercialCatalogId,
+            'marketplace_id' => $this->marketplaceId,
+        ]);
         $account = $this->pdo->prepare(
             'INSERT INTO marketplace_accounts (
                 marketplace_id, code, display_name, connector_code, status, technical_enabled
@@ -134,13 +148,14 @@ final class PricingPreviewServiceTest extends TestCase
         $offer->execute(['supplier_id' => $supplierId, 'catalog_item_id' => $this->catalogItemId, 'sku' => $this->sku, 'currency' => 'EUR']);
         $this->ruleId = $this->insertAndReturnId(
             'INSERT INTO pricing_rules (
-                code, name, scope, marketplace_id, adjustment_type, adjustment_value,
+                commercial_catalog_id, code, name, scope, marketplace_id, adjustment_type, adjustment_value,
                 currency, priority, enabled, valid_from, valid_until, created_at, updated_at
              ) VALUES (
-                :code, :name, :scope, :marketplace_id, :type, 2500,
+                :commercial_catalog_id, :code, :name, :scope, :marketplace_id, :type, 2500,
                 :currency, 100, TRUE, :valid_from, :valid_until, NOW(), NOW()
              ) RETURNING id',
             [
+                'commercial_catalog_id' => $this->commercialCatalogId,
                 'code' => 'preview-' . $suffix,
                 'name' => 'Preview 25%',
                 'scope' => 'marketplace',
@@ -164,6 +179,10 @@ final class PricingPreviewServiceTest extends TestCase
         if (isset($this->catalogItemId)) {
             $this->delete('supplier_catalog_items', 'catalog_item_id', $this->catalogItemId);
             $this->delete('catalog_items', 'id', $this->catalogItemId);
+        }
+        if (isset($this->commercialCatalogId)) {
+            $this->delete('commercial_catalog_marketplaces', 'commercial_catalog_id', $this->commercialCatalogId);
+            $this->delete('commercial_catalogs', 'id', $this->commercialCatalogId);
         }
         if (isset($this->marketplaceId)) {
             $this->delete('marketplace_accounts', 'marketplace_id', $this->marketplaceId);

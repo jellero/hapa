@@ -25,7 +25,8 @@ final class HttpResponsePolicy
         $response->headers->set(
             'Content-Security-Policy',
             "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; "
-            . "form-action 'self'; frame-ancestors 'none'; frame-src 'none'; img-src 'self' data:; "
+            . "form-action 'self'; frame-ancestors 'none'; frame-src 'none'; "
+            . "img-src 'self' data: https://cover.space1999.com; "
             . "manifest-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'",
         );
         $response->headers->set('Cache-Control', 'no-store, private');

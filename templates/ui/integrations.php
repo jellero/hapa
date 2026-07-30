@@ -38,6 +38,12 @@
 <?php if (($ordersImported ?? false) === true): ?>
     <output class="inline-notice inline-notice--info"><div><strong>Import SellRapido completato</strong><span><?= $e((string) ($ordersPublished ?? 0)) ?> osservazioni ordine pubblicate verso HAPA.</span></div></output>
 <?php endif; ?>
+<?php if (($catalogSynchronized ?? false) === true): ?>
+    <output class="inline-notice inline-notice--info"><div><strong>Feed prodotti Space sincronizzato</strong><span><?php if (($catalogPublished ?? 0) > 0): ?><?= $e((string) $catalogPublished) ?> variazioni prodotto acquisite da Space.<?php else: ?>Nessuna nuova variazione prodotto rilevata; il catalogo resta aggiornato.<?php endif; ?></span></div></output>
+<?php endif; ?>
+<?php if (($suppliersSynchronized ?? false) === true): ?>
+    <output class="inline-notice inline-notice--info"><div><strong>Elenco fornitori Space sincronizzato</strong><span><?php if (($suppliersPublished ?? 0) > 0): ?><?= $e((string) $suppliersPublished) ?> variazioni fornitore acquisite da Space.<?php else: ?>Nessuna nuova variazione fornitore rilevata; l’anagrafica resta aggiornata.<?php endif; ?></span></div></output>
+<?php endif; ?>
 
 <?php if (($currentUser?->role ?? '') === 'administrator'): ?>
 <section class="panel integration-create" id="new-integration-account" aria-labelledby="new-integration-title">
@@ -83,11 +89,19 @@
             </div>
         </div>
         <fieldset class="integration-create__advanced" data-space-feed-config hidden disabled>
-            <legend>Feed incrementale Space</legend>
-            <p class="integration-create__intro">Configura endpoint, pianificazione e token in un solo passaggio. Il token viene inviato direttamente ad Automation, cifrato e mai salvato nel database HAPA.</p>
+            <legend>Sincronizzazione Space</legend>
+            <p class="integration-create__intro">Prodotti e fornitori sono due account tecnici indipendenti: ciascuno conserva token, endpoint, cursore incrementale e frequenza propri.</p>
             <div class="integration-create__grid">
                 <div class="field integration-create__wide">
-                    <label for="space-bearer-token">Token Bearer Space</label>
+                    <label for="space-account-kind">Dati da sincronizzare</label>
+                    <select id="space-account-kind" name="space_account_kind">
+                        <option value="catalog">Feed prodotti SPECE (/apih)</option>
+                        <option value="suppliers">Elenco fornitori (/apie)</option>
+                    </select>
+                    <small>Per usare entrambi crea due account Space separati.</small>
+                </div>
+                <div class="field integration-create__wide">
+                    <label for="space-bearer-token">Token Bearer dedicato</label>
                     <input id="space-bearer-token" name="space_bearer_token" type="password" required maxlength="8192" autocomplete="new-password" spellcheck="false" placeholder="Incolla il token fornito da Space">
                     <small>Campo write-only: dopo il salvataggio non sarà più leggibile.</small>
                 </div>
@@ -96,22 +110,21 @@
                     <input id="space-base-url" name="space_base_url" type="url" value="https://admin.space1999.com">
                     <small>Dominio base, senza token e senza parametri query.</small>
                 </div>
-                <div class="field">
+                <div class="field" data-space-catalog-config>
                     <label for="space-incremental-path">Percorso feed</label>
                     <input id="space-incremental-path" name="space_catalog_incremental_path" value="/apih/index.php">
                 </div>
-                <div class="field">
-                    <label for="space-confirmation-path">Percorso conferma</label>
-                    <input id="space-confirmation-path" name="space_catalog_confirmation_path" value="/apih/index.php">
+                <div class="field" data-space-catalog-config>
+                    <label for="space-incremental-action">Azione API</label>
+                    <input id="space-incremental-action" name="space_catalog_incremental_action" value="spece">
                 </div>
-                <div class="field">
+                <div class="field" data-space-catalog-config>
                     <label for="space-health-path">Percorso verifica</label>
                     <input id="space-health-path" name="space_health_path" value="/apih/index.php?action=help">
                 </div>
-                <div class="field">
-                    <label for="space-entity">Entità feed</label>
-                    <input id="space-entity" name="space_catalog_entity" value="feed">
-                    <small>Diventerà entity=feed nella chiamata incrementale.</small>
+                <div class="field" data-space-supplier-config hidden>
+                    <label for="space-supplier-api-path">Percorso API fornitori</label>
+                    <input id="space-supplier-api-path" name="space_supplier_api_path" value="/apie/index.php">
                 </div>
                 <div class="field">
                     <label for="space-frequency">Frequenza sincronizzazione</label>
@@ -123,46 +136,73 @@
                         <option value="3600">Ogni ora</option>
                     </select>
                 </div>
-                <div class="field">
+                <div class="field" data-space-catalog-config>
                     <label for="space-page-size">Prodotti per pagina</label>
-                    <input id="space-page-size" name="space_catalog_page_size" type="number" min="1" max="500" value="500">
+                    <input id="space-page-size" name="space_catalog_page_size" type="number" min="1" max="5000" value="1000">
                 </div>
-                <div class="field">
+                <div class="field" data-space-catalog-config>
                     <label for="space-max-pages">Pagine massime per esecuzione</label>
                     <input id="space-max-pages" name="space_maximum_catalog_pages_per_run" type="number" min="1" max="1000" value="20">
+                </div>
+                <div class="field" data-space-supplier-config hidden>
+                    <label for="space-supplier-page-size">Fornitori per pagina</label>
+                    <input id="space-supplier-page-size" name="space_supplier_page_size" type="number" min="1" max="5000" value="1000">
+                </div>
+                <div class="field" data-space-supplier-config hidden>
+                    <label for="space-supplier-max-pages">Pagine massime per esecuzione</label>
+                    <input id="space-supplier-max-pages" name="space_maximum_supplier_pages_per_run" type="number" min="1" max="1000" value="25">
+                </div>
+                <div class="field">
+                    <label for="space-response-limit">Dimensione massima risposta</label>
+                    <input id="space-response-limit" name="space_maximum_response_bytes" type="number" min="1048576" max="16777216" value="8388608">
+                    <small>8 MiB, adeguati alle pagine SPECE da 1.000 prodotti.</small>
                 </div>
             </div>
             <?php
             $spaceMappingFields = [
-                'idspace' => 'ID prodotto', 'idspacefull' => 'SKU completo', 'barcode' => 'EAN',
-                'artista' => 'Artista', 'titolo' => 'Titolo', 'format' => 'Formato',
-                'label' => 'Etichetta', 'categoria' => 'Categoria', 'famiglia' => 'Famiglia',
-                'gruppo' => 'Gruppo', 'price' => 'Costo', 'stock' => 'Disponibilità',
-                'delitime' => 'Tempo di consegna', 'precisione' => 'Precisione',
-                'peso' => 'Peso', 'weight_unit' => 'Unità peso', 'currency' => 'Valuta',
-                'url' => 'URL prodotto', 'url_img' => 'URL immagine', 'uscita' => 'Data uscita',
-                'last_seen_run_id' => 'Versione feed', 'last_seen_at' => 'Ultima osservazione',
-                'updated_at' => 'Ultimo aggiornamento', 'missing_from_source' => 'Assente dalla sorgente',
-                'temu_sync_enabled' => 'Abilitato Temu',
+                'idspace' => ['ID prodotto', 'id_album'],
+                'idspacefull' => ['SKU completo', 'id_space_full'],
+                'barcode' => ['EAN', 'ean'],
+                'artista' => ['Artista', 'artista'],
+                'titolo' => ['Titolo', 'titolo'],
+                'format' => ['Formato', 'formato'],
+                'label' => ['Etichetta', 'etichetta'],
+                'categoria' => ['Categoria', 'categoria'],
+                'famiglia' => ['Famiglia', 'famiglia'],
+                'gruppo' => ['Gruppo', 'gruppo'],
+                'price' => ['Costo HAPA', 'prezzo_vendita'],
+                'stock' => ['Disponibilità immediata', 'onstock'],
+                'delitime' => ['Tempo di consegna', 'giorni_consegna'],
+                'precisione' => ['Precisione', 'precisione'],
+                'uscita' => ['Data uscita', 'release_date'],
+                'url' => ['Pagina prodotto Space', 'url_pagina'],
+                'url_img' => ['Immagine prodotto', 'url_immagine'],
+                'updated_at' => ['Ultimo aggiornamento', 'aggiornato_il'],
             ];
             ?>
-            <details class="integration-create__advanced" open>
+            <details class="integration-create__advanced" data-space-catalog-config open>
                 <summary>Mappatura campi Space</summary>
                 <p class="integration-create__intro">A sinistra è indicato il dato HAPA; nel campo inserisci il nome esatto ricevuto dall’API Space. I valori sono già impostati per il feed concordato.</p>
                 <div class="integration-create__grid">
-                    <?php foreach ($spaceMappingFields as $target => $label): ?>
+                    <?php foreach ($spaceMappingFields as $target => [$label, $source]): ?>
                         <div class="field">
                             <label for="space-map-<?= $e($target) ?>"><?= $e($label) ?></label>
-                            <input id="space-map-<?= $e($target) ?>" name="space_field_mapping[<?= $e($target) ?>]" value="<?= $e($target) ?>" required>
+                            <input id="space-map-<?= $e($target) ?>" name="space_field_mapping[<?= $e($target) ?>]" value="<?= $e($source) ?>">
                         </div>
                     <?php endforeach; ?>
                 </div>
             </details>
-            <ol class="gate-grid">
-                <li><span>01</span><strong>Legge incremental</strong><small>after_id e limit vengono gestiti da Automation</small></li>
-                <li><span>02</span><strong>Mappa il record</strong><small>idspace, barcode, prezzo, stock e metadati diventano catalogo HAPA</small></li>
-                <li><span>03</span><strong>Conferma il lotto</strong><small>Il cursore avanza solo dopo la conferma a Space</small></li>
-                <li><span>04</span><strong>Ripete automaticamente</strong><small>Lo scheduler usa la frequenza selezionata</small></li>
+            <ol class="gate-grid" data-space-catalog-config>
+                <li><span>01</span><strong>Legge il feed</strong><small>Automation invia action=spece, after e limit</small></li>
+                <li><span>02</span><strong>Mappa il record</strong><small>id_album, EAN, prezzo, stock e metadati diventano catalogo HAPA</small></li>
+                <li><span>03</span><strong>Avanza il cursore</strong><small>next_after viene salvato soltanto dopo la pubblicazione del lotto</small></li>
+                <li><span>04</span><strong>Ripete automaticamente</strong><small>A fine ciclo riparte per rilevare variazioni di prezzo e stock</small></li>
+            </ol>
+            <ol class="gate-grid" data-space-supplier-config hidden>
+                <li><span>01</span><strong>Scarica l’anagrafica</strong><small>Prima esecuzione full su entity=fornitori</small></li>
+                <li><span>02</span><strong>Avanza il cursore</strong><small>La lettura completa riprende dall’ultimo ID salvato</small></li>
+                <li><span>03</span><strong>Passa all’incrementale</strong><small>Legge inserimenti, modifiche e cancellazioni</small></li>
+                <li><span>04</span><strong>Conferma il batch</strong><small>Conferma solo dopo la pubblicazione verso HAPA</small></li>
             </ol>
         </fieldset>
         <details class="integration-create__advanced" data-generic-provider-settings>
@@ -208,7 +248,7 @@
                     <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-capabilities">Capacità</label><input id="<?= $e($accountFieldPrefix) ?>-capabilities" name="capabilities" value="<?= $e(implode(', ', $account['capabilities'])) ?>"></div>
                     <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-settings">Impostazioni non segrete (JSON)</label><textarea id="<?= $e($accountFieldPrefix) ?>-settings" name="settings_json" rows="6"><?= $e(json_encode($account['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></textarea></div>
                     <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-description">Descrizione</label><textarea id="<?= $e($accountFieldPrefix) ?>-description" name="description" rows="3" maxlength="1000"><?= $e($account['description'] ?? '') ?></textarea></div>
-                    <?php if ($account['provider_code'] === 'space'): ?>
+                    <?php if ($account['provider_code'] === 'space' && in_array('catalog.read', $account['capabilities'], true)): ?>
                         <?php $spaceSettings = is_array($account['settings']) ? $account['settings'] : []; ?>
                         <?php $savedMapping = is_array($spaceSettings['catalog_field_mapping'] ?? null) ? $spaceSettings['catalog_field_mapping'] : []; ?>
                         <fieldset class="integration-create__advanced">
@@ -216,18 +256,33 @@
                             <div class="integration-create__grid">
                                 <div class="field integration-create__wide"><label for="<?= $e($accountFieldPrefix) ?>-space-url">Server Space</label><input id="<?= $e($accountFieldPrefix) ?>-space-url" name="space_base_url" type="url" value="<?= $e((string) ($spaceSettings['base_url'] ?? 'https://admin.space1999.com')) ?>"></div>
                                 <div class="field"><label>Percorso feed</label><input name="space_catalog_incremental_path" value="<?= $e((string) ($spaceSettings['catalog_incremental_path'] ?? '/apih/index.php')) ?>"></div>
-                                <div class="field"><label>Percorso conferma</label><input name="space_catalog_confirmation_path" value="<?= $e((string) ($spaceSettings['catalog_confirmation_path'] ?? '/apih/index.php')) ?>"></div>
+                                <div class="field"><label>Azione API</label><input name="space_catalog_incremental_action" value="<?= $e((string) ($spaceSettings['catalog_incremental_action'] ?? 'spece')) ?>"></div>
                                 <div class="field"><label>Percorso verifica</label><input name="space_health_path" value="<?= $e((string) ($spaceSettings['health_path'] ?? '/apih/index.php?action=help')) ?>"></div>
-                                <div class="field"><label>Entità feed</label><input name="space_catalog_entity" value="<?= $e((string) ($spaceSettings['catalog_entity'] ?? 'feed')) ?>"></div>
                                 <div class="field"><label>Frequenza in secondi</label><input name="space_poll_interval_seconds" type="number" min="60" max="86400" value="<?= $e((string) ($spaceSettings['poll_interval_seconds'] ?? 300)) ?>"></div>
-                                <div class="field"><label>Prodotti per pagina</label><input name="space_catalog_page_size" type="number" min="1" max="500" value="<?= $e((string) ($spaceSettings['catalog_page_size'] ?? 500)) ?>"></div>
+                                <div class="field"><label>Prodotti per pagina</label><input name="space_catalog_page_size" type="number" min="1" max="5000" value="<?= $e((string) ($spaceSettings['catalog_page_size'] ?? 1000)) ?>"></div>
                                 <div class="field"><label>Pagine per esecuzione</label><input name="space_maximum_catalog_pages_per_run" type="number" min="1" max="1000" value="<?= $e((string) ($spaceSettings['maximum_catalog_pages_per_run'] ?? 20)) ?>"></div>
-                                <?php foreach ($spaceMappingFields as $target => $label): ?>
+                                <div class="field"><label>Dimensione massima risposta</label><input name="space_maximum_response_bytes" type="number" min="1048576" max="16777216" value="<?= $e((string) ($spaceSettings['maximum_response_bytes'] ?? 8388608)) ?>"></div>
+                                <?php foreach ($spaceMappingFields as $target => [$label, $source]): ?>
                                     <div class="field">
                                         <label><?= $e($label) ?></label>
-                                        <input name="space_field_mapping[<?= $e($target) ?>]" value="<?= $e((string) ($savedMapping[$target] ?? $target)) ?>" required>
+                                        <input name="space_field_mapping[<?= $e($target) ?>]" value="<?= $e((string) ($savedMapping[$target] ?? $source)) ?>">
                                     </div>
                                 <?php endforeach; ?>
+                            </div>
+                        </fieldset>
+                    <?php elseif ($account['provider_code'] === 'space' && in_array('suppliers.read', $account['capabilities'], true)): ?>
+                        <?php $spaceSettings = is_array($account['settings']) ? $account['settings'] : []; ?>
+                        <input type="hidden" name="space_account_kind" value="suppliers">
+                        <fieldset class="integration-create__advanced">
+                            <legend>API elenco fornitori Space</legend>
+                            <p class="integration-create__intro">Queste impostazioni e il relativo token sono indipendenti dal feed prodotti.</p>
+                            <div class="integration-create__grid">
+                                <div class="field integration-create__wide"><label for="<?= $e($accountFieldPrefix) ?>-space-url">Server Space</label><input id="<?= $e($accountFieldPrefix) ?>-space-url" name="space_base_url" type="url" value="<?= $e((string) ($spaceSettings['base_url'] ?? 'https://admin.space1999.com')) ?>"></div>
+                                <div class="field"><label>Percorso API fornitori</label><input name="space_supplier_api_path" value="<?= $e((string) ($spaceSettings['supplier_api_path'] ?? '/apie/index.php')) ?>"></div>
+                                <div class="field"><label>Frequenza in secondi</label><input name="space_poll_interval_seconds" type="number" min="60" max="86400" value="<?= $e((string) ($spaceSettings['poll_interval_seconds'] ?? 3600)) ?>"></div>
+                                <div class="field"><label>Fornitori per pagina</label><input name="space_supplier_page_size" type="number" min="1" max="5000" value="<?= $e((string) ($spaceSettings['supplier_page_size'] ?? 1000)) ?>"></div>
+                                <div class="field"><label>Pagine per esecuzione</label><input name="space_maximum_supplier_pages_per_run" type="number" min="1" max="1000" value="<?= $e((string) ($spaceSettings['maximum_supplier_pages_per_run'] ?? 25)) ?>"></div>
+                                <div class="field"><label>Dimensione massima risposta</label><input name="space_maximum_response_bytes" type="number" min="1048576" max="16777216" value="<?= $e((string) ($spaceSettings['maximum_response_bytes'] ?? 8388608)) ?>"></div>
                             </div>
                         </fieldset>
                     <?php endif; ?>
@@ -249,7 +304,10 @@
                     <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/orders/import" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['orders_import_csrf_token']) ?>"><button class="button button--primary" type="submit">Importa ordini ora</button></form>
                     <?php endif; ?>
                     <?php if ($account['provider_code'] === 'space' && in_array('catalog.read', $account['capabilities'], true) && in_array($account['desired_status'], ['pilot', 'active'], true) && $account['connection_test_status'] === 'passed' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
-                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/catalog/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['catalog_sync_csrf_token']) ?>"><button class="button button--primary" type="submit">Leggi ora costo e disponibilità da Space</button></form>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/catalog/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['catalog_sync_csrf_token']) ?>"><button class="button button--primary" type="submit">Sincronizza feed prodotti Space</button></form>
+                    <?php endif; ?>
+                    <?php if ($account['provider_code'] === 'space' && in_array('suppliers.read', $account['capabilities'], true) && in_array($account['desired_status'], ['pilot', 'active'], true) && $account['connection_test_status'] === 'passed' && $account['automation_configuration_version'] === $account['configuration_version']): ?>
+                    <form action="/ui/integrations/<?= $e((string) $account['id']) ?>/suppliers/sync" method="post"><input type="hidden" name="_csrf_token" value="<?= $e($account['supplier_sync_csrf_token']) ?>"><button class="button button--primary" type="submit">Scarica ora elenco fornitori</button></form>
                     <?php endif; ?>
                 </div>
                 <?php if ($account['desired_status'] !== 'retired'): ?>

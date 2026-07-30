@@ -57,6 +57,8 @@ use Hapa\Core\Ui\AuthenticationController;
 use Hapa\Core\Ui\CatalogProductManagement;
 use Hapa\Core\Ui\CatalogPublicationRuleController;
 use Hapa\Core\Ui\CatalogPublicationRuleManagement;
+use Hapa\Core\Ui\CommercialCatalogController;
+use Hapa\Core\Ui\CommercialCatalogManagement;
 use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\CatalogOverview;
 use Hapa\Core\Ui\CustomerOverview;
@@ -70,6 +72,7 @@ use Hapa\Core\Ui\PricingPreview;
 use Hapa\Core\Ui\ShipmentOverview;
 use Hapa\Core\Ui\SpacePurchaseController;
 use Hapa\Core\Ui\SpacePurchaseManagement;
+use Hapa\Core\Ui\SpaceSupplierOverview;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use Hapa\Modules\Catalog\Domain\PriceCalculator;
@@ -77,6 +80,7 @@ use Hapa\Modules\Catalog\Contract\CatalogOfferRecalculator;
 use Hapa\Modules\Catalog\Application\CatalogReadModel;
 use Hapa\Modules\Catalog\Application\CatalogProductReviewService;
 use Hapa\Modules\Catalog\Application\CatalogPublicationRuleService;
+use Hapa\Modules\Catalog\Application\CommercialCatalogService;
 use Hapa\Modules\Catalog\Application\MarketplaceOfferRecalculator;
 use Hapa\Modules\Catalog\Application\PricingRuleService;
 use Hapa\Modules\Catalog\Application\PricingPreviewService;
@@ -93,6 +97,7 @@ use Hapa\Modules\Procurement\Application\SpacePurchaseGenerationService;
 use Hapa\Modules\Procurement\Contract\AutomaticPurchaseGenerator as AutomaticPurchaseGeneratorContract;
 use Hapa\Modules\Space\Application\SpaceCatalogConsumeCommand;
 use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
+use Hapa\Modules\Space\Application\SpaceSupplierReadModel;
 use Hapa\Modules\Space\Infrastructure\Messaging\RabbitMqSpaceCatalogConsumer;
 use PDO;
 use Psr\Log\LoggerInterface;
@@ -277,6 +282,9 @@ final readonly class ContainerFactory
         $container->register(CatalogReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->setAlias(CatalogOverview::class, CatalogReadModel::class)->setPublic(false);
+        $container->register(SpaceSupplierReadModel::class)
+            ->setArguments([new Reference(ConnectionFactory::class)]);
+        $container->setAlias(SpaceSupplierOverview::class, SpaceSupplierReadModel::class)->setPublic(false);
         $container->register(CustomerReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->setAlias(CustomerOverview::class, CustomerReadModel::class)->setPublic(false);
@@ -310,6 +318,13 @@ final readonly class ContainerFactory
         $container->register(CatalogPublicationRuleService::class)
             ->setArguments([new Reference(ConnectionFactory::class), new Reference(Clock::class)]);
         $container->setAlias(CatalogPublicationRuleManagement::class, CatalogPublicationRuleService::class)->setPublic(false);
+        $container->register(CommercialCatalogService::class)
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+                new Reference(CatalogOfferRecalculator::class),
+            ]);
+        $container->setAlias(CommercialCatalogManagement::class, CommercialCatalogService::class)->setPublic(false);
         $container->register(SpaceCatalogObservationHandler::class)
             ->setArguments([
                 new Reference(PDO::class),
@@ -414,10 +429,12 @@ final readonly class ContainerFactory
                 new Reference(CustomerOverview::class),
                 new Reference(OrderOverview::class),
                 new Reference(AuthorizationPolicy::class),
-                new Reference(PricingPreview::class),
                 new Reference(ShipmentOverview::class),
                 new Reference(ProviderSecretFields::class),
                 new Reference(CatalogPublicationRuleManagement::class),
+                new Reference(CommercialCatalogManagement::class),
+                new Reference(SpaceSupplierOverview::class),
+                new Reference(PricingPreview::class),
             ]);
         $container->register(CustomerController::class)
             ->setArguments([new Reference(CustomerManagement::class)]);
@@ -444,6 +461,8 @@ final readonly class ContainerFactory
             ->setArguments([new Reference(PricingRuleManagement::class)]);
         $container->register(CatalogPublicationRuleController::class)
             ->setArguments([new Reference(CatalogPublicationRuleManagement::class)]);
+        $container->register(CommercialCatalogController::class)
+            ->setArguments([new Reference(CommercialCatalogManagement::class)]);
         $container->register(CatalogReviewController::class)
             ->setArguments([new Reference(CatalogProductManagement::class)]);
         $container->register(KernelFactory::class)
@@ -462,6 +481,7 @@ final readonly class ContainerFactory
                 new Reference(CustomerController::class),
                 new Reference(SpacePurchaseController::class),
                 new Reference(CatalogPublicationRuleController::class),
+                new Reference(CommercialCatalogController::class),
             ]);
         $container->setDefinition(Kernel::class, (new Definition())
             ->setFactory([new Reference(KernelFactory::class), 'create'])

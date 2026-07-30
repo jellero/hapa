@@ -21,7 +21,7 @@ final readonly class PricingRuleController
     {
         return $this->mutate(function () use ($request): void {
             $this->rules->create($this->input($request), $this->actor($request), $this->correlationId($request));
-        });
+        }, $request->request->getInt('commercial_catalog_id'));
     }
 
     public function update(Request $request): Response
@@ -34,7 +34,7 @@ final readonly class PricingRuleController
                 $this->actor($request),
                 $this->correlationId($request),
             );
-        });
+        }, $request->request->getInt('commercial_catalog_id'));
     }
 
     public function retire(Request $request): Response
@@ -46,24 +46,25 @@ final readonly class PricingRuleController
                 $this->actor($request),
                 $this->correlationId($request),
             );
-        });
+        }, $request->request->getInt('commercial_catalog_id'));
     }
 
     /** @param callable(): void $operation */
-    private function mutate(callable $operation): Response
+    private function mutate(callable $operation, int $catalogId): Response
     {
+        $catalogQuery = $catalogId > 0 ? 'catalog=' . $catalogId . '&' : '';
         try {
             $operation();
 
-            return new RedirectResponse('/ui/catalog?pricing_saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse('/ui/catalog?' . $catalogQuery . 'pricing_saved=1', Response::HTTP_SEE_OTHER);
         } catch (InvalidArgumentException | PricingRuleConflict $exception) {
             return new RedirectResponse(
-                '/ui/catalog?pricing_error=' . rawurlencode($exception->getMessage()),
+                '/ui/catalog?' . $catalogQuery . 'pricing_error=' . rawurlencode($exception->getMessage()),
                 Response::HTTP_SEE_OTHER,
             );
         } catch (Throwable) {
             return new RedirectResponse(
-                '/ui/catalog?pricing_error=' . rawurlencode('Impossibile salvare la regola di ricarico.'),
+                '/ui/catalog?' . $catalogQuery . 'pricing_error=' . rawurlencode('Impossibile salvare la regola di ricarico.'),
                 Response::HTTP_SEE_OTHER,
             );
         }
@@ -72,14 +73,17 @@ final readonly class PricingRuleController
     /** @return array<string, mixed> */
     private function input(Request $request): array
     {
+        $adjustmentType = $request->request->getString('adjustment_type');
+
         return [
+            'commercial_catalog_id' => $request->request->getString('commercial_catalog_id'),
             'code' => $request->request->getString('code'),
             'name' => $request->request->getString('name'),
             'scope' => $request->request->getString('scope'),
             'marketplace_id' => $request->request->getString('marketplace_id'),
             'sku' => $request->request->getString('sku'),
-            'adjustment_type' => $request->request->getString('adjustment_type'),
-            'adjustment_value' => $request->request->getString('adjustment_value'),
+            'adjustment_type' => $adjustmentType,
+            'adjustment_value' => $this->adjustmentValue($request, $adjustmentType),
             'currency' => $request->request->getString('currency', 'EUR'),
             'minimum_price_minor' => $request->request->getString('minimum_price_minor'),
             'maximum_price_minor' => $request->request->getString('maximum_price_minor'),
@@ -88,6 +92,19 @@ final readonly class PricingRuleController
             'valid_from' => $request->request->getString('valid_from'),
             'valid_until' => $request->request->getString('valid_until'),
         ];
+    }
+
+    private function adjustmentValue(Request $request, string $adjustmentType): string
+    {
+        if ($adjustmentType !== 'percentage' || !$request->request->has('percentage_value')) {
+            return $request->request->getString('adjustment_value');
+        }
+        $percentage = str_replace(',', '.', trim($request->request->getString('percentage_value')));
+        if ($percentage === '' || !is_numeric($percentage) || (float) $percentage < 0) {
+            throw new InvalidArgumentException('Inserisci una percentuale valida.');
+        }
+
+        return (string) (int) round((float) $percentage * 100);
     }
 
     private function actor(Request $request): UserIdentity

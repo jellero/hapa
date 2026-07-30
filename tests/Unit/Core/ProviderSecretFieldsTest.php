@@ -16,6 +16,14 @@ final class ProviderSecretFieldsTest extends TestCase
 
         self::assertArrayHasKey('lwa_refresh_token', $fields->forProvider('amazon'));
         self::assertSame(
+            ['api_key' => 'Token Bearer elenco fornitori Space (/apie)'],
+            $fields->forAccount('space', ['suppliers.read']),
+        );
+        self::assertSame(
+            ['api_key' => 'Token Bearer feed prodotti Space (/apih)'],
+            $fields->forAccount('space', ['catalog.read']),
+        );
+        self::assertSame(
             ['username' => 'operator'],
             $fields->submitted('sellrapido', ['username' => ' operator ', 'password' => '']),
         );

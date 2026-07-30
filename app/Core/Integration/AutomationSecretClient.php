@@ -77,7 +77,13 @@ final readonly class AutomationSecretClient implements ProviderSecretGateway, Pr
 
     public function synchronizeCatalog(string $account): array
     {
-        return $this->request('POST', $account, 'catalog/sync');
+        return $this->request('POST', $account, 'catalog/sync', [], 120.0);
+    }
+
+    /** @return array<string, mixed> */
+    public function synchronizeSuppliers(string $account): array
+    {
+        return $this->request('POST', $account, 'suppliers/sync', [], 120.0);
     }
 
     /**
@@ -85,7 +91,13 @@ final readonly class AutomationSecretClient implements ProviderSecretGateway, Pr
      * @return array<string, mixed>
      * @throws JsonException
      */
-    private function request(string $method, string $account, string $resource, array $payload = []): array
+    private function request(
+        string $method,
+        string $account,
+        string $resource,
+        array $payload = [],
+        ?float $timeoutSeconds = null,
+    ): array
     {
         $options = [
             'method' => $method,
@@ -95,7 +107,7 @@ final readonly class AutomationSecretClient implements ProviderSecretGateway, Pr
                 'Authorization: Bearer ' . $this->configuration->accessToken,
                 'Cache-Control: no-store',
             ]),
-            'timeout' => $this->configuration->timeoutSeconds,
+            'timeout' => $timeoutSeconds ?? $this->configuration->timeoutSeconds,
             'ignore_errors' => true,
         ];
         if ($method !== 'GET') {

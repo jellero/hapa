@@ -27,6 +27,61 @@ final class IntegrationAccountConfigurationTest extends TestCase
         self::assertSame(['orders.read', 'products.read'], $configuration['capabilities']);
     }
 
+    public function testItAcceptsTheDedicatedSpeceFeedConfiguration(): void
+    {
+        $configuration = (new IntegrationAccountConfiguration())->validate(
+            'space',
+            'space-primary',
+            'Space principale',
+            'production',
+            null,
+            ['catalog.read'],
+            [
+                'base_url' => 'https://admin.space1999.com',
+                'health_path' => '/apih/index.php?action=help',
+                'catalog_incremental_path' => '/apih/index.php',
+                'catalog_incremental_action' => 'spece',
+                'catalog_page_size' => 1000,
+                'catalog_field_mapping' => [
+                    'idspace' => 'id_album',
+                    'idspacefull' => 'id_space_full',
+                    'barcode' => 'ean',
+                    'price' => 'prezzo_vendita',
+                    'stock' => 'onstock',
+                    'delitime' => 'giorni_consegna',
+                ],
+            ],
+        );
+
+        self::assertSame('spece', $configuration['settings']['catalog_incremental_action']);
+        self::assertSame('id_album', $configuration['settings']['catalog_field_mapping']['idspace']);
+        self::assertSame('prezzo_vendita', $configuration['settings']['catalog_field_mapping']['price']);
+        self::assertSame('onstock', $configuration['settings']['catalog_field_mapping']['stock']);
+    }
+
+    public function testItAcceptsTheDedicatedSpaceSupplierConfiguration(): void
+    {
+        $configuration = (new IntegrationAccountConfiguration())->validate(
+            'space',
+            'space-suppliers',
+            'Elenco fornitori Space',
+            'production',
+            null,
+            ['suppliers.read'],
+            [
+                'base_url' => 'https://admin.space1999.com',
+                'supplier_api_path' => '/apie/index.php',
+                'supplier_page_size' => 1000,
+                'maximum_supplier_pages_per_run' => 25,
+                'poll_interval_seconds' => 3600,
+            ],
+        );
+
+        self::assertSame(['suppliers.read'], $configuration['capabilities']);
+        self::assertSame('/apie/index.php', $configuration['settings']['supplier_api_path']);
+        self::assertSame(3600, $configuration['settings']['poll_interval_seconds']);
+    }
+
     /** @param array<string, mixed> $settings */
     #[DataProvider('invalidConfigurations')]
     public function testItRejectsSecretsAndUnsafeProductionEndpoints(array $settings): void

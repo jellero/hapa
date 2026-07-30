@@ -175,7 +175,51 @@ SQL);
         self::assertSame(20, (int) $offer['available_quantity']);
     }
 
-    /** @param array<string, int|string|null> $overrides */
+    public function testItStoresTheDedicatedSpecePageAndImageUrls(): void
+    {
+        $suffix = bin2hex(random_bytes(5));
+        $message = $this->message($suffix, [
+            'external_item_id' => 'SPACE-' . $suffix,
+            'supplier_sku' => 'SKU-' . $suffix,
+            'attributes' => [
+                'url_pagina' => 'https://space1999.com/it/prodotto/' . $suffix,
+                'url_immagine' => 'https://cover.space1999.com/cache/' . $suffix . '.jpg',
+                'stock_qty_fornitore' => 162,
+                'id_fornitore' => 221,
+                'artista' => 'Artista album',
+                'titolo' => 'Titolo album',
+                'label' => 'Etichetta album',
+                'format' => 'CD',
+                'discoteca_artista' => 'Artista discoteca',
+                'discoteca_titolo' => 'Titolo discoteca',
+                'discoteca_etichetta' => 'Etichetta discoteca',
+                'discoteca_formato' => 'CD Audio',
+            ],
+        ]);
+
+        $this->handler->handle($message);
+
+        $statement = $this->pdo->prepare(<<<'SQL'
+SELECT product_url, image_url, backorder_quantity, space_supplier_id,
+       artist, title, label, format
+FROM supplier_catalog_items
+WHERE external_item_id = :external_item_id
+SQL);
+        $statement->execute(['external_item_id' => 'SPACE-' . $suffix]);
+        $offer = $statement->fetch(PDO::FETCH_ASSOC);
+
+        self::assertIsArray($offer);
+        self::assertSame('https://space1999.com/it/prodotto/' . $suffix, $offer['product_url']);
+        self::assertSame('https://cover.space1999.com/cache/' . $suffix . '.jpg', $offer['image_url']);
+        self::assertSame(162, (int) $offer['backorder_quantity']);
+        self::assertSame('221', $offer['space_supplier_id']);
+        self::assertSame('Artista discoteca', $offer['artist']);
+        self::assertSame('Titolo discoteca', $offer['title']);
+        self::assertSame('Etichetta discoteca', $offer['label']);
+        self::assertSame('CD Audio', $offer['format']);
+    }
+
+    /** @param array<string, mixed> $overrides */
     private function message(string $suffix, array $overrides = []): MessageEnvelope
     {
         $payload = [

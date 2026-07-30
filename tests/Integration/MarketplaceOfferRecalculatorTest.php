@@ -101,26 +101,59 @@ SQL);
         $this->execute(<<<'SQL'
 INSERT INTO supplier_catalog_items (
     supplier_id, catalog_item_id, external_item_id, supplier_sku,
-    purchase_cost_minor, currency, available_quantity, source_version,
+    purchase_cost_minor, currency, available_quantity, backorder_quantity, source_version,
     observed_at, active, created_at, updated_at
 ) VALUES (
     :supplier_id, :catalog_item_id, '987654', 'SPACE-CALC',
-    1000, 'EUR', 7, 'space-v1', NOW(), TRUE, NOW(), NOW()
+    1000, 'EUR', 7, 3, 'space-v1', NOW(), TRUE, NOW(), NOW()
 )
 SQL, [
             'supplier_id' => $supplierId,
             'catalog_item_id' => $productId,
         ]);
+        $catalogId = $this->insertId(<<<'SQL'
+INSERT INTO commercial_catalogs (
+    code, name, description, enabled, created_at, updated_at
+) VALUES (
+    :code, 'Catalogo offerte test', 'Perimetro del marketplace di test', TRUE, NOW(), NOW()
+)
+RETURNING id
+SQL, ['code' => 'catalog-' . $suffix]);
+        $this->execute(<<<'SQL'
+INSERT INTO commercial_catalog_marketplaces (
+    commercial_catalog_id, marketplace_id, created_at
+) VALUES (
+    :commercial_catalog_id, :marketplace_id, NOW()
+)
+SQL, [
+            'commercial_catalog_id' => $catalogId,
+            'marketplace_id' => $marketplaceId,
+        ]);
+        $this->execute(<<<'SQL'
+INSERT INTO catalog_publication_rules (
+    commercial_catalog_id, code, name, action, field, operator, match_value,
+    marketplace_id, priority, enabled, version, created_by, created_at, updated_at
+) VALUES (
+    :commercial_catalog_id, :code, 'Includi SKU test', 'include', 'sku', 'equals', :sku,
+    :marketplace_id, 100, TRUE, 1, 'phpunit', NOW(), NOW()
+)
+SQL, [
+            'commercial_catalog_id' => $catalogId,
+            'code' => 'include-' . $suffix,
+            'sku' => $sku,
+            'marketplace_id' => $marketplaceId,
+        ]);
         $ruleId = $this->insertId(<<<'SQL'
 INSERT INTO pricing_rules (
-    code, name, scope, marketplace_id, adjustment_type, adjustment_value,
+    commercial_catalog_id, code, name, scope, marketplace_id, adjustment_type, adjustment_value,
     currency, priority, enabled, version, created_at, updated_at
 ) VALUES (
-    :code, 'Ricarico 25%', 'marketplace', :marketplace_id, 'percentage', 2500,
+    :commercial_catalog_id, :code, 'Ricarico 25%', 'marketplace', :marketplace_id, 'percentage', 2500,
     'EUR', 100, TRUE, 1, NOW(), NOW()
 )
 RETURNING id
 SQL, [
+            'commercial_catalog_id' => $catalogId,
             'code' => 'rule-' . $suffix,
             'marketplace_id' => $marketplaceId,
         ]);
@@ -128,11 +161,11 @@ SQL, [
         self::assertGreaterThanOrEqual(1, $this->recalculator->recalculateProduct($this->pdo, $productId));
         $first = $this->offer($productId, $marketplaceId);
         self::assertSame(1250, (int) $first['desired_price_minor']);
-        self::assertSame(5, (int) $first['desired_quantity']);
+        self::assertSame(8, (int) $first['desired_quantity']);
         self::assertSame($ruleId, (int) $first['applied_pricing_rule_id']);
         self::assertSame(1, (int) $first['source_version']);
         self::assertSame('syncing', $first['status']);
-        self::assertSame(5, (int) $this->value('SELECT sellable_quantity FROM catalog_items WHERE id = ' . $productId));
+        self::assertSame(8, (int) $this->value('SELECT sellable_quantity FROM catalog_items WHERE id = ' . $productId));
         $command = $this->pdo->prepare(<<<'SQL'
 SELECT payload FROM outbox_messages
 WHERE event_type = 'marketplace.offer.publish.requested'
@@ -143,7 +176,7 @@ SQL);
         $payload = json_decode((string) $command->fetchColumn(), true, 32, JSON_THROW_ON_ERROR);
         self::assertSame($sku, $payload['sku']);
         self::assertSame(1250, $payload['price_minor']);
-        self::assertSame(5, $payload['quantity']);
+        self::assertSame(8, $payload['quantity']);
         self::assertSame(123456, $payload['catalog_id']);
         (new MarketplaceOfferPublicationResultHandler($this->pdo))->handle(new MessageEnvelope(
             'sellrapido-result-' . $suffix,
@@ -168,7 +201,8 @@ SQL);
 
         $this->execute(<<<'SQL'
 UPDATE supplier_catalog_items
-SET purchase_cost_minor = 1200, available_quantity = 1, source_version = 'space-v2', updated_at = NOW()
+SET purchase_cost_minor = 1200, available_quantity = 1, backorder_quantity = 0,
+    source_version = 'space-v2', updated_at = NOW()
 WHERE catalog_item_id = :catalog_item_id
 SQL, ['catalog_item_id' => $productId]);
         self::assertGreaterThanOrEqual(1, $this->recalculator->recalculateProduct($this->pdo, $productId));
@@ -177,6 +211,54 @@ SQL, ['catalog_item_id' => $productId]);
         self::assertSame(0, (int) $changed['desired_quantity']);
         self::assertSame(2, (int) $changed['source_version']);
         self::assertSame(0, (int) $this->value('SELECT sellable_quantity FROM catalog_items WHERE id = ' . $productId));
+
+        $fallbackCatalogId = $this->insertId(<<<'SQL'
+INSERT INTO commercial_catalogs (
+    code, name, description, enabled, priority, created_at, updated_at
+) VALUES (
+    :code, 'Catalogo offerte fallback', 'Secondo catalogo sullo stesso marketplace', TRUE, 200, NOW(), NOW()
+)
+RETURNING id
+SQL, ['code' => 'fallback-' . $suffix]);
+        $this->execute(
+            'INSERT INTO commercial_catalog_marketplaces (commercial_catalog_id, marketplace_id, created_at)
+             VALUES (:catalog_id, :marketplace_id, NOW())',
+            ['catalog_id' => $fallbackCatalogId, 'marketplace_id' => $marketplaceId],
+        );
+        $this->execute(<<<'SQL'
+INSERT INTO catalog_publication_rules (
+    commercial_catalog_id, code, name, action, field, operator, match_value,
+    marketplace_id, priority, enabled, version, created_by, created_at, updated_at
+) VALUES (
+    :catalog_id, :code, 'Includi SKU fallback', 'include', 'sku', 'equals', :sku,
+    :marketplace_id, 100, TRUE, 1, 'phpunit', NOW(), NOW()
+)
+SQL, [
+            'catalog_id' => $fallbackCatalogId,
+            'code' => 'fallback-include-' . $suffix,
+            'sku' => $sku,
+            'marketplace_id' => $marketplaceId,
+        ]);
+        $fallbackRuleId = $this->insertId(<<<'SQL'
+INSERT INTO pricing_rules (
+    commercial_catalog_id, code, name, scope, marketplace_id, adjustment_type,
+    adjustment_value, currency, priority, enabled, version, created_at, updated_at
+) VALUES (
+    :catalog_id, :code, 'Ricarico fallback 50%', 'marketplace', :marketplace_id, 'percentage',
+    5000, 'EUR', 100, TRUE, 1, NOW(), NOW()
+)
+RETURNING id
+SQL, [
+            'catalog_id' => $fallbackCatalogId,
+            'code' => 'fallback-price-' . $suffix,
+            'marketplace_id' => $marketplaceId,
+        ]);
+        $this->execute('UPDATE pricing_rules SET enabled = FALSE WHERE id = :id', ['id' => $ruleId]);
+
+        self::assertGreaterThanOrEqual(1, $this->recalculator->recalculateProduct($this->pdo, $productId));
+        $fallback = $this->offer($productId, $marketplaceId);
+        self::assertSame(1800, (int) $fallback['desired_price_minor']);
+        self::assertSame($fallbackRuleId, (int) $fallback['applied_pricing_rule_id']);
     }
 
     /** @param array<string, int|string> $parameters */

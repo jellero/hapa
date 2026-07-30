@@ -10,5 +10,5 @@ interface PricingPreview
      * @param list<array<string, mixed>> $products
      * @return array<int, list<array<string, mixed>>>
      */
-    public function forProducts(array $products): array;
+    public function forProducts(array $products, ?int $commercialCatalogId = null): array;
 }

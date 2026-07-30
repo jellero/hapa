@@ -288,6 +288,7 @@ SQL);
         int $catalogItemId,
         SpaceCatalogObservation $observation,
     ): void {
+        $this->ensureSpaceSupplier($observation);
         $statement = $this->pdo->prepare(<<<'SQL'
 INSERT INTO supplier_catalog_items (
     supplier_id, catalog_item_id, external_item_id, supplier_sku,
@@ -295,14 +296,16 @@ INSERT INTO supplier_catalog_items (
     observed_at, active, feed_name, artist, title, format, label, category,
     family, group_name, branch_suffix, delivery_time_days, source_status,
     precision_score, product_url, image_url, release_date, weight, weight_unit,
-    missing_from_source, temu_sync_enabled, source_attributes, created_at, updated_at
+    missing_from_source, temu_sync_enabled, space_supplier_id, backorder_quantity,
+    source_attributes, created_at, updated_at
 ) VALUES (
     :supplier_id, :catalog_item_id, :external_item_id, :supplier_sku,
     :purchase_cost_minor, :currency, :available_quantity, :source_version,
     :observed_at, TRUE, :feed_name, :artist, :title, :format, :label, :category,
     :family, :group_name, :branch_suffix, :delivery_time_days, :source_status,
     :precision_score, :product_url, :image_url, :release_date, :weight, :weight_unit,
-    :missing_from_source, :temu_sync_enabled, CAST(:source_attributes AS JSONB), NOW(), NOW()
+    :missing_from_source, :temu_sync_enabled, :space_supplier_id, :backorder_quantity,
+    CAST(:source_attributes AS JSONB), NOW(), NOW()
 )
 ON CONFLICT (supplier_id, catalog_item_id) DO UPDATE
 SET external_item_id = EXCLUDED.external_item_id,
@@ -331,6 +334,8 @@ SET external_item_id = EXCLUDED.external_item_id,
     weight_unit = EXCLUDED.weight_unit,
     missing_from_source = EXCLUDED.missing_from_source,
     temu_sync_enabled = EXCLUDED.temu_sync_enabled,
+    space_supplier_id = EXCLUDED.space_supplier_id,
+    backorder_quantity = EXCLUDED.backorder_quantity,
     source_attributes = EXCLUDED.source_attributes,
     active = TRUE,
     updated_at = NOW()
@@ -340,6 +345,7 @@ SQL);
 
     private function updateOffer(int $offerId, SpaceCatalogObservation $observation): void
     {
+        $this->ensureSpaceSupplier($observation);
         $statement = $this->pdo->prepare(<<<'SQL'
 UPDATE supplier_catalog_items
 SET supplier_sku = :supplier_sku,
@@ -367,6 +373,8 @@ SET supplier_sku = :supplier_sku,
     weight_unit = :weight_unit,
     missing_from_source = :missing_from_source,
     temu_sync_enabled = :temu_sync_enabled,
+    space_supplier_id = :space_supplier_id,
+    backorder_quantity = :backorder_quantity,
     source_attributes = CAST(:source_attributes AS JSONB),
     active = TRUE,
     updated_at = NOW()
@@ -409,22 +417,28 @@ SQL);
         $external = (string) ($a['idspace'] ?? $observation->externalItemId);
         $full = (string) ($a['idspacefull'] ?? $observation->supplierSku);
         $suffix = str_starts_with($full, $external) ? substr($full, strlen($external)) : null;
+        $spaceSupplierId = $this->attributeString($a, 'id_fornitore', 64);
+        if ($spaceSupplierId === null && is_string($suffix) && preg_match('/^[Aa]([0-9]+)$/D', $suffix, $match) === 1) {
+            $spaceSupplierId = $match[1];
+        }
 
         return [
             'feed_name' => $this->attributeString($a, 'feed_name', 80),
-            'artist' => $this->attributeString($a, 'artista', 255),
-            'title' => $this->attributeString($a, 'titolo', 255),
-            'format' => $this->attributeString($a, 'format', 80),
-            'label' => $this->attributeString($a, 'label', 255),
+            'artist' => $this->firstAttributeString($a, ['discoteca_artista', 'artista'], 255),
+            'title' => $this->firstAttributeString($a, ['discoteca_titolo', 'titolo'], 255),
+            'format' => $this->firstAttributeString($a, ['discoteca_formato', 'formato', 'format'], 80),
+            'label' => $this->firstAttributeString($a, ['discoteca_etichetta', 'etichetta', 'label'], 255),
             'category' => $this->attributeString($a, 'categoria', 160),
             'family' => $this->attributeString($a, 'famiglia', 160),
             'group_name' => $this->attributeString($a, 'gruppo', 160),
             'branch_suffix' => $suffix === '' ? null : substr((string) $suffix, 0, 40),
+            'space_supplier_id' => $spaceSupplierId,
+            'backorder_quantity' => max(0, $this->attributeInt($a, 'stock_qty_fornitore') ?? 0),
             'delivery_time_days' => $this->attributeInt($a, 'delitime'),
             'source_status' => $this->attributeInt($a, 'status'),
             'precision_score' => $this->attributeInt($a, 'precisione'),
-            'product_url' => $this->attributeString($a, 'url', 2048),
-            'image_url' => $this->attributeString($a, 'url_img', 2048),
+            'product_url' => $this->firstAttributeString($a, ['url_pagina', 'url', 'product_url'], 2048),
+            'image_url' => $this->firstAttributeString($a, ['url_immagine', 'url_img', 'image_url'], 2048),
             'release_date' => $this->attributeString($a, 'uscita', 20),
             'weight' => is_numeric($a['peso'] ?? null) ? (float) $a['peso'] : null,
             'weight_unit' => $this->attributeString($a, 'weight_unit', 16),
@@ -432,6 +446,20 @@ SQL);
             'temu_sync_enabled' => filter_var($a['temu_sync_enabled'] ?? false, FILTER_VALIDATE_BOOL) ? 1 : 0,
             'source_attributes' => json_encode($a === [] ? (object) [] : $a, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
+    }
+
+    private function ensureSpaceSupplier(SpaceCatalogObservation $observation): void
+    {
+        $supplierId = $this->feedParameters($observation)['space_supplier_id'];
+        if (!is_string($supplierId) || $supplierId === '') {
+            return;
+        }
+        $statement = $this->pdo->prepare(<<<'SQL'
+INSERT INTO space_suppliers (space_supplier_id)
+VALUES (:space_supplier_id)
+ON CONFLICT (space_supplier_id) DO NOTHING
+SQL);
+        $statement->execute(['space_supplier_id' => $supplierId]);
     }
 
     /** @param array<string, mixed> $attributes */
@@ -443,6 +471,22 @@ SQL);
         }
         $value = trim((string) $value);
         return $value === '' ? null : mb_substr($value, 0, $maximum);
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @param list<string> $keys
+     */
+    private function firstAttributeString(array $attributes, array $keys, int $maximum): ?string
+    {
+        foreach ($keys as $key) {
+            $value = $this->attributeString($attributes, $key, $maximum);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $attributes */

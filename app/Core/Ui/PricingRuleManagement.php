@@ -9,7 +9,7 @@ use Hapa\Core\Security\UserIdentity;
 interface PricingRuleManagement
 {
     /** @return list<array<string, mixed>> */
-    public function all(): array;
+    public function all(?int $commercialCatalogId = null): array;
 
     /** @return list<array{id: int, code: string, name: string}> */
     public function marketplaces(): array;

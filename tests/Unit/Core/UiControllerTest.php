@@ -8,7 +8,9 @@ use DateTimeImmutable;
 use Hapa\Core\Security\UserIdentity;
 use Hapa\Core\Security\WebSession;
 use Hapa\Core\Security\AuthorizationPolicy;
+use Hapa\Core\Ui\CommercialCatalogManagement;
 use Hapa\Core\Ui\OrderOverview;
+use Hapa\Core\Ui\PricingPreview;
 use Hapa\Core\Ui\UiController;
 use Hapa\Core\View\ViewRenderer;
 use PHPUnit\Framework\TestCase;
@@ -38,6 +40,7 @@ final class UiControllerTest extends TestCase
             $controller->dashboard($request),
             $controller->customers($request),
             $controller->orders($request),
+            $controller->products($request),
             $controller->catalog($request),
             $controller->picking($request),
             $controller->shipments($request),
@@ -74,16 +77,124 @@ final class UiControllerTest extends TestCase
         self::assertStringNotContainsString('Stato GLS', $shipments);
     }
 
-    public function testItPresentsTheProductRegistryAndMarkupFlow(): void
+    public function testItPresentsCommercialCatalogsAsThePrimaryWorkflow(): void
     {
         $content = (string) $this->controller()->catalog($this->request('/ui/catalog'))->getContent();
 
-        self::assertStringContainsString('Anagrafica prodotti, prezzi e stock', $content);
-        self::assertStringContainsString('Space sincronizza prezzo e stock del prodotto', $content);
-        self::assertStringContainsString('Nuova regola di ricarico', $content);
-        self::assertStringContainsString('Marketplace + SKU', $content);
-        self::assertStringContainsString('hapa-automation', $content);
-        self::assertStringNotContainsString('HAPA applica scorta di sicurezza', $content);
+        self::assertStringContainsString('Cataloghi marketplace', $content);
+        self::assertStringContainsString('Cataloghi configurati', $content);
+        self::assertStringContainsString('Prodotti sorgente', $content);
+        self::assertStringContainsString('catalogo nascerà in bozza', $content);
+        self::assertStringNotContainsString('Nuova regola di ricarico', $content);
+        self::assertStringNotContainsString('Anagrafica prodotti', $content);
+    }
+
+    public function testItPresentsProductsInADedicatedSearchPage(): void
+    {
+        $content = (string) $this->controller()->products($this->request('/ui/products'))->getContent();
+
+        self::assertStringContainsString('Prodotti importati da Space', $content);
+        self::assertStringContainsString('Filtri anagrafica', $content);
+        self::assertStringContainsString('Disponibilità', $content);
+        self::assertStringContainsString('SKU, EAN, ID Space, artista, titolo o etichetta', $content);
+    }
+
+    public function testItRendersTheRealCatalogPreviewBeforeActivation(): void
+    {
+        $catalogs = new class implements CommercialCatalogManagement {
+            public function all(): array
+            {
+                return [];
+            }
+
+            public function find(int $id): ?array
+            {
+                return [
+                    'id' => $id,
+                    'name' => 'Catalogo anteprima',
+                    'marketplace_ids' => [7],
+                    'marketplace_names' => 'Temu',
+                    'pricing_rule_count' => 1,
+                    'include_rule_count' => 1,
+                    'exclude_rule_count' => 0,
+                    'eligible_product_count' => 1,
+                    'ready' => true,
+                    'enabled' => false,
+                    'status' => 'ready',
+                ];
+            }
+
+            public function preview(int $id, int $limit = 200): array
+            {
+                return [[
+                    'id' => 91,
+                    'sku' => '22658659A221',
+                    'ean' => '5099703247626',
+                    'name' => 'Carlos Santana - Amigos',
+                    'artist' => 'Carlos Santana',
+                    'title' => 'Amigos',
+                    'format' => 'CD',
+                    'onboarding_status' => 'approved',
+                    'active' => true,
+                    'sellable_quantity' => 162,
+                    'available_quantity' => 162,
+                    'purchase_cost_minor' => 428,
+                    'currency' => 'EUR',
+                    'marketplace_ids' => [7],
+                ]];
+            }
+
+            public function create(array $input, UserIdentity $actor): int
+            {
+                return 1;
+            }
+
+            public function setEnabled(
+                int $id,
+                bool $enabled,
+                UserIdentity $actor,
+                string $correlationId,
+            ): void {
+            }
+
+            public function delete(
+                int $id,
+                string $confirmation,
+                UserIdentity $actor,
+                string $correlationId,
+            ): void {
+            }
+        };
+        $prices = new class implements PricingPreview {
+            public function forProducts(array $products, ?int $commercialCatalogId = null): array
+            {
+                return [91 => [[
+                    'marketplace_id' => 7,
+                    'marketplace_name' => 'Temu',
+                    'selling_price_minor' => 535,
+                    'currency' => 'EUR',
+                    'applied_rule_code' => 'temu-default',
+                ]]];
+            }
+        };
+        $controller = new UiController(
+            $this->renderer(),
+            'testing',
+            commercialCatalogs: $catalogs,
+            pricingPreview: $prices,
+        );
+
+        $content = (string) $controller->catalog($this->request('/ui/catalog?catalog=12&preview=1'))->getContent();
+
+        self::assertStringContainsString('Controlla cosa verrà passato', $content);
+        self::assertStringContainsString('1</strong><span>prodotti selezionati', $content);
+        self::assertStringContainsString('Attiva catalogo', $content);
+        self::assertStringContainsString('5099703247626', $content);
+        self::assertStringContainsString('22658659A221', $content);
+        self::assertStringContainsString('Carlos Santana', $content);
+        self::assertStringContainsString('Amigos', $content);
+        self::assertStringContainsString('4,28 EUR', $content);
+        self::assertStringContainsString('5,35 EUR', $content);
     }
 
     public function testItPresentsTheRealSpaceAccountConfigurationWithoutShowcaseCards(): void
@@ -94,6 +205,10 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('Mappatura campi Space', $content);
         self::assertStringContainsString('space_field_mapping[artista]', $content);
         self::assertStringContainsString('space_field_mapping[titolo]', $content);
+        self::assertStringContainsString('name="space_catalog_incremental_action" value="spece"', $content);
+        self::assertStringContainsString('name="space_field_mapping[idspace]" value="id_album"', $content);
+        self::assertStringContainsString('name="space_field_mapping[price]" value="prezzo_vendita"', $content);
+        self::assertStringNotContainsString('Percorso conferma', $content);
         self::assertStringNotContainsString('Canali, servizi e corrieri', $content);
     }
 

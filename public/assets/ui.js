@@ -95,6 +95,32 @@
   const genericProviderSettings = document.querySelector('[data-generic-provider-settings]');
   const genericSettingsInput = document.querySelector('#integration-settings');
   const capabilityInput = document.querySelector('#integration-capabilities');
+  const spaceAccountKind = document.querySelector('#space-account-kind');
+  const spaceFrequency = document.querySelector('#space-frequency');
+  const synchronizeSpaceAccountKind = () => {
+    if (!(spaceAccountKind instanceof HTMLSelectElement)) return;
+
+    const suppliers = spaceAccountKind.value === 'suppliers';
+    document.querySelectorAll('[data-space-catalog-config]').forEach((element) => {
+      element.hidden = suppliers;
+      element.querySelectorAll('input, select, textarea').forEach((field) => {
+        field.disabled = suppliers;
+      });
+    });
+    document.querySelectorAll('[data-space-supplier-config]').forEach((element) => {
+      element.hidden = !suppliers;
+      element.querySelectorAll('input, select, textarea').forEach((field) => {
+        field.disabled = !suppliers;
+      });
+    });
+    if (capabilityInput instanceof HTMLInputElement) {
+      capabilityInput.value = suppliers ? 'suppliers.read' : 'catalog.read';
+      capabilityInput.readOnly = true;
+    }
+    if (spaceFrequency instanceof HTMLSelectElement) {
+      spaceFrequency.value = suppliers ? '3600' : '300';
+    }
+  };
   const synchronizeProviderForm = () => {
     if (!(providerSelect instanceof HTMLSelectElement)
       || !(spaceFeedConfiguration instanceof HTMLFieldSetElement)) return;
@@ -111,7 +137,77 @@
     if (isSpace && capabilityInput instanceof HTMLInputElement && capabilityInput.value.trim() === '') {
       capabilityInput.value = 'catalog.read';
     }
+    if (!isSpace && capabilityInput instanceof HTMLInputElement) {
+      capabilityInput.readOnly = false;
+    }
+    if (isSpace) synchronizeSpaceAccountKind();
   };
   providerSelect?.addEventListener('change', synchronizeProviderForm);
+  spaceAccountKind?.addEventListener('change', synchronizeSpaceAccountKind);
   synchronizeProviderForm();
+
+  const imagePreview = document.querySelector('[data-image-preview]');
+  const imagePreviewImage = imagePreview?.querySelector('[data-image-preview-image]');
+  const imagePreviewTitle = imagePreview?.querySelector('[data-image-preview-title]');
+  let imagePreviewTrigger = null;
+
+  document.querySelectorAll('[data-image-preview-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!(imagePreview instanceof HTMLDialogElement)
+        || !(imagePreviewImage instanceof HTMLImageElement)
+        || !(imagePreviewTitle instanceof HTMLElement)) return;
+
+      const source = button.getAttribute('data-image-src');
+      if (!source) return;
+
+      const title = button.getAttribute('data-image-title') || 'Copertina prodotto';
+      imagePreviewTrigger = button;
+      imagePreviewImage.src = source;
+      imagePreviewImage.alt = `Copertina di ${title}`;
+      imagePreviewTitle.textContent = title;
+      imagePreview.showModal();
+    });
+  });
+
+  const closeImagePreview = () => {
+    if (!(imagePreview instanceof HTMLDialogElement)) return;
+    imagePreview.close();
+  };
+
+  imagePreview?.querySelector('[data-image-preview-close]')?.addEventListener('click', closeImagePreview);
+  imagePreview?.addEventListener('click', (event) => {
+    if (event.target === imagePreview) closeImagePreview();
+  });
+  imagePreview?.addEventListener('close', () => {
+    if (imagePreviewImage instanceof HTMLImageElement) {
+      imagePreviewImage.removeAttribute('src');
+    }
+    if (imagePreviewTrigger instanceof HTMLElement) imagePreviewTrigger.focus();
+    imagePreviewTrigger = null;
+  });
+
+  document.querySelectorAll('[data-pricing-form]').forEach((form) => {
+    const type = form.querySelector('[data-pricing-type]');
+    const percentage = form.querySelector('[data-pricing-percentage]');
+    const amount = form.querySelector('[data-pricing-amount]');
+    if (!(type instanceof HTMLSelectElement)
+      || !(percentage instanceof HTMLElement)
+      || !(amount instanceof HTMLElement)) return;
+
+    const synchronizePricingFields = () => {
+      const usesPercentage = type.value === 'percentage';
+      percentage.hidden = !usesPercentage;
+      amount.hidden = usesPercentage;
+      percentage.querySelectorAll('input').forEach((input) => {
+        input.disabled = !usesPercentage;
+        input.required = usesPercentage;
+      });
+      amount.querySelectorAll('input').forEach((input) => {
+        input.disabled = usesPercentage;
+        input.required = !usesPercentage;
+      });
+    };
+    type.addEventListener('change', synchronizePricingFields);
+    synchronizePricingFields();
+  });
 })();

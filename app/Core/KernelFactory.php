@@ -12,6 +12,7 @@ use Hapa\Core\Security\SessionManager;
 use Hapa\Core\Ui\AuthenticationController;
 use Hapa\Core\Ui\CatalogReviewController;
 use Hapa\Core\Ui\CatalogPublicationRuleController;
+use Hapa\Core\Ui\CommercialCatalogController;
 use Hapa\Core\Ui\CustomerController;
 use Hapa\Core\Ui\IntegrationConfigurationController;
 use Hapa\Core\Ui\PricingRuleController;
@@ -39,6 +40,7 @@ final class KernelFactory
         private readonly CustomerController $customers,
         private readonly SpacePurchaseController $spacePurchases,
         private readonly CatalogPublicationRuleController $publicationRules,
+        private readonly CommercialCatalogController $commercialCatalogs,
     ) {
     }
 
@@ -62,6 +64,7 @@ final class KernelFactory
             'pricing_rules' => $this->pricingRules, 'catalog_review' => $this->catalogReview,
             'customers' => $this->customers, 'space_purchases' => $this->spacePurchases,
             'publication_rules' => $this->publicationRules,
+            'commercial_catalogs' => $this->commercialCatalogs,
         ]);
         if (!$routes instanceof RouteCollection) {
             throw new HapaRuntimeException('La route factory deve restituire RouteCollection.');

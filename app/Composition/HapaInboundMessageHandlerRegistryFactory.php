@@ -23,6 +23,7 @@ use Hapa\Modules\Procurement\Application\AutomaticSpacePurchaseGenerator;
 use Hapa\Modules\Procurement\Application\SpacePurchaseOrderResultHandler;
 use Hapa\Modules\Space\Application\SpaceCatalogInboundHandler;
 use Hapa\Modules\Space\Application\SpaceCatalogObservationHandler;
+use Hapa\Modules\Space\Application\SpaceSupplierInboundHandler;
 use PDO;
 
 final readonly class HapaInboundMessageHandlerRegistryFactory implements InboundMessageHandlerRegistryFactory
@@ -54,6 +55,7 @@ final readonly class HapaInboundMessageHandlerRegistryFactory implements Inbound
                     new ProviderCommandFactory(new ProviderCommandPayloadValidator(), new SystemClock()),
                 ),
             )),
+            new SpaceSupplierInboundHandler($connection),
             new MarketplaceOfferPublicationResultHandler($connection),
             new SpacePurchaseOrderResultHandler($connection),
             new MarketplaceOrderInboundHandler(new MarketplaceOrderObservationHandler(

@@ -25,5 +25,9 @@ final class HttpResponsePolicyTest extends TestCase
             "object-src 'none'",
             (string) $response->headers->get('Content-Security-Policy'),
         );
+        self::assertStringContainsString(
+            "img-src 'self' data: https://cover.space1999.com",
+            (string) $response->headers->get('Content-Security-Policy'),
+        );
     }
 }

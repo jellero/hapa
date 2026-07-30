@@ -11,7 +11,7 @@ final class IntegrationAccountConfiguration
     /** @var array<string, list<string>> */
     private const CAPABILITIES = [
         'sellrapido' => ['products.read', 'products.write', 'orders.read', 'orders.status.write'],
-        'space' => ['catalog.read', 'purchase_orders.write', 'purchase_orders.read'],
+        'space' => ['catalog.read', 'suppliers.read', 'purchase_orders.write', 'purchase_orders.read'],
         'gls' => ['shipping.create', 'shipping.close', 'shipping.reconcile', 'labels.read'],
         'brt' => ['shipping.create', 'shipping.close', 'shipping.reconcile', 'labels.read'],
         'amazon' => ['products.write', 'orders.read', 'orders.status.write'],
@@ -35,6 +35,7 @@ final class IntegrationAccountConfiguration
             'catalog_entity', 'authentication_scheme', 'purchase_orders_path', 'credential_header',
             'request_timeout_seconds', 'maximum_response_bytes', 'timeout_seconds',
             'poll_interval_seconds', 'catalog_page_size', 'maximum_catalog_pages_per_run',
+            'supplier_api_path', 'supplier_page_size', 'maximum_supplier_pages_per_run',
             'overlap_seconds', 'state_mapping_version', 'catalog_field_mapping',
         ],
         'gls' => [

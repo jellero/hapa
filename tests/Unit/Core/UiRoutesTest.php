@@ -30,6 +30,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/orders/{orderId}', $routes->get('ui_order_detail')?->getPath());
         self::assertSame('/ui/orders/{orderId}/space-purchase', $routes->get('ui_order_space_purchase')?->getPath());
         self::assertSame('/ui/catalog', $routes->get('ui_catalog')?->getPath());
+        self::assertSame('/ui/products', $routes->get('ui_products')?->getPath());
         self::assertSame('/ui/catalog/pricing-rules', $routes->get('ui_pricing_create')?->getPath());
         self::assertSame('/ui/catalog/pricing-rules/{ruleId}', $routes->get('ui_pricing_update')?->getPath());
         self::assertSame('/ui/catalog/pricing-rules/{ruleId}/retire', $routes->get('ui_pricing_retire')?->getPath());
@@ -42,6 +43,7 @@ final class UiRoutesTest extends TestCase
         self::assertSame('/ui/integrations/{accountId}/connection-test', $routes->get('ui_integration_connection_test')?->getPath());
         self::assertSame('/ui/integrations/{accountId}/orders/import', $routes->get('ui_integration_orders_import')?->getPath());
         self::assertSame('/ui/integrations/{accountId}/catalog/sync', $routes->get('ui_integration_catalog_sync')?->getPath());
+        self::assertSame('/ui/integrations/{accountId}/suppliers/sync', $routes->get('ui_integration_supplier_sync')?->getPath());
         self::assertSame('/ui/users', $routes->get('ui_users')?->getPath());
         self::assertSame('/ui/audit', $routes->get('ui_audit')?->getPath());
         self::assertSame('/ui/settings', $routes->get('ui_settings')?->getPath());

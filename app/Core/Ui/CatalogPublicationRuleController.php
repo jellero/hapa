@@ -21,6 +21,7 @@ final readonly class CatalogPublicationRuleController
     {
         try {
             $this->rules->create([
+                'commercial_catalog_id' => $request->request->getString('commercial_catalog_id'),
                 'code' => $request->request->getString('code'),
                 'name' => $request->request->getString('name'),
                 'marketplace_id' => $request->request->getString('marketplace_id'),
@@ -30,11 +31,11 @@ final readonly class CatalogPublicationRuleController
                 'match_value' => $request->request->getString('match_value'),
                 'priority' => $request->request->getString('priority', '100'),
             ], $this->actor($request));
-            return new RedirectResponse('/ui/catalog?publication_rule_saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse('/ui/catalog?catalog=' . $request->request->getInt('commercial_catalog_id') . '&publication_rule_saved=1', Response::HTTP_SEE_OTHER);
         } catch (InvalidArgumentException $exception) {
-            return new RedirectResponse('/ui/catalog?publication_rule_error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse('/ui/catalog?catalog=' . $request->request->getInt('commercial_catalog_id') . '&publication_rule_error=' . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
         } catch (Throwable) {
-            return new RedirectResponse('/ui/catalog?publication_rule_error=' . rawurlencode('Impossibile salvare la regola di pubblicazione.'), Response::HTTP_SEE_OTHER);
+            return new RedirectResponse('/ui/catalog?catalog=' . $request->request->getInt('commercial_catalog_id') . '&publication_rule_error=' . rawurlencode('Impossibile salvare la regola di pubblicazione.'), Response::HTTP_SEE_OTHER);
         }
     }
 
@@ -42,7 +43,7 @@ final readonly class CatalogPublicationRuleController
     {
         try {
             $this->rules->retire($request->attributes->getInt('ruleId'), $this->actor($request));
-            return new RedirectResponse('/ui/catalog?publication_rule_saved=1', Response::HTTP_SEE_OTHER);
+            return new RedirectResponse('/ui/catalog?catalog=' . $request->request->getInt('commercial_catalog_id') . '&publication_rule_saved=1', Response::HTTP_SEE_OTHER);
         } catch (Throwable) {
             return new RedirectResponse('/ui/catalog?publication_rule_error=' . rawurlencode('Impossibile disattivare la regola.'), Response::HTTP_SEE_OTHER);
         }

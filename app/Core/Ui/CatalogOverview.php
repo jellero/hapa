@@ -7,10 +7,12 @@ namespace Hapa\Core\Ui;
 interface CatalogOverview
 {
     /**
+     * @param array<string, string> $filters
      * @return array{
      *   items: list<array<string, int|string|bool|null>>,
-     *   metrics: array{total: int, pending_review: int, active: int, stale: int}
+     *   metrics: array<string, int>,
+     *   filter_options: array{feeds: list<string>, formats: list<string>, suppliers: list<array{id:string,name:?string}>}
      * }
      */
-    public function search(string $query, int $limit = 100): array;
+    public function search(string $query, int $limit = 100, array $filters = []): array;
 }

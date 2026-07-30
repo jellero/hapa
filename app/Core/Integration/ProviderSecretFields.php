@@ -11,7 +11,10 @@ final class ProviderSecretFields
     /** @var array<string, array<string, string>> */
     private const FIELDS = [
         'sellrapido' => ['username' => 'Username API', 'password' => 'Password API'],
-        'space' => ['api_key' => 'Token Bearer Space'],
+        'space' => [
+            'api_key' => 'Token feed prodotti Space (/apih)',
+            'supplier_api_token' => 'Token API anagrafiche Space (/apie)',
+        ],
         'gls' => ['password' => 'Password cliente GLS'],
         'brt' => ['api_key' => 'Chiave API', 'username' => 'Username', 'password' => 'Password'],
         'amazon' => [
@@ -26,6 +29,27 @@ final class ProviderSecretFields
     public function forProvider(string $provider): array
     {
         return self::FIELDS[strtolower($provider)] ?? [];
+    }
+
+    /**
+     * @param list<string> $capabilities
+     * @return array<string, string>
+     */
+    public function forAccount(string $provider, array $capabilities): array
+    {
+        if (strtolower($provider) !== 'space') {
+            return $this->forProvider($provider);
+        }
+        if (in_array('suppliers.read', $capabilities, true)
+            && !in_array('catalog.read', $capabilities, true)) {
+            return ['api_key' => 'Token Bearer elenco fornitori Space (/apie)'];
+        }
+        if (in_array('catalog.read', $capabilities, true)
+            && !in_array('suppliers.read', $capabilities, true)) {
+            return ['api_key' => 'Token Bearer feed prodotti Space (/apih)'];
+        }
+
+        return self::FIELDS['space'];
     }
 
     /**

@@ -9,7 +9,7 @@ use Hapa\Core\Security\UserIdentity;
 interface CatalogPublicationRuleManagement
 {
     /** @return list<array<string, mixed>> */
-    public function all(): array;
+    public function all(?int $commercialCatalogId = null): array;
 
     /** @param array<string, mixed> $input */
     public function create(array $input, UserIdentity $actor): void;

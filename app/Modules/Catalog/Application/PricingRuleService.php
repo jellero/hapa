@@ -31,17 +31,16 @@ final class PricingRuleService implements PricingRuleManagement
     }
 
     /** @return list<array<string, mixed>> */
-    public function all(): array
+    public function all(?int $commercialCatalogId = null): array
     {
-        $statement = $this->connection()->query(<<<'SQL'
+        $statement = $this->connection()->prepare(<<<'SQL'
 SELECT rule.*, marketplace.code AS marketplace_code, marketplace.name AS marketplace_name
 FROM pricing_rules rule
 LEFT JOIN marketplaces marketplace ON marketplace.id = rule.marketplace_id
+WHERE (CAST(:catalog_id AS BIGINT) IS NULL OR rule.commercial_catalog_id = :catalog_id)
 ORDER BY rule.retired_at NULLS FIRST, rule.enabled DESC, rule.priority DESC, rule.code
 SQL);
-        if ($statement === false) {
-            throw new HapaRuntimeException('Impossibile leggere le regole di ricarico.');
-        }
+        $statement->execute(['catalog_id' => $commercialCatalogId]);
 
         return array_values(array_map(self::hydrate(...), $statement->fetchAll(PDO::FETCH_ASSOC)));
     }
@@ -76,11 +75,11 @@ SQL);
             }
             $statement = $pdo->prepare(<<<'SQL'
 INSERT INTO pricing_rules (
-    code, name, scope, marketplace_id, sku, adjustment_type, adjustment_value,
+    commercial_catalog_id, code, name, scope, marketplace_id, sku, adjustment_type, adjustment_value,
     currency, minimum_price_minor, maximum_price_minor, priority, enabled,
     valid_from, valid_until, version, created_at, updated_at
 ) VALUES (
-    :code, :name, :scope, :marketplace_id, :sku, :adjustment_type, :adjustment_value,
+    :commercial_catalog_id, :code, :name, :scope, :marketplace_id, :sku, :adjustment_type, :adjustment_value,
     :currency, :minimum_price_minor, :maximum_price_minor, :priority, CAST(:enabled AS BOOLEAN),
     :valid_from, :valid_until, 1, :created_at, :updated_at
 ) RETURNING id
@@ -89,7 +88,7 @@ SQL);
             $id = (int) $statement->fetchColumn();
             $snapshot = $this->snapshot($id);
             $this->historyAndAudit($id, 1, 'created', null, $snapshot, self::auditContext($actor, $correlationId, $now));
-            $this->offerRecalculator->recalculateAll($pdo);
+            $this->offerRecalculator->recalculateCatalog($pdo, (int) $rule['commercial_catalog_id']);
             $pdo->commit();
 
             return $id;
@@ -123,7 +122,8 @@ SQL);
             }
             $statement = $pdo->prepare(<<<'SQL'
 UPDATE pricing_rules
-SET code = :code, name = :name, scope = :scope, marketplace_id = :marketplace_id,
+SET commercial_catalog_id = :commercial_catalog_id,
+    code = :code, name = :name, scope = :scope, marketplace_id = :marketplace_id,
     sku = :sku, adjustment_type = :adjustment_type, adjustment_value = :adjustment_value,
     currency = :currency, minimum_price_minor = :minimum_price_minor,
     maximum_price_minor = :maximum_price_minor, priority = :priority,
@@ -144,7 +144,13 @@ SQL);
             }
             $after = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, 'updated', $before, $after, self::auditContext($actor, $correlationId, $now));
-            $this->offerRecalculator->recalculateAll($pdo);
+            $catalogIds = array_values(array_unique([
+                (int) $before['commercial_catalog_id'],
+                (int) $rule['commercial_catalog_id'],
+            ]));
+            foreach ($catalogIds as $catalogId) {
+                $this->offerRecalculator->recalculateCatalog($pdo, $catalogId);
+            }
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -182,7 +188,7 @@ SQL);
             }
             $after = $this->snapshot($id);
             $this->historyAndAudit($id, (int) $version, 'retired', $before, $after, self::auditContext($actor, $correlationId, $now));
-            $this->offerRecalculator->recalculateAll($pdo);
+            $this->offerRecalculator->recalculateCatalog($pdo, (int) $before['commercial_catalog_id']);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -199,6 +205,8 @@ SQL);
     private function validate(array $input): array
     {
         $code = strtolower(trim((string) ($input['code'] ?? '')));
+        $commercialCatalogId = self::nullablePositiveInt($input['commercial_catalog_id'] ?? null)
+            ?? throw new InvalidArgumentException('Selezionare un catalogo commerciale.');
         $name = trim((string) ($input['name'] ?? ''));
         if ($name === '' || mb_strlen($name) > 160) {
             throw new InvalidArgumentException('Nome della regola non valido.');
@@ -208,6 +216,7 @@ SQL);
         $adjustmentType = PriceAdjustmentType::tryFrom((string) ($input['adjustment_type'] ?? ''))
             ?? throw new InvalidArgumentException('Tipo di ricarico non valido.');
         $marketplaceId = self::nullablePositiveInt($input['marketplace_id'] ?? null);
+        $this->assertCatalogMarketplace($commercialCatalogId, $marketplaceId);
         $marketplaceCode = $marketplaceId === null ? null : $this->marketplaceCode($marketplaceId);
         $sku = self::nullableString($input['sku'] ?? null);
         $currency = strtoupper(trim((string) ($input['currency'] ?? 'EUR')));
@@ -234,6 +243,7 @@ SQL);
         }
 
         return [
+            'commercial_catalog_id' => $commercialCatalogId,
             'code' => $rule->code,
             'name' => $name,
             'scope' => $rule->scope->value,
@@ -249,6 +259,25 @@ SQL);
             'valid_from' => $validFrom?->format(DATE_ATOM),
             'valid_until' => $validUntil?->format(DATE_ATOM),
         ];
+    }
+
+    private function assertCatalogMarketplace(int $catalogId, ?int $marketplaceId): void
+    {
+        $catalog = $this->connection()->prepare('SELECT 1 FROM commercial_catalogs WHERE id = :id AND retired_at IS NULL');
+        $catalog->execute(['id' => $catalogId]);
+        if ($catalog->fetchColumn() === false) {
+            throw new InvalidArgumentException('Catalogo commerciale non disponibile.');
+        }
+        if ($marketplaceId === null) {
+            return;
+        }
+        $link = $this->connection()->prepare(
+            'SELECT 1 FROM commercial_catalog_marketplaces WHERE commercial_catalog_id = :catalog_id AND marketplace_id = :marketplace_id',
+        );
+        $link->execute(['catalog_id' => $catalogId, 'marketplace_id' => $marketplaceId]);
+        if ($link->fetchColumn() === false) {
+            throw new InvalidArgumentException('Il marketplace non appartiene al catalogo selezionato.');
+        }
     }
 
     private function marketplaceCode(int $id): string

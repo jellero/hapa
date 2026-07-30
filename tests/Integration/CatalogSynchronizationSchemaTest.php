@@ -69,16 +69,24 @@ SQL);
     {
         $suffix = bin2hex(random_bytes(6));
         $marketplaceId = $this->marketplace($suffix);
+        $catalog = $this->pdo->prepare(<<<'SQL'
+INSERT INTO commercial_catalogs (code, name, enabled, priority, version, created_at, updated_at)
+VALUES (:code, 'Catalogo vincoli test', TRUE, 100, 1, NOW(), NOW())
+RETURNING id
+SQL);
+        $catalog->execute(['code' => 'constraint-' . $suffix]);
+        $catalogId = (int) $catalog->fetchColumn();
         $statement = $this->pdo->prepare(<<<'SQL'
 INSERT INTO pricing_rules (
-    code, name, scope, marketplace_id, adjustment_type, adjustment_value, currency
+    commercial_catalog_id, code, name, scope, marketplace_id, adjustment_type, adjustment_value, currency
 ) VALUES (
-    :code, 'Regola non valida', 'global', :marketplace_id, 'percentage', 1500, 'EUR'
+    :commercial_catalog_id, :code, 'Regola non valida', 'global', :marketplace_id, 'percentage', 1500, 'EUR'
 )
 SQL);
 
         $this->expectException(PDOException::class);
         $statement->execute([
+            'commercial_catalog_id' => $catalogId,
             'code' => 'bad-' . $suffix,
             'marketplace_id' => $marketplaceId,
         ]);

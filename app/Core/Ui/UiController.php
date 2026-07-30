@@ -34,10 +34,12 @@ final readonly class UiController
         private ?CustomerOverview $customerReadModel = null,
         private ?OrderOverview $orderReadModel = null,
         private ?AuthorizationPolicy $authorization = null,
-        private ?PricingPreview $pricingPreview = null,
         private ?ShipmentOverview $shipmentReadModel = null,
         private ?ProviderSecretFields $providerSecretFields = null,
         private ?CatalogPublicationRuleManagement $publicationRules = null,
+        private ?CommercialCatalogManagement $commercialCatalogs = null,
+        private ?SpaceSupplierOverview $spaceSuppliers = null,
+        private ?PricingPreview $pricingPreview = null,
     ) {
     }
 
@@ -162,28 +164,15 @@ final readonly class UiController
 
     public function catalog(Request $request): Response
     {
-        $query = trim($request->query->getString('q'));
-        $catalog = $this->catalogReadModel?->search($query) ?? [
+        $selectedCatalogId = $request->query->getInt('catalog');
+        $commercialCatalogs = $this->commercialCatalogs?->all() ?? [];
+        $selectedCatalog = $selectedCatalogId > 0 ? $this->commercialCatalogs?->find($selectedCatalogId) : null;
+        $catalog = $this->catalogReadModel?->search('', 1) ?? [
             'items' => [],
             'metrics' => ['total' => 0, 'pending_review' => 0, 'active' => 0, 'stale' => 0],
         ];
         $session = $request->attributes->get('security_session');
-        $catalogItems = $catalog['items'];
-        foreach ($catalogItems as &$item) {
-            $item['review_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('catalog.review.' . (string) $item['id'])
-                : '';
-            $item['availability_csrf_token'] = $session instanceof WebSession
-                ? $session->csrfToken('catalog.availability.' . (string) $item['id'])
-                : '';
-        }
-        unset($item);
-        $pricePreviews = $this->pricingPreview?->forProducts($catalogItems) ?? [];
-        foreach ($catalogItems as &$item) {
-            $item['price_previews'] = $pricePreviews[(int) $item['id']] ?? [];
-        }
-        unset($item);
-        $pricingRules = $this->pricingRules?->all() ?? [];
+        $pricingRules = $selectedCatalog === null ? [] : ($this->pricingRules?->all($selectedCatalogId) ?? []);
         foreach ($pricingRules as &$rule) {
             $rule['update_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('pricing.update.' . (string) $rule['id'])
@@ -193,34 +182,116 @@ final readonly class UiController
                 : '';
         }
         unset($rule);
-        $publicationRules = $this->publicationRules?->all() ?? [];
+        $publicationRules = $selectedCatalog === null ? [] : ($this->publicationRules?->all($selectedCatalogId) ?? []);
         foreach ($publicationRules as &$rule) {
             $rule['retire_csrf_token'] = $session instanceof WebSession
                 ? $session->csrfToken('catalog.publication-rule.retire.' . (string) $rule['id'])
                 : '';
         }
         unset($rule);
+        $catalogPreviewRequested = $selectedCatalog !== null && $request->query->getBoolean('preview');
+        $catalogPreviewProducts = [];
+        if ($catalogPreviewRequested) {
+            $catalogPreviewProducts = $this->commercialCatalogs?->preview($selectedCatalogId, 200) ?? [];
+            $pricePreviews = $this->pricingPreview?->forProducts($catalogPreviewProducts, $selectedCatalogId) ?? [];
+            foreach ($catalogPreviewProducts as &$product) {
+                $eligibleMarketplaceIds = array_fill_keys(
+                    is_array($product['marketplace_ids'] ?? null) ? $product['marketplace_ids'] : [],
+                    true,
+                );
+                $product['price_previews'] = array_values(array_filter(
+                    $pricePreviews[(int) $product['id']] ?? [],
+                    static fn (array $preview): bool => isset($eligibleMarketplaceIds[(int) ($preview['marketplace_id'] ?? 0)]),
+                ));
+            }
+            unset($product);
+        }
 
         return $this->operational($request, 'ui/catalog', 'catalog', [
-            'title' => 'Anagrafica prodotti, prezzi e stock',
+            'title' => $selectedCatalog === null ? 'Cataloghi commerciali' : (string) $selectedCatalog['name'],
             'eyebrow' => 'Catalogo commerciale',
-            'description' => 'Consulta prezzo e stock sincronizzati da Space e gestisci da interfaccia le regole di ricarico applicate alle offerte.',
-            'query' => $query,
-            'catalogItems' => $catalogItems,
+            'description' => $selectedCatalog === null
+                ? 'Gestisci i cataloghi destinati ai marketplace, le regole prezzo e il perimetro dei prodotti pubblicabili.'
+                : 'Configura prezzo, inclusioni ed esclusioni del catalogo selezionato.',
+            'commercialCatalogs' => $commercialCatalogs,
+            'selectedCatalog' => $selectedCatalog,
+            'createCommercialCatalogCsrfToken' => $session instanceof WebSession ? $session->csrfToken('commercial-catalog.create') : '',
+            'deleteCommercialCatalogCsrfToken' => $session instanceof WebSession && $selectedCatalog !== null
+                ? $session->csrfToken('commercial-catalog.delete.' . (string) $selectedCatalogId)
+                : '',
+            'statusCommercialCatalogCsrfToken' => $session instanceof WebSession && $selectedCatalog !== null
+                ? $session->csrfToken('commercial-catalog.status.' . (string) $selectedCatalogId)
+                : '',
+            'catalogSaved' => $request->query->getBoolean('catalog_saved'),
+            'catalogDeleted' => $request->query->getBoolean('catalog_deleted'),
+            'catalogStatusSaved' => $request->query->getBoolean('catalog_status_saved'),
+            'catalogStatusError' => $request->query->getString('catalog_status_error'),
+            'catalogError' => $request->query->getString('catalog_error'),
+            'catalogDeleteError' => $request->query->getString('catalog_delete_error'),
             'catalogMetrics' => $catalog['metrics'],
             'pricingRules' => $pricingRules,
             'marketplaces' => $this->pricingRules?->marketplaces() ?? [],
             'createPricingCsrfToken' => $session instanceof WebSession ? $session->csrfToken('pricing.create') : '',
             'pricingSaved' => $request->query->getBoolean('pricing_saved'),
             'pricingError' => $request->query->getString('pricing_error'),
-            'reviewSaved' => $request->query->getBoolean('review_saved'),
-            'reviewError' => $request->query->getString('review_error'),
-            'availabilitySaved' => $request->query->getBoolean('availability_saved'),
-            'availabilityError' => $request->query->getString('availability_error'),
             'publicationRules' => $publicationRules,
+            'catalogPreviewRequested' => $catalogPreviewRequested,
+            'catalogPreviewProducts' => $catalogPreviewProducts,
+            'catalogPreviewLimit' => 200,
             'createPublicationRuleCsrfToken' => $session instanceof WebSession ? $session->csrfToken('catalog.publication-rule.create') : '',
             'publicationRuleSaved' => $request->query->getBoolean('publication_rule_saved'),
             'publicationRuleError' => $request->query->getString('publication_rule_error'),
+        ]);
+    }
+
+    public function products(Request $request): Response
+    {
+        $query = trim($request->query->getString('q'));
+        $filters = [
+            'status' => $request->query->getString('status'),
+            'availability' => $request->query->getString('availability'),
+            'feed_name' => $request->query->getString('feed_name'),
+            'format' => $request->query->getString('format'),
+            'supplier_id' => $request->query->getString('supplier_id'),
+        ];
+        $catalog = $this->catalogReadModel?->search($query, 200, $filters) ?? [
+            'items' => [],
+            'metrics' => [
+                'total' => 0, 'pending_review' => 0, 'active' => 0, 'stale' => 0,
+                'in_stock' => 0, 'backorder' => 0, 'unavailable' => 0,
+            ],
+            'filter_options' => ['feeds' => [], 'formats' => [], 'suppliers' => []],
+        ];
+
+        return $this->operational($request, 'ui/products', 'products', [
+            'title' => 'Prodotti',
+            'eyebrow' => 'Anagrafica prodotti',
+            'description' => 'Consulta e filtra tutti i prodotti importati da Space con i dati sorgente associati.',
+            'query' => $query,
+            'selectedFilters' => $filters,
+            'products' => $catalog['items'],
+            'productMetrics' => $catalog['metrics'],
+            'productFilterOptions' => $catalog['filter_options'],
+        ]);
+    }
+
+    public function suppliers(Request $request): Response
+    {
+        $query = trim($request->query->getString('q'));
+        $status = $request->query->getString('status');
+        $result = $this->spaceSuppliers?->search($query, $status, 500) ?? [
+            'items' => [],
+            'metrics' => ['total' => 0, 'active' => 0, 'inactive' => 0, 'countries' => 0],
+        ];
+
+        return $this->operational($request, 'ui/suppliers', 'suppliers', [
+            'title' => 'Fornitori Space',
+            'eyebrow' => 'Anagrafica fornitori',
+            'description' => 'Consulta l’anagrafica fornitori sincronizzata da Space. I dati sono di sola lettura.',
+            'query' => $query,
+            'selectedStatus' => $status,
+            'suppliers' => $result['items'],
+            'supplierMetrics' => $result['metrics'],
         ]);
     }
 
@@ -288,7 +359,10 @@ final readonly class UiController
         $accounts = $this->integrationAccounts?->all() ?? [];
         foreach ($accounts as &$account) {
             $account = $this->decorateIntegrationAccount($account, $session);
-            $account['secret_fields'] = $this->providerSecretFields?->forProvider((string) $account['provider_code']) ?? [];
+            $account['secret_fields'] = $this->providerSecretFields?->forAccount(
+                (string) $account['provider_code'],
+                is_array($account['capabilities'] ?? null) ? $account['capabilities'] : [],
+            ) ?? [];
         }
         unset($account);
         $availableCapabilities = $this->integrationConfiguration?->availableCapabilities() ?? [];
@@ -297,6 +371,10 @@ final readonly class UiController
             $provider = (string) $account['provider_code'];
             $accountCounts[$provider] = ($accountCounts[$provider] ?? 0) + 1;
         }
+        $published = max(0, $request->query->getInt('published'));
+        $ordersImported = $request->query->getBoolean('orders_imported');
+        $catalogSynchronized = $request->query->getBoolean('catalog_synchronized');
+        $suppliersSynchronized = $request->query->getBoolean('suppliers_synchronized');
 
         return $this->operational($request, 'ui/integrations', 'integrations', [
             'title' => 'Integrazioni',
@@ -323,8 +401,12 @@ final readonly class UiController
             'configurationSynced' => $request->query->getBoolean('configuration_synced'),
             'statusRefreshed' => $request->query->getBoolean('status_refreshed'),
             'connectionTested' => $request->query->getBoolean('connection_tested'),
-            'ordersImported' => $request->query->getBoolean('orders_imported'),
-            'ordersPublished' => max(0, $request->query->getInt('published')),
+            'ordersImported' => $ordersImported,
+            'ordersPublished' => $ordersImported ? $published : 0,
+            'catalogSynchronized' => $catalogSynchronized,
+            'catalogPublished' => $catalogSynchronized ? $published : 0,
+            'suppliersSynchronized' => $suppliersSynchronized,
+            'suppliersPublished' => $suppliersSynchronized ? $published : 0,
             'configurationError' => $request->query->getString('error'),
         ]);
     }
@@ -363,6 +445,7 @@ final readonly class UiController
             'connection_test_csrf_token' => 'integration.connection-test.',
             'orders_import_csrf_token' => 'integration.orders.import.',
             'catalog_sync_csrf_token' => 'integration.catalog.sync.',
+            'supplier_sync_csrf_token' => 'integration.suppliers.sync.',
         ];
         foreach ($actions as $field => $action) {
             $account[$field] = $session instanceof WebSession ? $session->csrfToken($action . $id) : '';

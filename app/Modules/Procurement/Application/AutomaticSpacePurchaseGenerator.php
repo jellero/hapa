@@ -240,7 +240,9 @@ SQL);
         }
         $offerId = (int) $offer['supplier_catalog_item_id'];
         $required[$offerId] = ($required[$offerId] ?? 0) + $quantity;
-        if ($required[$offerId] > (int) $offer['available_quantity']) {
+        $totalAvailable = (int) $offer['available_quantity'] + (int) $offer['backorder_quantity'];
+        $offer['available_quantity'] = $totalAvailable;
+        if ($required[$offerId] > $totalAvailable) {
             return sprintf('Disponibilità Space insufficiente per %s: richiesti %d, osservati %d.', (string) $offer['supplier_sku'], $required[$offerId], (int) $offer['available_quantity']);
         }
         return $offer['purchase_cost_minor'] === null ? sprintf('Costo di acquisto Space assente per %s.', (string) $offer['supplier_sku']) : null;
@@ -265,7 +267,7 @@ SQL);
         $statement = $this->pdo->prepare(<<<'SQL'
 SELECT offer.id AS supplier_catalog_item_id, offer.catalog_item_id,
        offer.external_item_id, offer.supplier_sku, offer.purchase_cost_minor,
-       offer.currency, offer.available_quantity,
+       offer.currency, offer.available_quantity, offer.backorder_quantity,
        CASE
            WHEN CAST(:catalog_item_id AS BIGINT) IS NOT NULL
                 AND item.id = CAST(:catalog_item_id AS BIGINT) THEN 4

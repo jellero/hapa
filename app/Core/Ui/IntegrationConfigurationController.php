@@ -281,6 +281,29 @@ final readonly class IntegrationConfigurationController
         }
     }
 
+    public function synchronizeSuppliers(Request $request): Response
+    {
+        try {
+            $account = $this->accounts->find($request->attributes->getInt('accountId'));
+            if ($account['provider_code'] !== 'space'
+                || !in_array($account['desired_status'], ['pilot', 'active'], true)
+                || !in_array('suppliers.read', $account['capabilities'], true)) {
+                throw new HapaRuntimeException('La sincronizzazione manuale richiede un account Space pilot o attivo con suppliers.read.');
+            }
+            $actor = $this->actor($request);
+            $correlationId = $request->attributes->getString('correlation_id');
+            $result = $this->configurationGateway->synchronizeSuppliers((string) $account['code']);
+            $this->accounts->recordManualSupplierSync((int) $account['id'], $result, $actor, $correlationId);
+
+            return new RedirectResponse(
+                '/ui/integrations?suppliers_synchronized=1&published=' . (int) ($result['published'] ?? 0),
+                Response::HTTP_SEE_OTHER,
+            );
+        } catch (JsonException | RuntimeException $exception) {
+            return new RedirectResponse(self::ERROR_PATH . rawurlencode($exception->getMessage()), Response::HTTP_SEE_OTHER);
+        }
+    }
+
     /** @return array<string, mixed> @throws JsonException */
     private function configuration(Request $request): array
     {
@@ -289,6 +312,10 @@ final readonly class IntegrationConfigurationController
             static fn (string $value): string => trim($value),
             explode(',', $request->request->getString('capabilities')),
         ), static fn (string $value): bool => $value !== ''));
+        $spaceAccountKind = $request->request->getString('space_account_kind');
+        if ($provider === 'space' && in_array($spaceAccountKind, ['catalog', 'suppliers'], true)) {
+            $capabilities = [$spaceAccountKind === 'suppliers' ? 'suppliers.read' : 'catalog.read'];
+        }
         $settings = [];
         if ($provider !== 'space') {
             $settingsJson = trim($request->request->getString('settings_json', '{}'));
@@ -301,30 +328,46 @@ final readonly class IntegrationConfigurationController
             }
         }
         if ($provider === 'space' && $request->request->has('space_base_url')) {
+            $supplierAccount = in_array('suppliers.read', $capabilities, true)
+                && !in_array('catalog.read', $capabilities, true);
             $spaceSettings = [
                 'base_url' => $request->request->getString('space_base_url'),
                 'health_path' => $request->request->getString('space_health_path'),
-                'catalog_incremental_path' => $request->request->getString('space_catalog_incremental_path'),
-                'catalog_confirmation_path' => $request->request->getString('space_catalog_confirmation_path'),
-                'catalog_entity' => $request->request->getString('space_catalog_entity'),
                 'poll_interval_seconds' => $request->request->getInt('space_poll_interval_seconds'),
-                'catalog_page_size' => $request->request->getInt('space_catalog_page_size'),
-                'maximum_catalog_pages_per_run' => $request->request->getInt('space_maximum_catalog_pages_per_run'),
+                'maximum_response_bytes' => $request->request->getInt('space_maximum_response_bytes'),
                 'authentication_scheme' => 'bearer',
             ];
+            if ($supplierAccount) {
+                $spaceSettings += [
+                    'supplier_api_path' => $request->request->getString('space_supplier_api_path'),
+                    'supplier_page_size' => $request->request->getInt('space_supplier_page_size'),
+                    'maximum_supplier_pages_per_run' => $request->request->getInt('space_maximum_supplier_pages_per_run'),
+                ];
+            } else {
+                $spaceSettings += [
+                    'catalog_incremental_path' => $request->request->getString('space_catalog_incremental_path'),
+                    'catalog_incremental_action' => $request->request->getString('space_catalog_incremental_action'),
+                    'catalog_confirmation_path' => $request->request->getString('space_catalog_confirmation_path'),
+                    'catalog_entity' => $request->request->getString('space_catalog_entity'),
+                    'catalog_page_size' => $request->request->getInt('space_catalog_page_size'),
+                    'maximum_catalog_pages_per_run' => $request->request->getInt('space_maximum_catalog_pages_per_run'),
+                ];
+            }
             foreach ($spaceSettings as $key => $value) {
                 if ($value !== '' && $value !== 0) {
                     $settings[$key] = $value;
                 }
             }
-            $mapping = [];
-            foreach ($request->request->all('space_field_mapping') as $target => $source) {
-                if (is_string($target) && is_string($source) && trim($source) !== '') {
-                    $mapping[$target] = trim($source);
+            if (!$supplierAccount) {
+                $mapping = [];
+                foreach ($request->request->all('space_field_mapping') as $target => $source) {
+                    if (is_string($target) && is_string($source) && trim($source) !== '') {
+                        $mapping[$target] = trim($source);
+                    }
                 }
-            }
-            if ($mapping !== []) {
-                $settings['catalog_field_mapping'] = $mapping;
+                if ($mapping !== []) {
+                    $settings['catalog_field_mapping'] = $mapping;
+                }
             }
         }
 

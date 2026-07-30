@@ -39,6 +39,7 @@ $registerIntegrationRoutes = static function (
         ['ui_integration_connection_test', '/ui/integrations/{accountId}/connection-test', 'test_connection', 'integrations.manage', 'integration.connection-test.{accountId}', ['accountId' => $accountId]],
         ['ui_integration_orders_import', '/ui/integrations/{accountId}/orders/import', 'import_orders', 'integrations.manage', 'integration.orders.import.{accountId}', ['accountId' => $accountId]],
         ['ui_integration_catalog_sync', '/ui/integrations/{accountId}/catalog/sync', 'sync_catalog', 'integrations.manage', 'integration.catalog.sync.{accountId}', ['accountId' => $accountId]],
+        ['ui_integration_supplier_sync', '/ui/integrations/{accountId}/suppliers/sync', 'sync_suppliers', 'integrations.manage', 'integration.suppliers.sync.{accountId}', ['accountId' => $accountId]],
     ];
 
     foreach ($actions as [$name, $path, $controller, $permission, $csrfAction, $requirements]) {
@@ -92,6 +93,7 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
     $customers = $services['customers'] ?? null;
     $spacePurchases = $services['space_purchases'] ?? null;
     $publicationRules = $services['publication_rules'] ?? null;
+    $commercialCatalogs = $services['commercial_catalogs'] ?? null;
     $routes = new RouteCollection();
     $positiveId = '[1-9][0-9]*'; $customerId = '[A-Za-z0-9._-]{3,64}'; $orderId = '[^/]{1,160}';
     $unavailableAuthentication = static fn (): JsonResponse => new JsonResponse(
@@ -114,18 +116,23 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
     $testIntegrationConnectionController = $resolveController($integrationConfiguration, 'testConnection');
     $importIntegrationOrdersController = $resolveController($integrationConfiguration, 'importOrders');
     $synchronizeIntegrationCatalogController = $resolveController($integrationConfiguration, 'synchronizeCatalog');
+    $synchronizeIntegrationSuppliersController = $resolveController($integrationConfiguration, 'synchronizeSuppliers');
     $integrationControllers = [
         'create' => $createIntegrationController, 'update' => $updateIntegrationController, 'retire' => $retireIntegrationController,
         'replace_secrets' => $replaceIntegrationSecretsController, 'revoke_secrets' => $revokeIntegrationSecretsController,
         'sync_configuration' => $syncIntegrationConfigurationController, 'refresh_status' => $refreshIntegrationStatusController,
         'change_status' => $changeIntegrationStatusController, 'test_connection' => $testIntegrationConnectionController,
         'import_orders' => $importIntegrationOrdersController, 'sync_catalog' => $synchronizeIntegrationCatalogController,
+        'sync_suppliers' => $synchronizeIntegrationSuppliersController,
     ];
     $createPricingController = $resolveController($pricingRules, 'create');
     $updatePricingController = $resolveController($pricingRules, 'update');
     $retirePricingController = $resolveController($pricingRules, 'retire');
     $createPublicationRuleController = $resolveController($publicationRules, 'create');
     $retirePublicationRuleController = $resolveController($publicationRules, 'retire');
+    $createCommercialCatalogController = $resolveController($commercialCatalogs, 'create');
+    $deleteCommercialCatalogController = $resolveController($commercialCatalogs, 'delete');
+    $statusCommercialCatalogController = $resolveController($commercialCatalogs, 'status');
     $reviewCatalogController = $resolveController($catalogReview, 'review');
     $updateCatalogAvailabilityController = $resolveController($catalogReview, 'updateAvailability');
     $createCustomerController = $resolveController($customers, 'create');
@@ -182,7 +189,24 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
         methods: ['GET'],
     ));
     $routes->add('ui_orders', new Route('/ui/orders', ['_controller' => $ui->orders(...), '_permission' => 'orders.view'], methods: ['GET']));
+    $routes->add('ui_products', new Route('/ui/products', ['_controller' => $ui->products(...), '_permission' => 'catalog.view'], methods: ['GET']));
+    $routes->add('ui_suppliers', new Route('/ui/suppliers', ['_controller' => $ui->suppliers(...), '_permission' => 'catalog.view'], methods: ['GET']));
     $routes->add('ui_catalog', new Route('/ui/catalog', ['_controller' => $ui->catalog(...), '_permission' => 'catalog.view'], methods: ['GET']));
+    $routes->add('ui_commercial_catalog_create', new Route('/ui/catalog/catalogs', [
+        '_controller' => $createCommercialCatalogController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'commercial-catalog.create',
+    ], methods: ['POST']));
+    $routes->add('ui_commercial_catalog_delete', new Route('/ui/catalog/catalogs/{catalogId}/delete', [
+        '_controller' => $deleteCommercialCatalogController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'commercial-catalog.delete.{catalogId}',
+    ], requirements: ['catalogId' => $positiveId], methods: ['POST']));
+    $routes->add('ui_commercial_catalog_status', new Route('/ui/catalog/catalogs/{catalogId}/status', [
+        '_controller' => $statusCommercialCatalogController,
+        '_permission' => 'catalog.manage',
+        '_csrf_action' => 'commercial-catalog.status.{catalogId}',
+    ], requirements: ['catalogId' => $positiveId], methods: ['POST']));
     $routes->add('ui_pricing_create', new Route('/ui/catalog/pricing-rules', [
         '_controller' => $createPricingController,
         '_permission' => 'catalog.manage',

@@ -35,6 +35,70 @@ final readonly class MarketplaceOfferRecalculator implements CatalogOfferRecalcu
         return $this->recalculate($pdo, [$catalogItemId]);
     }
 
+    public function recalculateCatalog(PDO $pdo, int $commercialCatalogId): int
+    {
+        if ($commercialCatalogId < 1) {
+            throw new HapaRuntimeException('Catalogo commerciale non valido per il ricalcolo offerte.');
+        }
+
+        $catalogItemIds = [];
+        $previouslyCalculated = $pdo->prepare(<<<'SQL'
+SELECT DISTINCT offer.catalog_item_id
+FROM marketplace_offers offer
+JOIN pricing_rules rule ON rule.id = offer.applied_pricing_rule_id
+WHERE rule.commercial_catalog_id = :catalog_id
+SQL);
+        $previouslyCalculated->execute(['catalog_id' => $commercialCatalogId]);
+        foreach ($previouslyCalculated->fetchAll(PDO::FETCH_COLUMN) as $catalogItemId) {
+            $catalogItemIds[(int) $catalogItemId] = true;
+        }
+
+        $catalog = $pdo->prepare(
+            'SELECT enabled FROM commercial_catalogs WHERE id = :catalog_id AND retired_at IS NULL',
+        );
+        $catalog->execute(['catalog_id' => $commercialCatalogId]);
+        $enabled = filter_var($catalog->fetchColumn(), FILTER_VALIDATE_BOOL);
+        $marketplaces = $pdo->prepare(
+            'SELECT marketplace_id FROM commercial_catalog_marketplaces WHERE commercial_catalog_id = :catalog_id',
+        );
+        $marketplaces->execute(['catalog_id' => $commercialCatalogId]);
+        $marketplaceIds = array_values(array_map('intval', $marketplaces->fetchAll(PDO::FETCH_COLUMN)));
+        $rules = $pdo->prepare(<<<'SQL'
+SELECT action, field, operator, match_value, marketplace_id, priority
+FROM catalog_publication_rules
+WHERE commercial_catalog_id = :catalog_id AND enabled AND retired_at IS NULL
+ORDER BY priority, CASE action WHEN 'exclude' THEN 0 ELSE 1 END, id
+SQL);
+        $rules->execute(['catalog_id' => $commercialCatalogId]);
+        $publicationRules = array_values($rules->fetchAll(PDO::FETCH_ASSOC));
+
+        if ($enabled && $marketplaceIds !== [] && $publicationRules !== []) {
+            $products = $pdo->query(<<<'SQL'
+SELECT item.id, item.sku, source.branch_suffix, source.space_supplier_id AS supplier_id,
+       source.artist, source.title, source.format, source.label, source.category, source.family,
+       source.group_name AS "group", source.delivery_time_days,
+       COALESCE(source.available_quantity, 0) + COALESCE(source.backorder_quantity, 0) AS available_quantity
+FROM catalog_items item
+JOIN supplier_catalog_items source ON source.catalog_item_id = item.id AND source.active
+JOIN suppliers supplier ON supplier.id = source.supplier_id AND supplier.code = 'space'
+WHERE item.onboarding_status <> 'rejected'
+SQL);
+            if ($products === false) {
+                throw new HapaRuntimeException('Impossibile leggere i prodotti del catalogo da ricalcolare.');
+            }
+            while (($product = $products->fetch(PDO::FETCH_ASSOC)) !== false) {
+                foreach ($marketplaceIds as $marketplaceId) {
+                    if (CatalogPublicationRuleMatcher::allows($product, $marketplaceId, $publicationRules)) {
+                        $catalogItemIds[(int) $product['id']] = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $this->recalculate($pdo, array_keys($catalogItemIds));
+    }
+
     public function recalculateAll(PDO $pdo): int
     {
         $statement = $pdo->query('SELECT id FROM catalog_items ORDER BY id');
@@ -69,12 +133,17 @@ final readonly class MarketplaceOfferRecalculator implements CatalogOfferRecalcu
     /**
      * @param array<string, mixed> $product
      * @param list<array{id: int, code: string, business_status: string}> $marketplaces
-     * @param list<PricingRule> $rules
-     * @param array<string, int> $ruleIds
+     * @param array<string, array<int, list<PricingRule>>> $rules
+     * @param array<string, array<int, array<string, int>>> $ruleIds
      */
     private function recalculateProductOffers(PDO $pdo, array $product, array $marketplaces, array $rules, array $ruleIds): int
     {
-        $sellableQuantity = max(0, (int) $product['available_quantity'] - (int) $product['safety_stock']);
+        $sellableQuantity = max(
+            0,
+            (int) $product['available_quantity']
+            + (int) $product['backorder_quantity']
+            - (int) $product['safety_stock'],
+        );
         $now = $this->clock->now()->format(DATE_ATOM);
         $updateProduct = $pdo->prepare(<<<'SQL'
 UPDATE catalog_items
@@ -85,20 +154,31 @@ SQL);
         $updateProduct->execute(['sellable_quantity' => $sellableQuantity, 'calculated_at' => $now, 'id' => $product['id']]);
         $updatedOffers = 0;
         foreach ($marketplaces as $marketplace) {
-            [$price, $appliedRuleId, $calculationValid] = $this->calculateOffer($product, $marketplace, $rules, $ruleIds);
-                $eligible = $calculationValid
-                    && $product['active']
-                    && $product['onboarding_status'] === 'approved'
-                    && $this->publicationAllows($pdo, $product, $marketplace['id'])
-                    && in_array($marketplace['business_status'], ['pilot', 'active'], true);
-                $changedOffer = $this->saveOffer($pdo, $product, $marketplace, [
-                    'price' => $price,
-                    'quantity' => $sellableQuantity,
-                    'rule_id' => $appliedRuleId,
-                    'eligible' => $eligible,
-                    'now' => $now,
-                    'currency' => (string) $product['currency'],
-                ]);
+            $price = null;
+            $appliedRuleId = null;
+            $calculationValid = false;
+            foreach ($this->publicationCatalogIds($pdo, $product, $marketplace['id']) as $catalogId) {
+                [$price, $appliedRuleId, $calculationValid] = $this->calculateOffer(
+                    $product,
+                    $marketplace,
+                    $rules[$marketplace['code']][$catalogId] ?? [],
+                    $ruleIds[$marketplace['code']][$catalogId] ?? [],
+                );
+                if ($calculationValid) {
+                    break;
+                }
+            }
+            $eligible = $calculationValid
+                && $product['onboarding_status'] !== 'rejected'
+                && in_array($marketplace['business_status'], ['pilot', 'active'], true);
+            $changedOffer = $this->saveOffer($pdo, $product, $marketplace, [
+                'price' => $price,
+                'quantity' => $sellableQuantity,
+                'rule_id' => $appliedRuleId,
+                'eligible' => $eligible,
+                'now' => $now,
+                'currency' => (string) $product['currency'],
+            ]);
             if ($changedOffer !== null) {
                 ++$updatedOffers;
                 $this->requestPublication($pdo, $product, $marketplace, $changedOffer, $now);
@@ -134,8 +214,9 @@ SQL);
         $statement = $pdo->prepare(<<<'SQL'
 SELECT item.id, item.sku, item.onboarding_status, item.active, item.safety_stock,
        offer.purchase_cost_minor, COALESCE(offer.currency, item.currency) AS currency,
-       offer.available_quantity, COALESCE(offer.active, FALSE) AS offer_active,
-       offer.branch_suffix, offer.artist, offer.title, offer.format, offer.label,
+       offer.available_quantity, offer.backorder_quantity,
+       COALESCE(offer.active, FALSE) AS offer_active,
+       offer.branch_suffix, offer.space_supplier_id, offer.artist, offer.title, offer.format, offer.label,
        offer.category, offer.family, offer.group_name, offer.delivery_time_days
 FROM catalog_items AS item
 LEFT JOIN supplier_catalog_items AS offer
@@ -159,8 +240,10 @@ SQL);
             'purchase_cost_minor' => $row['purchase_cost_minor'] === null ? null : (int) $row['purchase_cost_minor'],
             'currency' => (string) $row['currency'],
             'available_quantity' => $row['available_quantity'] === null ? 0 : (int) $row['available_quantity'],
+            'backorder_quantity' => $row['backorder_quantity'] === null ? 0 : (int) $row['backorder_quantity'],
             'offer_active' => filter_var($row['offer_active'], FILTER_VALIDATE_BOOL),
             'branch_suffix' => $row['branch_suffix'],
+            'supplier_id' => $row['space_supplier_id'],
             'artist' => $row['artist'],
             'title' => $row['title'],
             'format' => $row['format'],
@@ -172,56 +255,38 @@ SQL);
         ];
     }
 
-    /** @param array<string, mixed> $product */
-    private function publicationAllows(PDO $pdo, array $product, int $marketplaceId): bool
-    {
-        $statement = $pdo->prepare(<<<'SQL'
-SELECT action, field, operator, match_value
-FROM catalog_publication_rules
-WHERE enabled AND retired_at IS NULL
-  AND (marketplace_id IS NULL OR marketplace_id = :marketplace_id)
-ORDER BY priority, CASE action WHEN 'exclude' THEN 0 ELSE 1 END, id
-SQL);
-        $statement->execute(['marketplace_id' => $marketplaceId]);
-        $hasInclude = false;
-        $included = false;
-        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $rule) {
-            $matches = $this->publicationRuleMatches($product, $rule);
-            if ((string) $rule['action'] === 'exclude' && $matches) {
-                return false;
-            }
-            if ((string) $rule['action'] === 'include') {
-                $hasInclude = true;
-                $included = $included || $matches;
-            }
-        }
-        return !$hasInclude || $included;
-    }
-
     /**
      * @param array<string, mixed> $product
-     * @param array<string, mixed> $rule
+     * @return list<int>
      */
-    private function publicationRuleMatches(array $product, array $rule): bool
+    private function publicationCatalogIds(PDO $pdo, array $product, int $marketplaceId): array
     {
-        $field = (string) $rule['field'];
-        $actual = $field === 'available_quantity' ? $product['available_quantity'] : ($product[$field] ?? null);
-        $expected = (string) $rule['match_value'];
-        $operator = (string) $rule['operator'];
-        if (in_array($operator, ['minimum', 'maximum'], true)) {
-            if (!is_int($actual) && !is_numeric($actual)) {
-                return false;
-            }
-            return $operator === 'minimum' ? (int) $actual >= (int) $expected : (int) $actual <= (int) $expected;
+        $statement = $pdo->prepare(<<<'SQL'
+SELECT catalog.id AS commercial_catalog_id, action, field, operator, match_value, rule.marketplace_id, rule.priority
+FROM catalog_publication_rules rule
+JOIN commercial_catalogs catalog ON catalog.id = rule.commercial_catalog_id
+JOIN commercial_catalog_marketplaces link ON link.commercial_catalog_id = catalog.id
+WHERE rule.enabled AND rule.retired_at IS NULL AND catalog.enabled AND catalog.retired_at IS NULL
+  AND link.marketplace_id = :marketplace_id
+  AND (rule.marketplace_id IS NULL OR rule.marketplace_id = :marketplace_id)
+ORDER BY catalog.priority, catalog.id, rule.priority,
+         CASE rule.action WHEN 'exclude' THEN 0 ELSE 1 END, rule.id
+SQL);
+        $statement->execute(['marketplace_id' => $marketplaceId]);
+        $catalogs = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $rule) {
+            $catalogId = (int) $rule['commercial_catalog_id'];
+            $catalogs[$catalogId] ??= [];
+            $catalogs[$catalogId][] = $rule;
         }
-        $actual = mb_strtolower(trim((string) $actual));
-        $expected = mb_strtolower(trim($expected));
-        return match ($operator) {
-            'equals' => $actual === $expected,
-            'starts_with' => str_starts_with($actual, $expected),
-            'ends_with' => str_ends_with($actual, $expected),
-            default => str_contains($actual, $expected),
-        };
+        $eligible = [];
+        foreach ($catalogs as $catalogId => $rules) {
+            if (CatalogPublicationRuleMatcher::allows($product, $marketplaceId, $rules)) {
+                $eligible[] = $catalogId;
+            }
+        }
+
+        return $eligible;
     }
 
     /** @return list<array{id: int, code: string, business_status: string}> */
@@ -244,30 +309,49 @@ SQL);
         ], $statement->fetchAll(PDO::FETCH_ASSOC)));
     }
 
-    /** @return array{0: list<PricingRule>, 1: array<string, int>} */
+    /**
+     * @return array{
+     *   0: array<string, array<int, list<PricingRule>>>,
+     *   1: array<string, array<int, array<string, int>>>
+     * }
+     */
     private function rules(PDO $pdo): array
     {
         $statement = $pdo->prepare(<<<'SQL'
-SELECT rule.id, rule.code, rule.scope, marketplace.code AS marketplace_code, rule.sku,
+SELECT rule.id, rule.commercial_catalog_id, rule.code, rule.scope,
+       COALESCE(marketplace.code, assigned.code) AS marketplace_code, rule.sku,
        rule.adjustment_type, rule.adjustment_value, rule.currency, rule.priority,
        rule.minimum_price_minor, rule.maximum_price_minor
 FROM pricing_rules AS rule
 LEFT JOIN marketplaces AS marketplace ON marketplace.id = rule.marketplace_id
+JOIN commercial_catalogs catalog ON catalog.id = rule.commercial_catalog_id
+JOIN commercial_catalog_marketplaces link ON link.commercial_catalog_id = catalog.id
+JOIN marketplaces assigned ON assigned.id = link.marketplace_id
 WHERE rule.enabled
   AND rule.retired_at IS NULL
+  AND catalog.enabled AND catalog.retired_at IS NULL
+  AND (rule.marketplace_id IS NULL OR rule.marketplace_id = assigned.id)
   AND (rule.valid_from IS NULL OR rule.valid_from <= :now)
   AND (rule.valid_until IS NULL OR rule.valid_until > :now)
-ORDER BY rule.code
+ORDER BY catalog.priority, catalog.id, rule.code
 SQL);
         $statement->execute(['now' => $this->clock->now()->format(DATE_ATOM)]);
         $rules = [];
         $ids = [];
         foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $code = (string) $row['code'];
-            $rules[] = new PricingRule(
+            $marketplaceCode = (string) $row['marketplace_code'];
+            $catalogId = (int) $row['commercial_catalog_id'];
+            $scope = PricingRuleScope::from((string) $row['scope']);
+            $effectiveScope = match ($scope) {
+                PricingRuleScope::Global => PricingRuleScope::Marketplace,
+                PricingRuleScope::Sku => PricingRuleScope::MarketplaceSku,
+                default => $scope,
+            };
+            $rules[$marketplaceCode][$catalogId][] = new PricingRule(
                 $code,
-                PricingRuleScope::from((string) $row['scope']),
-                is_string($row['marketplace_code']) ? $row['marketplace_code'] : null,
+                $effectiveScope,
+                $marketplaceCode,
                 is_string($row['sku']) ? $row['sku'] : null,
                 PriceAdjustmentType::from((string) $row['adjustment_type']),
                 (int) $row['adjustment_value'],
@@ -276,7 +360,7 @@ SQL);
                 $row['minimum_price_minor'] === null ? null : (int) $row['minimum_price_minor'],
                 $row['maximum_price_minor'] === null ? null : (int) $row['maximum_price_minor'],
             );
-            $ids[$code] = (int) $row['id'];
+            $ids[$marketplaceCode][$catalogId][$code] = (int) $row['id'];
         }
 
         return [$rules, $ids];
