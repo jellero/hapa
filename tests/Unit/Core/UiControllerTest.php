@@ -67,10 +67,8 @@ final class UiControllerTest extends TestCase
     public function testItPresentsBrtAndProviderNeutralShipmentCopy(): void
     {
         $controller = $this->controller();
-        $integrations = (string) $controller->integrations($this->request('/ui/integrations'))->getContent();
         $shipments = (string) $controller->shipments($this->request('/ui/shipments'))->getContent();
 
-        self::assertStringContainsString('BRT (Bartolini)', $integrations);
         self::assertStringContainsString('GLS e BRT (Bartolini)', $shipments);
         self::assertStringContainsString('<th scope="col">Corriere</th>', $shipments);
         self::assertStringNotContainsString('Stato GLS', $shipments);
@@ -88,16 +86,15 @@ final class UiControllerTest extends TestCase
         self::assertStringNotContainsString('HAPA applica scorta di sicurezza', $content);
     }
 
-    public function testItPresentsAutomationAsASeparateIntegration(): void
+    public function testItPresentsTheRealSpaceAccountConfigurationWithoutShowcaseCards(): void
     {
         $content = (string) $this->controller()->integrations($this->request('/ui/integrations'))->getContent();
 
         self::assertStringContainsString('hapa-automation', $content);
-        self::assertStringContainsString('RabbitMQ', $content);
-        self::assertStringContainsString('database proprio', $content);
-        self::assertStringContainsString('SellRapido', $content);
-        self::assertStringContainsString('import ordini IBS', $content);
-        self::assertStringContainsString('Operativo', $content);
+        self::assertStringContainsString('Mappatura campi Space', $content);
+        self::assertStringContainsString('space_field_mapping[artista]', $content);
+        self::assertStringContainsString('space_field_mapping[titolo]', $content);
+        self::assertStringNotContainsString('Canali, servizi e corrieri', $content);
     }
 
     public function testItIgnoresUnknownCollectionFilters(): void

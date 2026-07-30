@@ -35,7 +35,7 @@ final class IntegrationAccountConfiguration
             'catalog_entity', 'authentication_scheme', 'purchase_orders_path', 'credential_header',
             'request_timeout_seconds', 'maximum_response_bytes', 'timeout_seconds',
             'poll_interval_seconds', 'catalog_page_size', 'maximum_catalog_pages_per_run',
-            'overlap_seconds', 'state_mapping_version',
+            'overlap_seconds', 'state_mapping_version', 'catalog_field_mapping',
         ],
         'gls' => [
             'endpoint', 'wsdl_url', 'branch_code', 'customer_code', 'contract_code',
@@ -143,10 +143,33 @@ final class IntegrationAccountConfiguration
             if (in_array($key, ['base_url', 'endpoint', 'wsdl_url'], true)) {
                 $this->validateUrl($value, $environment);
             }
+            if ($provider === 'space' && $key === 'catalog_field_mapping') {
+                $this->validateSpaceFieldMapping($value);
+            }
         }
         ksort($settings);
 
         return $settings;
+    }
+
+    private function validateSpaceFieldMapping(mixed $mapping): void
+    {
+        $allowed = [
+            'id', 'feed_name', 'idspace', 'idspacefull', 'artista', 'titolo', 'barcode',
+            'unita', 'format', 'label', 'categoria', 'famiglia', 'gruppo', 'peso', 'url',
+            'url_img', 'uscita', 'price', 'stock', 'precisione', 'delitime', 'status',
+            'last_seen_run_id', 'last_seen_at', 'missing_from_source', 'updated_at',
+            'currency', 'weight_unit', 'temu_sync_enabled',
+        ];
+        if (!is_array($mapping) || array_is_list($mapping)) {
+            throw new InvalidArgumentException('Mappatura feed Space non valida.');
+        }
+        foreach ($mapping as $target => $source) {
+            if (!is_string($target) || !in_array($target, $allowed, true)
+                || !is_string($source) || preg_match('/^[A-Za-z_][A-Za-z0-9_]{0,63}$/D', $source) !== 1) {
+                throw new InvalidArgumentException('Campo della mappatura Space non valido.');
+            }
+        }
     }
 
     /** @return array<string, list<string>> */

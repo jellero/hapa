@@ -314,6 +314,15 @@ final readonly class IntegrationConfigurationController
                     $settings[$key] = $value;
                 }
             }
+            $mapping = [];
+            foreach ($request->request->all('space_field_mapping') as $target => $source) {
+                if (is_string($target) && is_string($source) && trim($source) !== '') {
+                    $mapping[$target] = trim($source);
+                }
+            }
+            if ($mapping !== []) {
+                $settings['catalog_field_mapping'] = $mapping;
+            }
         }
 
         return $this->validator->validate(

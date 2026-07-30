@@ -132,6 +132,32 @@
                     <input id="space-max-pages" name="space_maximum_catalog_pages_per_run" type="number" min="1" max="1000" value="20">
                 </div>
             </div>
+            <?php
+            $spaceMappingFields = [
+                'idspace' => 'ID prodotto', 'idspacefull' => 'SKU completo', 'barcode' => 'EAN',
+                'artista' => 'Artista', 'titolo' => 'Titolo', 'format' => 'Formato',
+                'label' => 'Etichetta', 'categoria' => 'Categoria', 'famiglia' => 'Famiglia',
+                'gruppo' => 'Gruppo', 'price' => 'Costo', 'stock' => 'Disponibilità',
+                'delitime' => 'Tempo di consegna', 'precisione' => 'Precisione',
+                'peso' => 'Peso', 'weight_unit' => 'Unità peso', 'currency' => 'Valuta',
+                'url' => 'URL prodotto', 'url_img' => 'URL immagine', 'uscita' => 'Data uscita',
+                'last_seen_run_id' => 'Versione feed', 'last_seen_at' => 'Ultima osservazione',
+                'updated_at' => 'Ultimo aggiornamento', 'missing_from_source' => 'Assente dalla sorgente',
+                'temu_sync_enabled' => 'Abilitato Temu',
+            ];
+            ?>
+            <details class="integration-create__advanced" open>
+                <summary>Mappatura campi Space</summary>
+                <p class="integration-create__intro">A sinistra è indicato il dato HAPA; nel campo inserisci il nome esatto ricevuto dall’API Space. I valori sono già impostati per il feed concordato.</p>
+                <div class="integration-create__grid">
+                    <?php foreach ($spaceMappingFields as $target => $label): ?>
+                        <div class="field">
+                            <label for="space-map-<?= $e($target) ?>"><?= $e($label) ?></label>
+                            <input id="space-map-<?= $e($target) ?>" name="space_field_mapping[<?= $e($target) ?>]" value="<?= $e($target) ?>" required>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </details>
             <ol class="gate-grid">
                 <li><span>01</span><strong>Legge incremental</strong><small>after_id e limit vengono gestiti da Automation</small></li>
                 <li><span>02</span><strong>Mappa il record</strong><small>idspace, barcode, prezzo, stock e metadati diventano catalogo HAPA</small></li>
@@ -182,6 +208,29 @@
                     <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-capabilities">Capacità</label><input id="<?= $e($accountFieldPrefix) ?>-capabilities" name="capabilities" value="<?= $e(implode(', ', $account['capabilities'])) ?>"></div>
                     <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-settings">Impostazioni non segrete (JSON)</label><textarea id="<?= $e($accountFieldPrefix) ?>-settings" name="settings_json" rows="6"><?= $e(json_encode($account['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></textarea></div>
                     <div class="field"><label for="<?= $e($accountFieldPrefix) ?>-description">Descrizione</label><textarea id="<?= $e($accountFieldPrefix) ?>-description" name="description" rows="3" maxlength="1000"><?= $e($account['description'] ?? '') ?></textarea></div>
+                    <?php if ($account['provider_code'] === 'space'): ?>
+                        <?php $spaceSettings = is_array($account['settings']) ? $account['settings'] : []; ?>
+                        <?php $savedMapping = is_array($spaceSettings['catalog_field_mapping'] ?? null) ? $spaceSettings['catalog_field_mapping'] : []; ?>
+                        <fieldset class="integration-create__advanced">
+                            <legend>Feed e mapping Space</legend>
+                            <div class="integration-create__grid">
+                                <div class="field integration-create__wide"><label for="<?= $e($accountFieldPrefix) ?>-space-url">Server Space</label><input id="<?= $e($accountFieldPrefix) ?>-space-url" name="space_base_url" type="url" value="<?= $e((string) ($spaceSettings['base_url'] ?? 'https://admin.space1999.com')) ?>"></div>
+                                <div class="field"><label>Percorso feed</label><input name="space_catalog_incremental_path" value="<?= $e((string) ($spaceSettings['catalog_incremental_path'] ?? '/apih/index.php')) ?>"></div>
+                                <div class="field"><label>Percorso conferma</label><input name="space_catalog_confirmation_path" value="<?= $e((string) ($spaceSettings['catalog_confirmation_path'] ?? '/apih/index.php')) ?>"></div>
+                                <div class="field"><label>Percorso verifica</label><input name="space_health_path" value="<?= $e((string) ($spaceSettings['health_path'] ?? '/apih/index.php?action=help')) ?>"></div>
+                                <div class="field"><label>Entità feed</label><input name="space_catalog_entity" value="<?= $e((string) ($spaceSettings['catalog_entity'] ?? 'feed')) ?>"></div>
+                                <div class="field"><label>Frequenza in secondi</label><input name="space_poll_interval_seconds" type="number" min="60" max="86400" value="<?= $e((string) ($spaceSettings['poll_interval_seconds'] ?? 300)) ?>"></div>
+                                <div class="field"><label>Prodotti per pagina</label><input name="space_catalog_page_size" type="number" min="1" max="500" value="<?= $e((string) ($spaceSettings['catalog_page_size'] ?? 500)) ?>"></div>
+                                <div class="field"><label>Pagine per esecuzione</label><input name="space_maximum_catalog_pages_per_run" type="number" min="1" max="1000" value="<?= $e((string) ($spaceSettings['maximum_catalog_pages_per_run'] ?? 20)) ?>"></div>
+                                <?php foreach ($spaceMappingFields as $target => $label): ?>
+                                    <div class="field">
+                                        <label><?= $e($label) ?></label>
+                                        <input name="space_field_mapping[<?= $e($target) ?>]" value="<?= $e((string) ($savedMapping[$target] ?? $target)) ?>" required>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </fieldset>
+                    <?php endif; ?>
                     <button class="button button--secondary" type="submit">Salva nuova versione</button>
                 </form>
                 <div class="auth-form">
