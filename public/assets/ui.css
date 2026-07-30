@@ -561,6 +561,10 @@ h3 {
   font-size: 0.78rem;
 }
 
+.preview-banner[hidden] {
+  display: none;
+}
+
 .preview-banner > .icon {
   color: var(--blue-700);
 }
