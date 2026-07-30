@@ -107,7 +107,7 @@ final class UiControllerTest extends TestCase
                 return [];
             }
 
-            public function find(int $id): ?array
+            public function find(int $id): array
             {
                 return [
                     'id' => $id,

@@ -359,9 +359,14 @@ final readonly class UiController
         $accounts = $this->integrationAccounts?->all() ?? [];
         foreach ($accounts as &$account) {
             $account = $this->decorateIntegrationAccount($account, $session);
+            /** @var list<string> $capabilities */
+            $capabilities = array_values(array_filter(
+                is_array($account['capabilities'] ?? null) ? $account['capabilities'] : [],
+                is_string(...),
+            ));
             $account['secret_fields'] = $this->providerSecretFields?->forAccount(
                 (string) $account['provider_code'],
-                is_array($account['capabilities'] ?? null) ? $account['capabilities'] : [],
+                $capabilities,
             ) ?? [];
         }
         unset($account);
