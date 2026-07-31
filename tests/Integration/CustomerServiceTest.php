@@ -159,7 +159,7 @@ final class CustomerServiceTest extends TestCase
     private function encryptedHistory(): bool
     {
         $statement = $this->pdo->prepare(<<<'SQL'
-SELECT history.snapshot ? '_hapa_pii'
+SELECT jsonb_exists(history.snapshot, '_hapa_pii')
 FROM customer_history history
 JOIN customers customer ON customer.id = history.customer_id
 WHERE customer.customer_code = :code
