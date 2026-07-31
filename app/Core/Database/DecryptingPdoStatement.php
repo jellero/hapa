@@ -86,10 +86,8 @@ final class DecryptingPdoStatement extends PDOStatement
         $names = [];
         foreach ($patterns as $pattern) {
             preg_match_all($pattern, $this->queryString, $matches);
-            foreach ($matches[1] ?? [] as $name) {
-                if (is_string($name)) {
-                    $names[] = $name;
-                }
+            foreach ($matches[1] as $name) {
+                $names[] = $name;
             }
         }
 
