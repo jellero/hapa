@@ -30,7 +30,7 @@
 </section>
 
 <div class="dashboard-grid">
-    <section class="panel panel--span-2" aria-labelledby="workstreams-title">
+    <section class="panel panel--span-3" aria-labelledby="workstreams-title">
         <div class="panel__header">
             <div>
                 <p class="eyebrow">Flusso end-to-end</p>
@@ -54,30 +54,6 @@
             <?php endforeach; ?>
         </div>
     </section>
-
-    <aside class="panel" aria-labelledby="priorities-title">
-        <div class="panel__header">
-            <div>
-                <p class="eyebrow">Roadmap</p>
-                <h2 id="priorities-title">Prossimi gate</h2>
-            </div>
-        </div>
-        <ol class="priority-list">
-            <li>
-                <span>01</span>
-                <div><strong>Anagrafica cliente</strong><small>Aggregato, repository e query paginata</small></div>
-            </li>
-            <li>
-                <span>02</span>
-                <div><strong>Sicurezza operativa</strong><small>Autenticazione, ruoli, CSRF e audit</small></div>
-            </li>
-            <li>
-                <span>03</span>
-                <div><strong>Prima integrazione</strong><small>SellRapido/marketplace → HAPA → Space</small></div>
-            </li>
-        </ol>
-        <a class="button button--ghost button--wide" href="/ui/integrations">Esplora il piano integrazioni</a>
-    </aside>
 
     <section class="panel panel--span-3" aria-labelledby="exceptions-title">
         <div class="panel__header">

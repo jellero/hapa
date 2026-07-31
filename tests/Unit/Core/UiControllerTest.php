@@ -58,6 +58,16 @@ final class UiControllerTest extends TestCase
         }
     }
 
+    public function testDashboardDoesNotExposeTheObsoleteRoadmap(): void
+    {
+        $content = (string) $this->controller()->dashboard($this->request('/ui'))->getContent();
+
+        self::assertStringNotContainsString('Roadmap', $content);
+        self::assertStringNotContainsString('Prossimi gate', $content);
+        self::assertStringNotContainsString('Esplora il piano integrazioni', $content);
+        self::assertStringContainsString('Stato delle capacità', $content);
+    }
+
     public function testItEscapesSearchInputInCollectionPages(): void
     {
         $request = $this->request('/ui/orders?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
