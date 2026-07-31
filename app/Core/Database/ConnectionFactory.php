@@ -43,6 +43,10 @@ SQL);
             'pii_key' => PiiKeyProvider::passphrase(),
             'pii_key_id' => PiiKeyProvider::keyId(),
         ]);
+        $connection->setAttribute(
+            PDO::ATTR_STATEMENT_CLASS,
+            [DecryptingPdoStatement::class, [$connection]],
+        );
 
         return $connection;
     }
