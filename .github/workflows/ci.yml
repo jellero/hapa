@@ -48,6 +48,8 @@ jobs:
       DB_DATABASE: hapa_test
       DB_USERNAME: hapa
       DB_PASSWORD: ci-postgres-password
+      HAPA_PII_KEY: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+      HAPA_PII_KEY_ID: ci-test-v1
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
@@ -58,7 +60,7 @@ jobs:
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, redis, intl, mbstring, sockets, zip
+          extensions: pdo_pgsql, redis, intl, mbstring, openssl, sockets, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist
       - run: composer validate --strict
@@ -103,6 +105,8 @@ jobs:
       IMAGE_TAG: ${{ github.sha }}
       HAPA_HTTP_PORT: 18080
       DB_PASSWORD_FILE: /tmp/hapa-db-secret
+      HAPA_PII_KEY_FILE: /tmp/hapa-pii-key
+      HAPA_PII_KEY_ID: ci-production-v1
       REDIS_PASSWORD_FILE: /tmp/hapa-redis-secret
       RABBITMQ_PASSWORD_FILE: /tmp/hapa-rabbitmq-secret
       AUTOMATION_ADMIN_API_URL: https://automation.internal.example.test
@@ -115,6 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' 'ci-production-database-secret' > "$DB_PASSWORD_FILE"
+          printf '%s' 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=' > "$HAPA_PII_KEY_FILE"
           printf '%s' 'ci-production-redis-secret' > "$REDIS_PASSWORD_FILE"
           printf '%s' 'ci-production-rabbitmq-secret' > "$RABBITMQ_PASSWORD_FILE"
           printf '%s' 'ci-production-automation-admin-api-token' > "$AUTOMATION_ADMIN_API_TOKEN_FILE"
@@ -230,7 +235,7 @@ jobs:
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, redis, intl, mbstring, sockets, zip
+          extensions: pdo_pgsql, redis, intl, mbstring, openssl, sockets, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist --quiet
       - run: composer analyse
