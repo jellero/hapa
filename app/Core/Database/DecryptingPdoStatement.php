@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Database;
 
+use Hapa\Core\Security\PiiKeyProvider;
 use JsonException;
 use PDO;
 use PDOStatement;
@@ -13,6 +14,21 @@ final class DecryptingPdoStatement extends PDOStatement
 {
     protected function __construct(private readonly PDO $connection)
     {
+    }
+
+    /** @param array<int|string, mixed>|null $params */
+    public function execute(?array $params = null): bool
+    {
+        return parent::execute($params === null ? null : $this->encodeBlindIndexParameters($params));
+    }
+
+    public function bindValue(string|int $param, mixed $value, int $type = PDO::PARAM_STR): bool
+    {
+        if (is_string($param) && is_string($value) && $this->usesBlindIndexParameter(ltrim($param, ':'))) {
+            $value = self::emailBlindIndex($value);
+        }
+
+        return parent::bindValue($param, $value, $type);
     }
 
     public function fetch(
@@ -36,6 +52,57 @@ final class DecryptingPdoStatement extends PDOStatement
     public function fetchColumn(int $column = 0): mixed
     {
         return $this->decodeValue(parent::fetchColumn($column));
+    }
+
+    /**
+     * @param array<int|string, mixed> $params
+     * @return array<int|string, mixed>
+     */
+    private function encodeBlindIndexParameters(array $params): array
+    {
+        foreach ($this->blindIndexParameterNames() as $name) {
+            foreach ([$name, ':' . $name] as $key) {
+                if (array_key_exists($key, $params) && is_string($params[$key])) {
+                    $params[$key] = self::emailBlindIndex($params[$key]);
+                }
+            }
+        }
+
+        return $params;
+    }
+
+    private function usesBlindIndexParameter(string $name): bool
+    {
+        return in_array($name, $this->blindIndexParameterNames(), true);
+    }
+
+    /** @return list<string> */
+    private function blindIndexParameterNames(): array
+    {
+        $patterns = [
+            '/\bemail_normalized\s*=\s*:([A-Za-z_][A-Za-z0-9_]*)/i',
+            '/:([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\bemail_normalized\b/i',
+        ];
+        $names = [];
+        foreach ($patterns as $pattern) {
+            preg_match_all($pattern, $this->queryString, $matches);
+            foreach ($matches[1] ?? [] as $name) {
+                if (is_string($name)) {
+                    $names[] = $name;
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    private static function emailBlindIndex(string $email): string
+    {
+        return hash_hmac(
+            'sha256',
+            mb_strtolower(trim($email), 'UTF-8'),
+            PiiKeyProvider::passphrase(),
+        );
     }
 
     private function decodeValue(mixed $value): mixed
