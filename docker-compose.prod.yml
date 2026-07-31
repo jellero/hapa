@@ -6,6 +6,8 @@ x-database-environment: &database-environment
   DB_USERNAME: ${DB_USERNAME:-hapa}
   DB_PASSWORD_FILE: /run/secrets/db_password
   DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-5}
+  HAPA_PII_KEY_FILE: /run/secrets/pii_key
+  HAPA_PII_KEY_ID: ${HAPA_PII_KEY_ID:?Set HAPA_PII_KEY_ID}
 
 x-app-environment: &app-environment
   <<: *database-environment
@@ -66,7 +68,7 @@ services:
       dockerfile: docker/php/Dockerfile.prod
       target: runtime
     environment: *app-environment
-    secrets: [db_password, redis_password, rabbitmq_password, automation_admin_api_token]
+    secrets: [db_password, pii_key, redis_password, rabbitmq_password, automation_admin_api_token]
     user: www-data
     read_only: true
     tmpfs:
@@ -96,7 +98,7 @@ services:
       <<: *app-environment
       RABBITMQ_ENABLED: "true"
     command: ["php", "bin/console", "outbox:relay", "--watch"]
-    secrets: [db_password, redis_password, rabbitmq_password, automation_admin_api_token]
+    secrets: [db_password, pii_key, redis_password, rabbitmq_password, automation_admin_api_token]
     user: www-data
     read_only: true
     tmpfs:
@@ -119,7 +121,7 @@ services:
       <<: *consumer-environment
       RABBITMQ_CONSUMER_ENABLED: "true"
     command: ["php", "bin/console", "inbox:consume", "--watch"]
-    secrets: [db_password, redis_password, rabbitmq_password, rabbitmq_consumer_password, automation_admin_api_token]
+    secrets: [db_password, pii_key, redis_password, rabbitmq_password, rabbitmq_consumer_password, automation_admin_api_token]
     user: www-data
     read_only: true
     tmpfs:
@@ -145,7 +147,7 @@ services:
       dockerfile: docker/php/Dockerfile.prod
       target: migration
     environment: *database-environment
-    secrets: [db_password]
+    secrets: [db_password, pii_key]
     user: www-data
     read_only: true
     tmpfs:
@@ -244,6 +246,8 @@ volumes:
 secrets:
   db_password:
     file: ${DB_PASSWORD_FILE:?Set DB_PASSWORD_FILE}
+  pii_key:
+    file: ${HAPA_PII_KEY_FILE:?Set HAPA_PII_KEY_FILE}
   redis_password:
     file: ${REDIS_PASSWORD_FILE:?Set REDIS_PASSWORD_FILE}
   rabbitmq_password:
