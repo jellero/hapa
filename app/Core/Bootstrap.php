@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core;
 
-use Hapa\Composition\ContainerFactory;
+use Hapa\Composition\CompiledContainerFactory;
 use Hapa\Core\Configuration\ApplicationConfig;
 use Hapa\Core\Configuration\ConfigurationLoader;
 use Hapa\Core\Console\InboxConsumeCommand;
@@ -12,7 +12,7 @@ use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
 use Hapa\Core\Console\UserCreateCommand;
 use Hapa\Core\Exception\HapaRuntimeException;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Psr\Container\ContainerInterface;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -20,7 +20,7 @@ final readonly class Bootstrap
 {
     private function __construct(
         public ApplicationConfig $application,
-        private ContainerBuilder $container,
+        private ContainerInterface $container,
     ) {
     }
 
@@ -46,7 +46,7 @@ final readonly class Bootstrap
 
         return new self(
             $configuration->application,
-            (new ContainerFactory())->create($basePath, $configuration),
+            (new CompiledContainerFactory())->create($basePath, $configuration),
         );
     }
 
@@ -100,7 +100,7 @@ final readonly class Bootstrap
         return $command;
     }
 
-    public function container(): ContainerBuilder
+    public function container(): ContainerInterface
     {
         return $this->container;
     }

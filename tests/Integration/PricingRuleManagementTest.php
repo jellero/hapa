@@ -88,6 +88,9 @@ SQL);
             'adjustment_value' => 1500,
             'currency' => 'EUR',
             'priority' => 100,
+            'match_field' => 'format',
+            'match_operator' => 'equals',
+            'match_value' => 'CD',
             'enabled' => true,
         ], $this->actor, 'pricing-create');
 
@@ -100,17 +103,23 @@ SQL);
             'adjustment_value' => 500,
             'currency' => 'EUR',
             'priority' => 200,
+            'match_field' => 'supplier_id',
+            'match_operator' => 'equals',
+            'match_value' => 'aec',
             'enabled' => true,
         ], $this->actor, 'pricing-update');
         $this->rules->retire($this->ruleId, 2, $this->actor, 'pricing-retire');
 
-        $statement = $this->pdo->prepare('SELECT version, enabled, retired_at FROM pricing_rules WHERE id = :id');
+        $statement = $this->pdo->prepare('SELECT version, enabled, retired_at, match_field, match_operator, match_value FROM pricing_rules WHERE id = :id');
         $statement->execute(['id' => $this->ruleId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         self::assertIsArray($row);
         self::assertSame(3, (int) $row['version']);
         self::assertFalse(filter_var($row['enabled'], FILTER_VALIDATE_BOOL));
         self::assertNotNull($row['retired_at']);
+        self::assertSame('supplier_id', $row['match_field']);
+        self::assertSame('equals', $row['match_operator']);
+        self::assertSame('aec', $row['match_value']);
 
         $history = $this->pdo->prepare('SELECT COUNT(*) FROM pricing_rule_history WHERE pricing_rule_id = :id');
         $history->execute(['id' => $this->ruleId]);

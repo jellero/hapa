@@ -166,10 +166,15 @@ final readonly class UiController
     {
         $selectedCatalogId = $request->query->getInt('catalog');
         $commercialCatalogs = $this->commercialCatalogs?->all() ?? [];
-        $selectedCatalog = $selectedCatalogId > 0 ? $this->commercialCatalogs?->find($selectedCatalogId) : null;
-        $catalog = $this->catalogReadModel?->search('', 1) ?? [
-            'items' => [],
-            'metrics' => ['total' => 0, 'pending_review' => 0, 'active' => 0, 'stale' => 0],
+        $selectedCatalog = $selectedCatalogId > 0
+            ? (current(array_filter(
+                $commercialCatalogs,
+                static fn (array $catalog): bool => (int) ($catalog['id'] ?? 0) === $selectedCatalogId,
+            )) ?: $this->commercialCatalogs?->find($selectedCatalogId))
+            : null;
+        $catalogMetrics = $this->catalogReadModel?->metrics() ?? [
+            'total' => 0, 'pending_review' => 0, 'active' => 0, 'stale' => 0,
+            'in_stock' => 0, 'backorder' => 0, 'unavailable' => 0,
         ];
         $session = $request->attributes->get('security_session');
         $pricingRules = $selectedCatalog === null ? [] : ($this->pricingRules?->all($selectedCatalogId) ?? []);
@@ -228,7 +233,7 @@ final readonly class UiController
             'catalogStatusError' => $request->query->getString('catalog_status_error'),
             'catalogError' => $request->query->getString('catalog_error'),
             'catalogDeleteError' => $request->query->getString('catalog_delete_error'),
-            'catalogMetrics' => $catalog['metrics'],
+            'catalogMetrics' => $catalogMetrics,
             'pricingRules' => $pricingRules,
             'marketplaces' => $this->pricingRules?->marketplaces() ?? [],
             'createPricingCsrfToken' => $session instanceof WebSession ? $session->csrfToken('pricing.create') : '',

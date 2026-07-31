@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Core\Observability;
 
+use Hapa\Core\Cache\ReadModelCache;
 use Hapa\Core\Database\ConnectionFactory;
 use PDO;
 use Hapa\Core\Exception\HapaRuntimeException;
@@ -12,8 +13,10 @@ final class RuntimeOverview
 {
     private ?PDO $connection = null;
 
-    public function __construct(private readonly ConnectionFactory $connections)
-    {
+    public function __construct(
+        private readonly ConnectionFactory $connections,
+        private readonly ?ReadModelCache $cache = null,
+    ) {
     }
 
     /**
@@ -25,6 +28,23 @@ final class RuntimeOverview
      * }
      */
     public function snapshot(): array
+    {
+        return $this->cache?->remember(
+            'hapa:read:v1:runtime-overview',
+            60,
+            $this->querySnapshot(...),
+        ) ?? $this->querySnapshot();
+    }
+
+    /**
+     * @return array{
+     *   business: array{open_orders: int, customers: int, catalog_items: int, shipments_today: int},
+     *   inbox: array<string, int>, outbox: array<string, int>,
+     *   lag_seconds: array{inbox_failed_oldest: int, outbox_due_oldest: int},
+     *   audit_last_24h: int
+     * }
+     */
+    private function querySnapshot(): array
     {
         return [
             'business' => [

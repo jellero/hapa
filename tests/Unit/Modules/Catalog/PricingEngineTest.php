@@ -90,6 +90,38 @@ final class PricingEngineTest extends TestCase
         self::assertNull($result->appliedRuleCode);
     }
 
+    public function testAProductConditionCanTargetTheSupplierCode(): void
+    {
+        $calculator = new PriceCalculator();
+        $fallback = $this->rule('fallback', PricingRuleScope::Global, PriceAdjustmentType::Percentage, 1_000);
+        $supplier = new PricingRule(
+            'aec-cd',
+            PricingRuleScope::Global,
+            null,
+            null,
+            PriceAdjustmentType::Percentage,
+            3_000,
+            'EUR',
+            100,
+            null,
+            null,
+            'supplier_id',
+            'equals',
+            'aec',
+        );
+
+        $result = $calculator->calculate(
+            new Money(1_000, 'EUR'),
+            'temu',
+            'SKU-1',
+            [$fallback, $supplier],
+            ['supplier_code' => 'AEC', 'format' => 'CD'],
+        );
+
+        self::assertSame(1_300, $result->sellingPrice->minorAmount);
+        self::assertSame('aec-cd', $result->appliedRuleCode);
+    }
+
     public function testItRejectsARuleWithIncoherentScopeTargets(): void
     {
         $this->expectException(InvalidArgumentException::class);

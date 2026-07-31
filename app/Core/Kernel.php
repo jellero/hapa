@@ -73,7 +73,8 @@ final readonly class Kernel
         }
 
         $public = ($parameters['_public'] ?? false) === true;
-        $session = $this->openSession($request, ($parameters['_session'] ?? false) === true || !$public);
+        $createsAnonymousSession = ($parameters['_session'] ?? false) === true;
+        $session = $this->openSession($request, $createsAnonymousSession || !$public, $createsAnonymousSession);
         $this->authorize($session, $public, $parameters['_permission'] ?? null);
         $this->verifyCsrf($request, $session, $parameters['_csrf_action'] ?? null, $parameters);
         $this->addRouteAttributes($request, $parameters);
@@ -82,13 +83,18 @@ final readonly class Kernel
         return $result instanceof Response ? $result : new JsonResponse($result);
     }
 
-    private function openSession(Request $request, bool $required): ?WebSession
+    private function openSession(Request $request, bool $required, bool $createsAnonymousSession): ?WebSession
     {
         if (!$required || $this->sessions === null) {
             return null;
         }
 
-        $session = $this->sessions->open($request);
+        $session = $createsAnonymousSession
+            ? $this->sessions->open($request)
+            : $this->sessions->resume($request);
+        if ($session === null) {
+            return null;
+        }
         $request->attributes->set('security_session', $session);
         $request->attributes->set('current_user', $session->user);
 

@@ -74,13 +74,15 @@ SQL);
 
         if ($enabled && $marketplaceIds !== [] && $publicationRules !== []) {
             $products = $pdo->query(<<<'SQL'
-SELECT item.id, item.sku, source.branch_suffix, source.space_supplier_id AS supplier_id,
+SELECT item.id, item.sku, item.ean, source.branch_suffix, source.space_supplier_id AS supplier_id,
+       supplier_registry.code AS supplier_code, supplier_registry.legal_name AS supplier_name,
        source.artist, source.title, source.format, source.label, source.category, source.family,
        source.group_name AS "group", source.delivery_time_days,
        COALESCE(source.available_quantity, 0) + COALESCE(source.backorder_quantity, 0) AS available_quantity
 FROM catalog_items item
 JOIN supplier_catalog_items source ON source.catalog_item_id = item.id AND source.active
 JOIN suppliers supplier ON supplier.id = source.supplier_id AND supplier.code = 'space'
+LEFT JOIN space_suppliers supplier_registry ON supplier_registry.space_supplier_id = source.space_supplier_id
 WHERE item.onboarding_status <> 'rejected'
 SQL);
             if ($products === false) {
@@ -200,7 +202,13 @@ SQL);
             return [null, null, false];
         }
         try {
-            $calculated = $this->calculator->calculate(new Money((int) $product['purchase_cost_minor'], (string) $product['currency']), $marketplace['code'], (string) $product['sku'], $rules);
+            $calculated = $this->calculator->calculate(
+                new Money((int) $product['purchase_cost_minor'], (string) $product['currency']),
+                $marketplace['code'],
+                (string) $product['sku'],
+                $rules,
+                $product,
+            );
             $ruleId = $calculated->appliedRuleCode === null ? null : ($ruleIds[$calculated->appliedRuleCode] ?? null);
             return [$ruleId === null ? null : $calculated->sellingPrice->minorAmount, $ruleId, $ruleId !== null];
         } catch (Throwable) {
@@ -212,16 +220,18 @@ SQL);
     private function product(PDO $pdo, int $catalogItemId): array
     {
         $statement = $pdo->prepare(<<<'SQL'
-SELECT item.id, item.sku, item.onboarding_status, item.active, item.safety_stock,
+SELECT item.id, item.sku, item.ean, item.onboarding_status, item.active, item.safety_stock,
        offer.purchase_cost_minor, COALESCE(offer.currency, item.currency) AS currency,
        offer.available_quantity, offer.backorder_quantity,
        COALESCE(offer.active, FALSE) AS offer_active,
        offer.branch_suffix, offer.space_supplier_id, offer.artist, offer.title, offer.format, offer.label,
-       offer.category, offer.family, offer.group_name, offer.delivery_time_days
+       offer.category, offer.family, offer.group_name, offer.delivery_time_days,
+       supplier_registry.code AS supplier_code, supplier_registry.legal_name AS supplier_name
 FROM catalog_items AS item
 LEFT JOIN supplier_catalog_items AS offer
   ON offer.catalog_item_id = item.id
  AND offer.supplier_id = (SELECT id FROM suppliers WHERE code = 'space' LIMIT 1)
+LEFT JOIN space_suppliers supplier_registry ON supplier_registry.space_supplier_id = offer.space_supplier_id
 WHERE item.id = :id
 FOR UPDATE OF item
 SQL);
@@ -234,6 +244,7 @@ SQL);
         return [
             'id' => (int) $row['id'],
             'sku' => (string) $row['sku'],
+            'ean' => $row['ean'],
             'onboarding_status' => (string) $row['onboarding_status'],
             'active' => filter_var($row['active'], FILTER_VALIDATE_BOOL),
             'safety_stock' => (int) $row['safety_stock'],
@@ -244,6 +255,8 @@ SQL);
             'offer_active' => filter_var($row['offer_active'], FILTER_VALIDATE_BOOL),
             'branch_suffix' => $row['branch_suffix'],
             'supplier_id' => $row['space_supplier_id'],
+            'supplier_code' => $row['supplier_code'],
+            'supplier_name' => $row['supplier_name'],
             'artist' => $row['artist'],
             'title' => $row['title'],
             'format' => $row['format'],
@@ -321,7 +334,8 @@ SQL);
 SELECT rule.id, rule.commercial_catalog_id, rule.code, rule.scope,
        COALESCE(marketplace.code, assigned.code) AS marketplace_code, rule.sku,
        rule.adjustment_type, rule.adjustment_value, rule.currency, rule.priority,
-       rule.minimum_price_minor, rule.maximum_price_minor
+       rule.minimum_price_minor, rule.maximum_price_minor,
+       rule.match_field, rule.match_operator, rule.match_value
 FROM pricing_rules AS rule
 LEFT JOIN marketplaces AS marketplace ON marketplace.id = rule.marketplace_id
 JOIN commercial_catalogs catalog ON catalog.id = rule.commercial_catalog_id
@@ -359,6 +373,9 @@ SQL);
                 (int) $row['priority'],
                 $row['minimum_price_minor'] === null ? null : (int) $row['minimum_price_minor'],
                 $row['maximum_price_minor'] === null ? null : (int) $row['maximum_price_minor'],
+                is_string($row['match_field']) ? $row['match_field'] : null,
+                is_string($row['match_operator']) ? $row['match_operator'] : null,
+                is_string($row['match_value']) ? $row['match_value'] : null,
             );
             $ids[$marketplaceCode][$catalogId][$code] = (int) $row['id'];
         }

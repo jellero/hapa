@@ -6,6 +6,9 @@ namespace Hapa\Core\Ui;
 
 interface CatalogOverview
 {
+    /** @return array<string, int> */
+    public function metrics(): array;
+
     /**
      * @param array<string, string> $filters
      * @return array{

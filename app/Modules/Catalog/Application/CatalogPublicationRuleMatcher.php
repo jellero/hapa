@@ -42,9 +42,22 @@ final class CatalogPublicationRuleMatcher
     public static function matches(array $product, array $rule): bool
     {
         $field = (string) $rule['field'];
-        $actual = $field === 'available_quantity' ? ($product[$field] ?? 0) : ($product[$field] ?? null);
+        $actualValues = $field === 'supplier_id'
+            ? [$product['supplier_code'] ?? null, $product['supplier_id'] ?? null, $product['supplier_name'] ?? null]
+            : [$field === 'available_quantity' ? ($product[$field] ?? 0) : ($product[$field] ?? null)];
         $expected = (string) $rule['match_value'];
         $operator = (string) $rule['operator'];
+        foreach ($actualValues as $actual) {
+            if (self::valueMatches($actual, $operator, $expected)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function valueMatches(mixed $actual, string $operator, string $expected): bool
+    {
         if (in_array($operator, ['minimum', 'maximum'], true)) {
             if (!is_int($actual) && !is_numeric($actual)) {
                 return false;

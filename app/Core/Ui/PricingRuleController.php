@@ -74,14 +74,18 @@ final readonly class PricingRuleController
     private function input(Request $request): array
     {
         $adjustmentType = $request->request->getString('adjustment_type');
+        $marketplaceId = $request->request->getString('marketplace_id');
 
         return [
             'commercial_catalog_id' => $request->request->getString('commercial_catalog_id'),
             'code' => $request->request->getString('code'),
             'name' => $request->request->getString('name'),
-            'scope' => $request->request->getString('scope'),
-            'marketplace_id' => $request->request->getString('marketplace_id'),
+            'scope' => $marketplaceId === '' ? 'global' : 'marketplace',
+            'marketplace_id' => $marketplaceId,
             'sku' => $request->request->getString('sku'),
+            'match_field' => $request->request->getString('match_field'),
+            'match_operator' => $request->request->getString('match_operator'),
+            'match_value' => $request->request->getString('match_value'),
             'adjustment_type' => $adjustmentType,
             'adjustment_value' => $this->adjustmentValue($request, $adjustmentType),
             'currency' => $request->request->getString('currency', 'EUR'),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Modules\Catalog\Application;
 
+use Hapa\Core\Cache\ReadModelCache;
 use Hapa\Core\Clock\Clock;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Security\UserIdentity;
@@ -14,10 +15,14 @@ use PDOException;
 
 final readonly class CatalogPublicationRuleService implements CatalogPublicationRuleManagement
 {
-    private const FIELDS = ['sku', 'supplier_id', 'branch_suffix', 'artist', 'title', 'format', 'label', 'category', 'family', 'group', 'delivery_time_days', 'available_quantity'];
+    private const FIELDS = ['sku', 'ean', 'supplier_id', 'branch_suffix', 'artist', 'title', 'format', 'label', 'category', 'family', 'group', 'delivery_time_days', 'available_quantity'];
     private const OPERATORS = ['equals', 'contains', 'starts_with', 'ends_with', 'minimum', 'maximum'];
 
-    public function __construct(private ConnectionFactory $connections, private Clock $clock)
+    public function __construct(
+        private ConnectionFactory $connections,
+        private Clock $clock,
+        private ?ReadModelCache $cache = null,
+    )
     {
     }
 
@@ -126,6 +131,7 @@ SQL);
             }
             throw $exception;
         }
+        $this->cache?->forget($this->eligibleCountCacheKey($catalogId));
     }
 
     public function retire(int $id, UserIdentity $actor): void
@@ -133,9 +139,21 @@ SQL);
         if ($id < 1) {
             throw new InvalidArgumentException('Regola di pubblicazione non valida.');
         }
-        $statement = $this->connections->create()->prepare(
-            'UPDATE catalog_publication_rules SET enabled = FALSE, retired_at = :now, updated_at = :now, version = version + 1 WHERE id = :id AND retired_at IS NULL',
-        );
+        $statement = $this->connections->create()->prepare(<<<'SQL'
+UPDATE catalog_publication_rules
+SET enabled = FALSE, retired_at = :now, updated_at = :now, version = version + 1
+WHERE id = :id AND retired_at IS NULL
+RETURNING commercial_catalog_id
+SQL);
         $statement->execute(['id' => $id, 'now' => $this->clock->now()->format(DATE_ATOM)]);
+        $catalogId = $statement->fetchColumn();
+        if ($catalogId !== false) {
+            $this->cache?->forget($this->eligibleCountCacheKey((int) $catalogId));
+        }
+    }
+
+    private function eligibleCountCacheKey(int $catalogId): string
+    {
+        return sprintf('hapa:read:v1:catalog-eligible:%d', $catalogId);
     }
 }

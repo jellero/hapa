@@ -77,11 +77,11 @@ SQL);
 INSERT INTO pricing_rules (
     commercial_catalog_id, code, name, scope, marketplace_id, sku, adjustment_type, adjustment_value,
     currency, minimum_price_minor, maximum_price_minor, priority, enabled,
-    valid_from, valid_until, version, created_at, updated_at
+    valid_from, valid_until, match_field, match_operator, match_value, version, created_at, updated_at
 ) VALUES (
     :commercial_catalog_id, :code, :name, :scope, :marketplace_id, :sku, :adjustment_type, :adjustment_value,
     :currency, :minimum_price_minor, :maximum_price_minor, :priority, CAST(:enabled AS BOOLEAN),
-    :valid_from, :valid_until, 1, :created_at, :updated_at
+    :valid_from, :valid_until, :match_field, :match_operator, :match_value, 1, :created_at, :updated_at
 ) RETURNING id
 SQL);
             $statement->execute([...$rule, 'created_at' => $now, 'updated_at' => $now]);
@@ -128,6 +128,7 @@ SET commercial_catalog_id = :commercial_catalog_id,
     currency = :currency, minimum_price_minor = :minimum_price_minor,
     maximum_price_minor = :maximum_price_minor, priority = :priority,
     enabled = CAST(:enabled AS BOOLEAN), valid_from = :valid_from, valid_until = :valid_until,
+    match_field = :match_field, match_operator = :match_operator, match_value = :match_value,
     version = version + 1, updated_at = :updated_at
 WHERE id = :id AND version = :expected_version AND retired_at IS NULL
 RETURNING version
@@ -219,6 +220,9 @@ SQL);
         $this->assertCatalogMarketplace($commercialCatalogId, $marketplaceId);
         $marketplaceCode = $marketplaceId === null ? null : $this->marketplaceCode($marketplaceId);
         $sku = self::nullableString($input['sku'] ?? null);
+        $matchField = self::nullableString($input['match_field'] ?? null);
+        $matchOperator = self::nullableString($input['match_operator'] ?? null);
+        $matchValue = self::nullableString($input['match_value'] ?? null);
         $currency = strtoupper(trim((string) ($input['currency'] ?? 'EUR')));
         $adjustmentValue = self::integer($input['adjustment_value'] ?? null, 'Valore di ricarico');
         $priority = self::integer($input['priority'] ?? 100, 'Priorità');
@@ -235,6 +239,9 @@ SQL);
             $priority,
             $minimum,
             $maximum,
+            $matchField,
+            $matchOperator,
+            $matchValue,
         );
         $validFrom = self::date($input['valid_from'] ?? null);
         $validUntil = self::date($input['valid_until'] ?? null);
@@ -249,6 +256,9 @@ SQL);
             'scope' => $rule->scope->value,
             'marketplace_id' => $marketplaceId,
             'sku' => $rule->sku,
+            'match_field' => $rule->matchField,
+            'match_operator' => $rule->matchOperator,
+            'match_value' => $rule->matchValue,
             'adjustment_type' => $rule->adjustmentType->value,
             'adjustment_value' => $rule->adjustmentValue,
             'currency' => $rule->currency,

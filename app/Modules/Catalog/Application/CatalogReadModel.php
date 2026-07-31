@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hapa\Modules\Catalog\Application;
 
 use DateTimeImmutable;
+use Hapa\Core\Cache\ReadModelCache;
 use Hapa\Core\Exception\HapaRuntimeException;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Ui\CatalogOverview;
@@ -14,7 +15,10 @@ final class CatalogReadModel implements CatalogOverview
 {
     private ?PDO $connection = null;
 
-    public function __construct(private readonly ConnectionFactory $connections)
+    public function __construct(
+        private readonly ConnectionFactory $connections,
+        private readonly ?ReadModelCache $cache = null,
+    )
     {
     }
 
@@ -65,6 +69,27 @@ SQL];
             $parameters[$key] = $value;
         }
         $sql = <<<'SQL'
+WITH page AS MATERIALIZED (
+    SELECT item.id AS catalog_item_id, offer.id AS supplier_offer_id,
+           offer.observed_at, item.sku
+    FROM catalog_items AS item
+    LEFT JOIN supplier_catalog_items AS offer
+      ON offer.catalog_item_id = item.id
+     AND offer.supplier_id = (SELECT id FROM suppliers WHERE code = 'space' LIMIT 1)
+    WHERE
+SQL;
+        $sql .= implode("\n  AND ", $conditions);
+        $sql .= <<<'SQL'
+
+    ORDER BY offer.observed_at DESC NULLS LAST, item.sku ASC
+    LIMIT :limit
+),
+marketplace_counts AS (
+    SELECT marketplace_offer.catalog_item_id, COUNT(*) AS offer_count
+    FROM marketplace_offers AS marketplace_offer
+    JOIN page ON page.catalog_item_id = marketplace_offer.catalog_item_id
+    GROUP BY marketplace_offer.catalog_item_id
+)
 SELECT item.id, item.sku, item.ean, item.name, item.onboarding_status, item.active, item.version,
        item.safety_stock, item.sellable_quantity, item.offers_calculated_at,
        offer.external_item_id, offer.supplier_sku, offer.purchase_cost_minor, offer.currency,
@@ -88,21 +113,13 @@ SELECT item.id, item.sku, item.ean, item.name, item.onboarding_status, item.acti
        ) AS image_url,
        offer.precision_score, offer.release_date, offer.weight, offer.weight_unit,
        offer.missing_from_source, offer.temu_sync_enabled, offer.source_attributes::text AS source_attributes_json,
-       COUNT(marketplace_offer.id) AS marketplace_offer_count
-FROM catalog_items AS item
-LEFT JOIN supplier_catalog_items AS offer
-  ON offer.catalog_item_id = item.id
- AND offer.supplier_id = (SELECT id FROM suppliers WHERE code = 'space' LIMIT 1)
-LEFT JOIN marketplace_offers AS marketplace_offer ON marketplace_offer.catalog_item_id = item.id
+       COALESCE(marketplace_counts.offer_count, 0) AS marketplace_offer_count
+FROM page
+JOIN catalog_items AS item ON item.id = page.catalog_item_id
+LEFT JOIN supplier_catalog_items AS offer ON offer.id = page.supplier_offer_id
+LEFT JOIN marketplace_counts ON marketplace_counts.catalog_item_id = item.id
 LEFT JOIN space_suppliers AS space_supplier ON space_supplier.space_supplier_id = offer.space_supplier_id
-WHERE
-SQL;
-        $sql .= implode("\n  AND ", $conditions);
-        $sql .= <<<'SQL'
-
-GROUP BY item.id, offer.id, space_supplier.legal_name
-ORDER BY offer.observed_at DESC NULLS LAST, item.sku ASC
-LIMIT :limit
+ORDER BY page.observed_at DESC NULLS LAST, page.sku ASC
 SQL;
         $statement = $this->connection()->prepare($sql);
         $statement->bindValue('query', trim($query));
@@ -182,7 +199,17 @@ SQL;
     }
 
     /** @return array<string, int> */
-    private function metrics(): array
+    public function metrics(): array
+    {
+        return $this->cache?->remember(
+            'hapa:read:v1:catalog-metrics',
+            60,
+            $this->queryMetrics(...),
+        ) ?? $this->queryMetrics();
+    }
+
+    /** @return array<string, int> */
+    private function queryMetrics(): array
     {
         $metricsStatement = $this->connection()->query(<<<'SQL'
 SELECT COUNT(*) AS total,
@@ -224,6 +251,16 @@ SQL);
 
     /** @return array{feeds: list<string>, formats: list<string>, suppliers: list<array{id:string,name:?string}>} */
     private function filterOptions(): array
+    {
+        return $this->cache?->remember(
+            'hapa:read:v1:catalog-filter-options',
+            600,
+            $this->queryFilterOptions(...),
+        ) ?? $this->queryFilterOptions();
+    }
+
+    /** @return array{feeds: list<string>, formats: list<string>, suppliers: list<array{id:string,name:?string}>} */
+    private function queryFilterOptions(): array
     {
         $values = [];
         foreach ([

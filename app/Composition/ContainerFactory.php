@@ -18,6 +18,7 @@ use Hapa\Core\Configuration\ProxyConfig;
 use Hapa\Core\Configuration\RabbitMqConfig;
 use Hapa\Core\Configuration\RabbitMqConsumerConfig;
 use Hapa\Core\Configuration\RedisConfig;
+use Hapa\Core\Cache\ReadModelCache;
 use Hapa\Core\Console\InboxConsumeCommand;
 use Hapa\Core\Console\OutboxRelayCommand;
 use Hapa\Core\Console\SystemCheckCommand;
@@ -263,6 +264,8 @@ final readonly class ContainerFactory
 
     private function registerBusinessServices(ContainerBuilder $container): void
     {
+        $container->register(ReadModelCache::class)
+            ->setArguments([new Reference(RedisConfig::class)]);
         $container->register(OrderEventOutboxMapper::class);
         $container->register(PriceCalculator::class);
         $container->register(MarketplaceOfferRecalculator::class)
@@ -280,7 +283,10 @@ final readonly class ContainerFactory
             ]);
         $container->setAlias(PricingPreview::class, PricingPreviewService::class)->setPublic(false);
         $container->register(CatalogReadModel::class)
-            ->setArguments([new Reference(ConnectionFactory::class)]);
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(ReadModelCache::class),
+            ]);
         $container->setAlias(CatalogOverview::class, CatalogReadModel::class)->setPublic(false);
         $container->register(SpaceSupplierReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
@@ -316,13 +322,18 @@ final readonly class ContainerFactory
             ]);
         $container->setAlias(PricingRuleManagement::class, PricingRuleService::class)->setPublic(false);
         $container->register(CatalogPublicationRuleService::class)
-            ->setArguments([new Reference(ConnectionFactory::class), new Reference(Clock::class)]);
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(Clock::class),
+                new Reference(ReadModelCache::class),
+            ]);
         $container->setAlias(CatalogPublicationRuleManagement::class, CatalogPublicationRuleService::class)->setPublic(false);
         $container->register(CommercialCatalogService::class)
             ->setArguments([
                 new Reference(ConnectionFactory::class),
                 new Reference(Clock::class),
                 new Reference(CatalogOfferRecalculator::class),
+                new Reference(ReadModelCache::class),
             ]);
         $container->setAlias(CommercialCatalogManagement::class, CommercialCatalogService::class)->setPublic(false);
         $container->register(SpaceCatalogObservationHandler::class)
@@ -404,7 +415,10 @@ final readonly class ContainerFactory
         $container->register(AuditReadModel::class)
             ->setArguments([new Reference(ConnectionFactory::class)]);
         $container->register(RuntimeOverview::class)
-            ->setArguments([new Reference(ConnectionFactory::class)]);
+            ->setArguments([
+                new Reference(ConnectionFactory::class),
+                new Reference(ReadModelCache::class),
+            ]);
         $container->register(IntegrationAccountConfiguration::class);
         $container->register(IntegrationAccountRepository::class)
             ->setArguments([

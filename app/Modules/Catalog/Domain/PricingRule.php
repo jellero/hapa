@@ -8,6 +8,12 @@ use InvalidArgumentException;
 
 final readonly class PricingRule
 {
+    private const MATCH_FIELDS = [
+        'sku', 'ean', 'supplier_id', 'branch_suffix', 'artist', 'title', 'format', 'label',
+        'category', 'family', 'group', 'delivery_time_days', 'available_quantity',
+    ];
+    private const MATCH_OPERATORS = ['equals', 'contains', 'starts_with', 'ends_with', 'minimum', 'maximum'];
+
     public function __construct(
         public string $code,
         public PricingRuleScope $scope,
@@ -19,10 +25,14 @@ final readonly class PricingRule
         public int $priority = 100,
         public ?int $minimumPriceMinor = null,
         public ?int $maximumPriceMinor = null,
+        public ?string $matchField = null,
+        public ?string $matchOperator = null,
+        public ?string $matchValue = null,
     ) {
         $this->assertIdentifiers();
         $this->assertPricingValues();
         $this->assertScopeTargets();
+        $this->assertProductMatch();
     }
 
     private function assertIdentifiers(): void
@@ -75,14 +85,22 @@ final readonly class PricingRule
         }
     }
 
-    public function appliesTo(string $marketplaceCode, string $sku): bool
+    /** @param array<string, mixed> $product */
+    public function appliesTo(string $marketplaceCode, string $sku, array $product = []): bool
     {
-        return match ($this->scope) {
+        $scopeMatches = match ($this->scope) {
             PricingRuleScope::Global => true,
             PricingRuleScope::Marketplace => $this->marketplaceCode === $marketplaceCode,
             PricingRuleScope::Sku => $this->sku === $sku,
             PricingRuleScope::MarketplaceSku => $this->marketplaceCode === $marketplaceCode && $this->sku === $sku,
         };
+
+        return $scopeMatches && $this->matchesProduct(['sku' => $sku, ...$product]);
+    }
+
+    public function specificity(): int
+    {
+        return $this->scope->specificity() + ($this->matchField === null ? 0 : 2);
     }
 
     private function assertScopeTargets(): void
@@ -99,5 +117,63 @@ final readonly class PricingRule
         if (!$valid) {
             throw new InvalidArgumentException('I destinatari non sono coerenti con l’ambito della regola prezzo.');
         }
+    }
+
+    private function assertProductMatch(): void
+    {
+        $values = [$this->matchField, $this->matchOperator, $this->matchValue];
+        if ($values === [null, null, null]) {
+            return;
+        }
+        if ($this->matchField === null || $this->matchOperator === null || $this->matchValue === null
+            || !in_array($this->matchField, self::MATCH_FIELDS, true)
+            || !in_array($this->matchOperator, self::MATCH_OPERATORS, true)
+            || trim($this->matchValue) === '' || mb_strlen($this->matchValue) > 500) {
+            throw new InvalidArgumentException('La condizione prodotto della regola prezzo non è valida.');
+        }
+        if (in_array($this->matchField, ['delivery_time_days', 'available_quantity'], true)
+            && (!ctype_digit($this->matchValue)
+                || !in_array($this->matchOperator, ['equals', 'minimum', 'maximum'], true))) {
+            throw new InvalidArgumentException('La condizione numerica della regola prezzo non è valida.');
+        }
+    }
+
+    /** @param array<string, mixed> $product */
+    private function matchesProduct(array $product): bool
+    {
+        if ($this->matchField === null || $this->matchOperator === null || $this->matchValue === null) {
+            return true;
+        }
+        $actualValues = $this->matchField === 'supplier_id'
+            ? [$product['supplier_code'] ?? null, $product['supplier_id'] ?? null, $product['supplier_name'] ?? null]
+            : [$product[$this->matchField] ?? null];
+
+        foreach ($actualValues as $actual) {
+            if ($this->valueMatches($actual, $this->matchOperator, $this->matchValue)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function valueMatches(mixed $actual, string $operator, string $expected): bool
+    {
+        if (in_array($operator, ['minimum', 'maximum'], true)) {
+            if (!is_int($actual) && !is_numeric($actual)) {
+                return false;
+            }
+
+            return $operator === 'minimum' ? (int) $actual >= (int) $expected : (int) $actual <= (int) $expected;
+        }
+        $actual = mb_strtolower(trim((string) $actual));
+        $expected = mb_strtolower(trim($expected));
+
+        return match ($operator) {
+            'equals' => $actual === $expected,
+            'starts_with' => str_starts_with($actual, $expected),
+            'ends_with' => str_ends_with($actual, $expected),
+            default => str_contains($actual, $expected),
+        };
     }
 }

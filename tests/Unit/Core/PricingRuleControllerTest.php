@@ -75,5 +75,6 @@ final class PricingRuleControllerTest extends TestCase
         self::assertSame(Response::HTTP_SEE_OTHER, $response->getStatusCode());
         self::assertSame('2000', $rules->created['adjustment_value']);
         self::assertSame('percentage', $rules->created['adjustment_type']);
+        self::assertSame('marketplace', $rules->created['scope']);
     }
 }

@@ -89,7 +89,7 @@ final class PricingPreviewService implements PricingPreview
                     $preview['calculated_at'] = $saved['calculated_at'];
                 }
                 try {
-                    $calculated = $this->calculator->calculate($basePrice, $marketplace['code'], $sku, $rules);
+                    $calculated = $this->calculator->calculate($basePrice, $marketplace['code'], $sku, $rules, $product);
                     $preview['selling_price_minor'] = $calculated->sellingPrice->minorAmount;
                     $preview['markup_minor'] = $calculated->sellingPrice->minorAmount - $cost;
                     $preview['applied_rule_code'] = $calculated->appliedRuleCode;
@@ -199,7 +199,8 @@ SQL;
         $sql = <<<'SQL'
 SELECT rule.code, rule.scope, marketplace.code AS marketplace_code, rule.sku,
        rule.adjustment_type, rule.adjustment_value, rule.currency, rule.priority,
-       rule.minimum_price_minor, rule.maximum_price_minor
+       rule.minimum_price_minor, rule.maximum_price_minor,
+       rule.match_field, rule.match_operator, rule.match_value
 FROM pricing_rules rule
 LEFT JOIN marketplaces marketplace ON marketplace.id = rule.marketplace_id
 WHERE rule.enabled
@@ -232,6 +233,9 @@ SQL;
             (int) $row['priority'],
             $row['minimum_price_minor'] === null ? null : (int) $row['minimum_price_minor'],
             $row['maximum_price_minor'] === null ? null : (int) $row['maximum_price_minor'],
+            is_string($row['match_field']) ? $row['match_field'] : null,
+            is_string($row['match_operator']) ? $row['match_operator'] : null,
+            is_string($row['match_value']) ? $row['match_value'] : null,
         ), $statement->fetchAll(PDO::FETCH_ASSOC)));
     }
 

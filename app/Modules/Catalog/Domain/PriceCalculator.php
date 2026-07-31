@@ -12,16 +12,23 @@ final class PriceCalculator
 {
     /**
      * @param list<PricingRule> $rules
+     * @param array<string, mixed> $product
      */
-    public function calculate(Money $basePrice, string $marketplaceCode, string $sku, array $rules): CalculatedPrice
+    public function calculate(
+        Money $basePrice,
+        string $marketplaceCode,
+        string $sku,
+        array $rules,
+        array $product = [],
+    ): CalculatedPrice
     {
         $applicable = array_values(array_filter(
             $rules,
-            static fn (PricingRule $rule): bool => $rule->appliesTo($marketplaceCode, $sku),
+            static fn (PricingRule $rule): bool => $rule->appliesTo($marketplaceCode, $sku, $product),
         ));
 
         usort($applicable, static function (PricingRule $left, PricingRule $right): int {
-            $specificity = $right->scope->specificity() <=> $left->scope->specificity();
+            $specificity = $right->specificity() <=> $left->specificity();
             if ($specificity !== 0) {
                 return $specificity;
             }

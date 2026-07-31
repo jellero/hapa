@@ -28,6 +28,11 @@ final class SessionManager
 
     public function open(Request $request): WebSession
     {
+        return $this->resume($request) ?? $this->createAnonymous($request);
+    }
+
+    public function resume(Request $request): ?WebSession
+    {
         $token = $request->cookies->get(self::COOKIE);
         if (is_string($token) && preg_match('/^[A-Za-z0-9_-]{43}$/D', $token)) {
             $session = $this->find($token);
@@ -38,7 +43,7 @@ final class SessionManager
             }
         }
 
-        return $this->createAnonymous($request);
+        return null;
     }
 
     public function authenticate(WebSession $session, UserIdentity $user, bool $remember): void

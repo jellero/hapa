@@ -38,6 +38,25 @@ final class CatalogPublicationRuleMatcherTest extends TestCase
         ));
     }
 
+    public function testItMatchesEanAndTheOfficialSupplierCode(): void
+    {
+        $product = [
+            'ean' => '5099703247626',
+            'supplier_id' => '5',
+            'supplier_code' => 'AEC',
+            'supplier_name' => 'AEC ALLIANCE ENTERTAINMENT',
+        ];
+
+        self::assertTrue(CatalogPublicationRuleMatcher::matches($product, [
+            ...$this->rule('include', 'equals', '5099703247626', 100),
+            'field' => 'ean',
+        ]));
+        self::assertTrue(CatalogPublicationRuleMatcher::matches($product, [
+            ...$this->rule('include', 'equals', 'aec', 100),
+            'field' => 'supplier_id',
+        ]));
+    }
+
     /** @return array<string, int|string|null> */
     private function rule(string $action, string $operator, string $value, int $priority): array
     {

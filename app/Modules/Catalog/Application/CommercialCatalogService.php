@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hapa\Modules\Catalog\Application;
 
+use Hapa\Core\Cache\ReadModelCache;
 use Hapa\Core\Clock\Clock;
 use Hapa\Core\Database\ConnectionFactory;
 use Hapa\Core\Security\UserIdentity;
@@ -19,6 +20,7 @@ final readonly class CommercialCatalogService implements CommercialCatalogManage
         private ConnectionFactory $connections,
         private Clock $clock,
         private CatalogOfferRecalculator $offerRecalculator,
+        private ?ReadModelCache $cache = null,
     ) {
     }
 
@@ -60,13 +62,16 @@ final readonly class CommercialCatalogService implements CommercialCatalogManage
         $products = $pdo->query(<<<'SQL'
 SELECT item.id, item.sku, item.ean, item.name, item.onboarding_status, item.active,
        item.sellable_quantity, source.purchase_cost_minor, source.currency,
-       source.space_supplier_id AS supplier_id, source.artist, source.title, source.format,
+       source.space_supplier_id AS supplier_id,
+       supplier_registry.code AS supplier_code, supplier_registry.legal_name AS supplier_name,
+       source.artist, source.title, source.format,
        source.label, source.category, source.family, source.group_name AS "group",
        source.branch_suffix, source.delivery_time_days,
        COALESCE(source.available_quantity, 0) + COALESCE(source.backorder_quantity, 0) AS available_quantity
 FROM catalog_items item
 JOIN supplier_catalog_items source ON source.catalog_item_id = item.id AND source.active
 JOIN suppliers supplier ON supplier.id = source.supplier_id AND supplier.code = 'space'
+LEFT JOIN space_suppliers supplier_registry ON supplier_registry.space_supplier_id = source.space_supplier_id
 WHERE item.onboarding_status <> 'rejected'
 ORDER BY item.id
 SQL);
@@ -336,19 +341,35 @@ SQL;
 
     private function eligibleCount(int $catalogId): int
     {
+        $cached = $this->cache?->remember(
+            sprintf('hapa:read:v1:catalog-eligible:%d', $catalogId),
+            300,
+            fn (): array => ['count' => $this->queryEligibleCount($catalogId)],
+        );
+
+        return is_array($cached) ? (int) ($cached['count'] ?? 0) : $this->queryEligibleCount($catalogId);
+    }
+
+    private function queryEligibleCount(int $catalogId): int
+    {
         $pdo = $this->connections->create();
         $statement = $pdo->prepare(<<<'SQL'
 WITH candidate_rules AS (
     SELECT
         item.id AS catalog_item_id,
+        rule.field,
         link.marketplace_id,
         rule.priority,
         rule.action,
         rule.operator,
         lower(btrim(rule.match_value)) AS expected_value,
+        lower(btrim(COALESCE(source.space_supplier_id::text, ''))) AS supplier_external_id,
+        lower(btrim(COALESCE(space_supplier.code, ''))) AS supplier_code,
+        lower(btrim(COALESCE(space_supplier.legal_name, ''))) AS supplier_name,
         lower(btrim(CASE rule.field
             WHEN 'sku' THEN item.sku
-            WHEN 'supplier_id' THEN source.space_supplier_id::text
+            WHEN 'ean' THEN item.ean
+            WHEN 'supplier_id' THEN COALESCE(space_supplier.code, source.space_supplier_id::text, space_supplier.legal_name)
             WHEN 'branch_suffix' THEN source.branch_suffix
             WHEN 'artist' THEN source.artist
             WHEN 'title' THEN source.title
@@ -379,18 +400,37 @@ WITH candidate_rules AS (
     JOIN catalog_items item ON item.onboarding_status <> 'rejected'
     JOIN supplier_catalog_items source ON source.catalog_item_id = item.id AND source.active
     JOIN suppliers supplier ON supplier.id = source.supplier_id AND supplier.code = 'space'
+    LEFT JOIN space_suppliers space_supplier ON space_supplier.space_supplier_id = source.space_supplier_id
     WHERE link.commercial_catalog_id = :catalog_id
 ),
 matching_rules AS (
     SELECT catalog_item_id, marketplace_id, priority, action
     FROM candidate_rules
     WHERE
-        (operator = 'equals' AND actual_value = expected_value)
-        OR (operator = 'contains' AND position(expected_value IN actual_value) > 0)
-        OR (operator = 'starts_with' AND left(actual_value, length(expected_value)) = expected_value)
-        OR (operator = 'ends_with' AND right(actual_value, length(expected_value)) = expected_value)
-        OR (operator = 'minimum' AND actual_number >= expected_value::integer)
-        OR (operator = 'maximum' AND actual_number <= expected_value::integer)
+        (
+            field = 'supplier_id' AND (
+                (operator = 'equals' AND expected_value IN (supplier_external_id, supplier_code, supplier_name))
+                OR (operator = 'contains' AND position(expected_value IN concat_ws(' ', supplier_external_id, supplier_code, supplier_name)) > 0)
+                OR (operator = 'starts_with' AND EXISTS (
+                    SELECT 1 FROM unnest(ARRAY[supplier_external_id, supplier_code, supplier_name]) AS candidate(value)
+                    WHERE left(candidate.value, length(expected_value)) = expected_value
+                ))
+                OR (operator = 'ends_with' AND EXISTS (
+                    SELECT 1 FROM unnest(ARRAY[supplier_external_id, supplier_code, supplier_name]) AS candidate(value)
+                    WHERE right(candidate.value, length(expected_value)) = expected_value
+                ))
+            )
+        )
+        OR (
+            field <> 'supplier_id' AND (
+                (operator = 'equals' AND actual_value = expected_value)
+                OR (operator = 'contains' AND position(expected_value IN actual_value) > 0)
+                OR (operator = 'starts_with' AND left(actual_value, length(expected_value)) = expected_value)
+                OR (operator = 'ends_with' AND right(actual_value, length(expected_value)) = expected_value)
+                OR (operator = 'minimum' AND actual_number >= expected_value::integer)
+                OR (operator = 'maximum' AND actual_number <= expected_value::integer)
+            )
+        )
 ),
 winning_priority AS (
     SELECT catalog_item_id, marketplace_id, min(priority) AS priority

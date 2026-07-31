@@ -218,6 +218,10 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('Amigos', $content);
         self::assertStringContainsString('4,28 EUR', $content);
         self::assertStringContainsString('5,35 EUR', $content);
+        self::assertStringContainsString('<option value="ean">EAN</option>', $content);
+        self::assertStringContainsString('AEC ALLIANCE ENTERTAINMENT', $content);
+        self::assertStringContainsString('name="match_field"', $content);
+        self::assertStringNotContainsString('name="sku"', $content);
     }
 
     public function testItPresentsTheRealSpaceAccountConfigurationWithoutShowcaseCards(): void
