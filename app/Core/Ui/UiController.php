@@ -463,6 +463,7 @@ final readonly class UiController
     {
         $query = trim($request->query->getString('q'));
         $entityType = $request->query->getString('entity_type');
+        $level = $request->query->getString('level') === 'error' ? 'error' : '';
 
         return $this->operational($request, 'ui/audit', 'audit', [
             'title' => 'Audit',
@@ -470,8 +471,9 @@ final readonly class UiController
             'description' => 'Ricostruisci azioni operative, cambi di stato e accessi sensibili.',
             'query' => $query,
             'selectedEntityType' => $entityType,
+            'selectedLevel' => $level,
             'entityTypes' => $this->auditReadModel?->entityTypes() ?? [],
-            'auditEntries' => $this->auditReadModel?->search($query, $entityType) ?? [],
+            'auditEntries' => $this->auditReadModel?->search($query, $entityType, $level) ?? [],
         ]);
     }
 

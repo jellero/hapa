@@ -44,8 +44,16 @@ $formatJson = static function (?array $value): string {
                 <?php endforeach; ?>
             </select>
         </div>
+        <div class="toolbar-field">
+            <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
+            <label class="sr-only" for="audit-level">Filtra per esito</label>
+            <select id="audit-level" name="level">
+                <option value="">Tutti gli esiti</option>
+                <option value="error"<?= ($selectedLevel ?? '') === 'error' ? ' selected' : '' ?>>Solo errori</option>
+            </select>
+        </div>
         <button class="button button--secondary" type="submit">Applica</button>
-        <?php if (($query ?? '') !== '' || ($selectedEntityType ?? '') !== ''): ?><a class="button button--ghost" href="/ui/audit">Azzera</a><?php endif; ?>
+        <?php if (($query ?? '') !== '' || ($selectedEntityType ?? '') !== '' || ($selectedLevel ?? '') !== ''): ?><a class="button button--ghost" href="/ui/audit">Azzera</a><?php endif; ?>
     </form>
 
     <div class="table-scroll">

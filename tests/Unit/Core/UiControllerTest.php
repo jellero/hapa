@@ -68,6 +68,17 @@ final class UiControllerTest extends TestCase
         self::assertStringContainsString('Stato delle capacità', $content);
     }
 
+    public function testAuditExposesTheOperationalErrorFilter(): void
+    {
+        $content = (string) $this->controller()
+            ->audit($this->request('/ui/audit?level=error'))
+            ->getContent();
+
+        self::assertStringContainsString('id="audit-level"', $content);
+        self::assertStringContainsString('value="error" selected', $content);
+        self::assertStringContainsString('Solo errori', $content);
+    }
+
     public function testItEscapesSearchInputInCollectionPages(): void
     {
         $request = $this->request('/ui/orders?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
