@@ -13,6 +13,11 @@ final class PiiKeyProvider
 
     public static function passphrase(): string
     {
+        return base64_encode(self::rawKey());
+    }
+
+    public static function rawKey(): string
+    {
         $environment = strtolower(EnvironmentReader::value('APP_ENV', 'development'));
         $key = EnvironmentReader::secret('HAPA_PII_KEY', '');
         if ($key === '') {
@@ -22,7 +27,7 @@ final class PiiKeyProvider
                 );
             }
 
-            $key = base64_encode(hash('sha256', self::LOCAL_KEY_SEED, true));
+            return hash('sha256', self::LOCAL_KEY_SEED, true);
         }
 
         $decoded = base64_decode($key, true);
@@ -30,7 +35,7 @@ final class PiiKeyProvider
             throw new HapaRuntimeException('HAPA_PII_KEY deve essere una chiave base64 di 32 byte.');
         }
 
-        return $key;
+        return $decoded;
     }
 
     public static function keyId(): string
