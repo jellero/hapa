@@ -17,10 +17,20 @@ use Symfony\Component\Routing\RouteCollection;
 
 final class UiRoutesTest extends TestCase
 {
+    public function testTheRootRedirectsToTheUserInterface(): void
+    {
+        $kernel = Bootstrap::initialize(dirname(__DIR__, 3))->kernel();
+        $response = $kernel->handle(Request::create('/'));
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/ui', $response->headers->get('Location'));
+    }
+
     public function testItRegistersEveryUserInterfaceRoute(): void
     {
         $routes = $this->routes();
 
+        self::assertSame('/', $routes->get('home')?->getPath());
         self::assertSame('/login', $routes->get('login')?->getPath());
         self::assertSame('/password/recovery', $routes->get('password_recovery')?->getPath());
         self::assertSame('/ui', $routes->get('ui_dashboard')?->getPath());

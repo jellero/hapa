@@ -12,6 +12,7 @@ use Hapa\Core\Ui\PricingRuleController;
 use Hapa\Core\Ui\SpacePurchaseController;
 use Hapa\Core\Ui\UiController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Route;
@@ -142,13 +143,7 @@ return static function (array $services) use ($registerIntegrationRoutes, $regis
 
     $routes->add('home', new Route(
         '/',
-        ['_controller' => static fn (Request $request): JsonResponse => new JsonResponse([
-            'application' => 'HAPA',
-            'status' => 'bootstrapped',
-            'interface' => '/ui',
-            'automation_service' => 'jellero/hapa-automation',
-            'correlation_id' => $request->attributes->getString('correlation_id'),
-        ]), '_public' => true],
+        ['_controller' => static fn (): RedirectResponse => new RedirectResponse('/ui'), '_public' => true],
         methods: ['GET'],
     ));
 
