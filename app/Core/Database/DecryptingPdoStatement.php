@@ -28,8 +28,9 @@ final class DecryptingPdoStatement extends PDOStatement
     {
         /** @var array<mixed> $rows */
         $rows = parent::fetchAll($mode, ...$args);
+        $decrypted = $this->decrypt($rows);
 
-        return $this->decrypt($rows);
+        return is_array($decrypted) ? $decrypted : [];
     }
 
     public function fetchColumn(int $column = 0): mixed
@@ -40,8 +41,12 @@ final class DecryptingPdoStatement extends PDOStatement
     public function fetchObject(?string $class = 'stdClass', array $constructorArgs = []): object|false
     {
         $value = parent::fetchObject($class, $constructorArgs);
+        if ($value === false) {
+            return false;
+        }
+        $decrypted = $this->decrypt($value);
 
-        return $value === false ? false : $this->decrypt($value);
+        return is_object($decrypted) ? $decrypted : $value;
     }
 
     private function decrypt(mixed $value): mixed
