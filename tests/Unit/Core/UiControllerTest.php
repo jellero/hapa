@@ -66,6 +66,8 @@ final class UiControllerTest extends TestCase
         self::assertStringNotContainsString('Prossimi gate', $content);
         self::assertStringNotContainsString('Esplora il piano integrazioni', $content);
         self::assertStringContainsString('Stato delle capacità', $content);
+        self::assertStringContainsString('data-liveness-status', $content);
+        self::assertStringNotContainsString('href="/health/live"', $content);
     }
 
     public function testAuditExposesTheOperationalErrorFilter(): void

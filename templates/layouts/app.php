@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#132238">
     <meta name="description" content="<?= $e($description ?? 'Centro operativo HAPA') ?>">
     <title><?= $e($title ?? 'HAPA') ?> · HAPA</title>
-    <link rel="stylesheet" href="/assets/ui.css?v=17">
-    <script defer src="/assets/ui.js?v=12"></script>
+    <link rel="stylesheet" href="/assets/ui.css?v=18">
+    <script defer src="/assets/ui.js?v=13"></script>
 </head>
 <body class="app-body" data-ui-shell>
     <a class="skip-link" href="#main-content">Vai al contenuto</a>

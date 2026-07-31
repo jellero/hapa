@@ -79,6 +79,38 @@
     banner?.setAttribute('hidden', 'hidden');
   });
 
+  const livenessStatus = document.querySelector('[data-liveness-status]');
+  const livenessLabel = livenessStatus?.querySelector('[data-liveness-label]');
+  const updateLiveness = async () => {
+    if (!(livenessStatus instanceof HTMLOutputElement) || !(livenessLabel instanceof HTMLElement)) return;
+
+    let healthy = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch('/health/live', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal: controller.signal,
+      });
+      const payload = response.ok ? await response.json() : null;
+      healthy = payload?.status === 'ok';
+    } catch {
+      healthy = false;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+
+    livenessStatus.classList.toggle('service-health--checking', false);
+    livenessStatus.classList.toggle('service-health--ok', healthy);
+    livenessStatus.classList.toggle('service-health--ko', !healthy);
+    livenessLabel.textContent = healthy ? 'Sistema OK' : 'Sistema KO';
+  };
+  if (livenessStatus instanceof HTMLOutputElement) {
+    updateLiveness();
+    window.setInterval(updateLiveness, 30000);
+  }
+
   document.querySelectorAll('[data-password-toggle]').forEach((button) => {
     button.addEventListener('click', () => {
       const field = button.closest('.input-shell')?.querySelector('[data-password-input]');

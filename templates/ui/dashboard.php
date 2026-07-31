@@ -5,10 +5,10 @@
         <p class="page-header__description"><?= $e($description) ?></p>
     </div>
     <div class="page-header__actions">
-        <a class="button button--secondary" href="/health/live" target="_blank" rel="noopener">
-            <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#pulse"></use></svg>
-            Verifica liveness
-        </a>
+        <output class="service-health service-health--checking" data-liveness-status role="status" aria-live="polite">
+            <span class="service-health__dot" aria-hidden="true"></span>
+            <span data-liveness-label>Verifica in corso</span>
+        </output>
         <button class="button button--primary" type="button" disabled title="Disponibile dopo l’attivazione del repository ordini">
             <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg>
             Nuovo ordine

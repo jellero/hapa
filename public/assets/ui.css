@@ -1295,7 +1295,56 @@ h3 {
 .page-header__actions {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
   gap: 9px;
+}
+
+.service-health {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 13px;
+  border: 1px solid var(--slate-200);
+  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.service-health__dot {
+  width: 9px;
+  height: 9px;
+  background: var(--slate-500);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgb(129 144 165 / 13%);
+}
+
+.service-health--checking {
+  color: var(--slate-600);
+  background: var(--slate-100);
+}
+
+.service-health--ok {
+  color: var(--teal-700);
+  background: var(--teal-100);
+  border-color: #b9e9dc;
+}
+
+.service-health--ok .service-health__dot {
+  background: #0ca789;
+  box-shadow: 0 0 0 4px rgb(12 167 137 / 14%);
+}
+
+.service-health--ko {
+  color: var(--red-700);
+  background: var(--red-100);
+  border-color: #f3c8d0;
+}
+
+.service-health--ko .service-health__dot {
+  background: #d92d4c;
+  box-shadow: 0 0 0 4px rgb(217 45 76 / 14%);
 }
 
 .page-header--detail {
