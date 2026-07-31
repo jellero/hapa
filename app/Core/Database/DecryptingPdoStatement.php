@@ -20,7 +20,7 @@ final class DecryptingPdoStatement extends PDOStatement
         int $cursorOrientation = PDO::FETCH_ORI_NEXT,
         int $cursorOffset = 0,
     ): mixed {
-        return $this->decrypt(parent::fetch($mode, $cursorOrientation, $cursorOffset));
+        return $this->decodeValue(parent::fetch($mode, $cursorOrientation, $cursorOffset));
     }
 
     /** @return array<mixed> */
@@ -28,39 +28,28 @@ final class DecryptingPdoStatement extends PDOStatement
     {
         /** @var array<mixed> $rows */
         $rows = parent::fetchAll($mode, ...$args);
-        $decrypted = $this->decrypt($rows);
+        $decoded = $this->decodeValue($rows);
 
-        return is_array($decrypted) ? $decrypted : [];
+        return is_array($decoded) ? $decoded : [];
     }
 
     public function fetchColumn(int $column = 0): mixed
     {
-        return $this->decrypt(parent::fetchColumn($column));
+        return $this->decodeValue(parent::fetchColumn($column));
     }
 
-    public function fetchObject(?string $class = 'stdClass', array $constructorArgs = []): object|false
-    {
-        $value = parent::fetchObject($class, $constructorArgs);
-        if ($value === false) {
-            return false;
-        }
-        $decrypted = $this->decrypt($value);
-
-        return is_object($decrypted) ? $decrypted : $value;
-    }
-
-    private function decrypt(mixed $value): mixed
+    private function decodeValue(mixed $value): mixed
     {
         if (is_array($value)) {
             foreach ($value as $key => $item) {
-                $value[$key] = $this->decrypt($item);
+                $value[$key] = $this->decodeValue($item);
             }
 
             return $value;
         }
         if ($value instanceof stdClass) {
             foreach (get_object_vars($value) as $key => $item) {
-                $value->{$key} = $this->decrypt($item);
+                $value->{$key} = $this->decodeValue($item);
             }
 
             return $value;
@@ -69,7 +58,7 @@ final class DecryptingPdoStatement extends PDOStatement
             return $value;
         }
         if (str_starts_with($value, 'hapa:v1:')) {
-            return $this->decryptText($value);
+            return $this->decodeText($value);
         }
 
         $trimmed = ltrim($value);
@@ -85,10 +74,10 @@ final class DecryptingPdoStatement extends PDOStatement
             return $value;
         }
 
-        return $this->decryptJson($value);
+        return $this->decodeJson($value);
     }
 
-    private function decryptText(string $ciphertext): string
+    private function decodeText(string $ciphertext): string
     {
         $statement = $this->connection->prepare('SELECT hapa_pii_decrypt(:ciphertext)');
         $statement->execute(['ciphertext' => $ciphertext]);
@@ -97,7 +86,7 @@ final class DecryptingPdoStatement extends PDOStatement
         return is_string($plaintext) ? $plaintext : '';
     }
 
-    private function decryptJson(string $ciphertext): string
+    private function decodeJson(string $ciphertext): string
     {
         $statement = $this->connection->prepare(
             'SELECT hapa_pii_decrypt_json(CAST(:ciphertext AS JSONB))::TEXT',
