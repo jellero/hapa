@@ -157,6 +157,8 @@ SQL);
      */
     private static function hydrate(array $row): array
     {
+        $after = self::jsonObject($row['after_data']);
+
         return [
             'id' => (int) $row['id'],
             'created_at' => (string) $row['created_at'],
@@ -168,7 +170,8 @@ SQL);
             'entity_id' => (string) $row['entity_id'],
             'correlation_id' => self::nullableString($row['correlation_id']),
             'before' => self::jsonObject($row['before_data']),
-            'after' => self::jsonObject($row['after_data']),
+            'after' => $after,
+            'diagnostic' => AuditErrorDiagnostic::from((string) $row['action'], $after),
         ];
     }
 

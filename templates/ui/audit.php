@@ -57,20 +57,41 @@ $formatJson = static function (?array $value): string {
     </form>
 
     <div class="table-scroll">
-        <table class="data-table">
+        <table class="data-table audit-table">
+            <colgroup><col class="audit-table__date"><col class="audit-table__actor"><col class="audit-table__action"><col class="audit-table__entity"><col class="audit-table__correlation"><col class="audit-table__detail"></colgroup>
             <thead><tr><th>Data e ora</th><th>Attore</th><th>Azione</th><th>Entità</th><th>Correlation ID</th><th>Dettaglio</th></tr></thead>
             <tbody>
             <?php if (($auditEntries ?? []) === []): ?>
                 <tr><td colspan="6"><div class="empty-state"><span class="empty-state__icon"><svg class="icon"><use href="/assets/icons.svg#audit"></use></svg></span><h3>Nessun evento trovato</h3><p>Modifica i filtri oppure esegui un’azione operativa autorizzata.</p></div></td></tr>
             <?php else: ?>
                 <?php foreach ($auditEntries as $entry): ?>
-                    <tr>
+                    <?php $diagnostic = is_array($entry['diagnostic'] ?? null) ? $entry['diagnostic'] : null; ?>
+                    <tr<?= $diagnostic !== null ? ' class="audit-table__error-row"' : '' ?>>
                         <td><time datetime="<?= $e($entry['created_at']) ?>"><?= $e($formatDate($entry['created_at'])) ?></time></td>
                         <td><strong><?= $e($entry['actor_name'] ?? 'Sistema') ?></strong><small><?= $e($entry['actor_email'] ?? $entry['actor_id'] ?? '—') ?></small></td>
                         <td><code><?= $e($entry['action']) ?></code></td>
                         <td><strong><?= $e($entry['entity_type']) ?></strong><small><?= $e($entry['entity_id']) ?></small></td>
                         <td><code><?= $e($entry['correlation_id'] ?? '—') ?></code></td>
-                        <td><details><summary>Mostra</summary><strong>Prima</strong><pre><?= $e($formatJson($entry['before'])) ?></pre><strong>Dopo</strong><pre><?= $e($formatJson($entry['after'])) ?></pre></details></td>
+                        <td class="audit-table__detail-cell">
+                            <?php if ($diagnostic !== null): ?>
+                                <div class="audit-error-card">
+                                    <div class="audit-error-card__heading"><span class="status-badge status-badge--danger">Errore</span><strong><?= $e($diagnostic['message']) ?></strong></div>
+                                    <?php if ($diagnostic['cause'] !== null): ?><p><?= $e($diagnostic['cause']) ?></p><?php endif; ?>
+                                    <dl class="audit-diagnostic">
+                                        <?php if ($diagnostic['field'] !== null): ?><div><dt>Campo</dt><dd><code><?= $e($diagnostic['field']) ?></code></dd></div><?php endif; ?>
+                                        <?php if ($diagnostic['observed'] !== null): ?><div><dt>Ricevuto</dt><dd><?= $e($diagnostic['observed']) ?></dd></div><?php endif; ?>
+                                        <?php if ($diagnostic['expected'] !== null): ?><div><dt>Atteso</dt><dd><?= $e($diagnostic['expected']) ?></dd></div><?php endif; ?>
+                                        <?php if ($diagnostic['value'] !== null): ?><div class="audit-diagnostic__value"><dt>Valore</dt><dd title="<?= $e($diagnostic['value']) ?>"><?= $e($diagnostic['value']) ?></dd></div><?php endif; ?>
+                                    </dl>
+                                </div>
+                            <?php endif; ?>
+                            <details class="audit-raw-details">
+                                <summary><?= $diagnostic === null ? 'Mostra dettaglio' : 'Apri payload tecnico' ?></summary>
+                                <?php if ($entry['before'] !== null): ?><strong>Prima</strong><pre><?= $e($formatJson($entry['before'])) ?></pre><?php endif; ?>
+                                <strong><?= $entry['before'] === null ? 'Dati evento' : 'Dopo' ?></strong>
+                                <pre><?= $e($formatJson($entry['after'])) ?></pre>
+                            </details>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>

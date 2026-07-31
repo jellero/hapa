@@ -89,7 +89,7 @@ final readonly class SpaceCatalogObservation
     {
         $value = $payload[$key] ?? null;
         if (!is_string($value) || trim($value) !== $value || $value === '' || strlen($value) > $maximumLength) {
-            throw new InvalidArgumentException(sprintf('Campo %s mancante o non valido.', $key));
+            throw new InvalidArgumentException(self::invalidStringMessage($key, $value, $maximumLength, true));
         }
 
         return $value;
@@ -103,7 +103,7 @@ final readonly class SpaceCatalogObservation
             return null;
         }
         if (!is_string($value) || trim($value) !== $value || $value === '' || strlen($value) > $maximumLength) {
-            throw new InvalidArgumentException(sprintf('Campo %s non valido.', $key));
+            throw new InvalidArgumentException(self::invalidStringMessage($key, $value, $maximumLength, false));
         }
 
         return $value;
@@ -118,5 +118,30 @@ final readonly class SpaceCatalogObservation
         }
 
         return $value;
+    }
+
+    private static function invalidStringMessage(
+        string $key,
+        mixed $value,
+        int $maximumLength,
+        bool $required,
+    ): string {
+        $prefix = sprintf('Campo %s %snon valido: ', $key, $required ? 'mancante o ' : '');
+        if (!is_string($value)) {
+            return $prefix . sprintf('atteso testo, ricevuto %s.', get_debug_type($value));
+        }
+        if ($value === '') {
+            return $prefix . 'il testo è vuoto.';
+        }
+        if (trim($value) !== $value) {
+            return $prefix . 'sono presenti spazi iniziali o finali.';
+        }
+
+        return $prefix . sprintf(
+            'lunghezza %d byte (%d caratteri), massimo consentito %d byte.',
+            strlen($value),
+            mb_strlen($value),
+            $maximumLength,
+        );
     }
 }

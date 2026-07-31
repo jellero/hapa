@@ -1726,6 +1726,141 @@ a.workstream-item:focus-visible {
   border-bottom: 0;
 }
 
+.audit-table {
+  min-width: 1080px;
+  table-layout: fixed;
+}
+
+.audit-table__date { width: 10%; }
+.audit-table__actor { width: 12%; }
+.audit-table__action { width: 14%; }
+.audit-table__entity { width: 16%; }
+.audit-table__correlation { width: 14%; }
+.audit-table__detail { width: 34%; }
+
+.audit-table td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.audit-table td > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--slate-500);
+}
+
+.audit-table td > code {
+  color: var(--navy-900);
+  white-space: normal;
+}
+
+.audit-table__error-row {
+  background: #fffdfd;
+}
+
+.audit-error-card {
+  padding: 13px;
+  background: #fff7f7;
+  border: 1px solid #f2cccc;
+  border-radius: 10px;
+}
+
+.audit-error-card__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.audit-error-card__heading strong {
+  padding-top: 3px;
+  color: var(--red-700);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.audit-error-card > p {
+  margin: 9px 0 0;
+  color: var(--slate-700);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.audit-diagnostic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.audit-diagnostic > div {
+  min-width: 0;
+  padding: 8px 9px;
+  background: var(--white);
+  border: 1px solid #eddede;
+  border-radius: 8px;
+}
+
+.audit-diagnostic dt {
+  color: var(--slate-500);
+  font-size: 0.61rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.audit-diagnostic dd {
+  margin: 3px 0 0;
+  color: var(--navy-900);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.audit-diagnostic__value {
+  grid-column: 1 / -1;
+}
+
+.audit-diagnostic__value dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-raw-details {
+  margin-top: 9px;
+}
+
+.audit-raw-details > summary {
+  color: var(--blue-700);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.audit-raw-details[open] > summary {
+  margin-bottom: 9px;
+}
+
+.audit-raw-details > strong {
+  display: block;
+  margin: 9px 0 5px;
+  color: var(--slate-600);
+  font-size: 0.65rem;
+}
+
+.audit-raw-details pre {
+  max-height: 300px;
+  margin: 0;
+  padding: 11px;
+  overflow: auto;
+  color: #d8e5f5;
+  background: #162338;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  line-height: 1.5;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
 .data-table--compact .empty-state {
   min-height: 150px;
 }
