@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hapa\Core\Database;
 
 use Hapa\Core\Configuration\DatabaseConfig;
+use Hapa\Core\Security\PiiKeyProvider;
 use PDO;
 
 final readonly class ConnectionFactory
@@ -15,7 +16,7 @@ final readonly class ConnectionFactory
 
     public function create(): PDO
     {
-        return new PDO(
+        $connection = new PDO(
             sprintf(
                 'pgsql:host=%s;port=%d;dbname=%s;connect_timeout=%d;application_name=hapa',
                 $this->config->host,
@@ -32,5 +33,21 @@ final readonly class ConnectionFactory
                 PDO::ATTR_PERSISTENT => false,
             ],
         );
+
+        $statement = $connection->prepare(<<<'SQL'
+SELECT
+    set_config('hapa.pii_key', :pii_key, false),
+    set_config('hapa.pii_key_id', :pii_key_id, false)
+SQL);
+        $statement->execute([
+            'pii_key' => PiiKeyProvider::passphrase(),
+            'pii_key_id' => PiiKeyProvider::keyId(),
+        ]);
+        $connection->setAttribute(
+            PDO::ATTR_STATEMENT_CLASS,
+            [DecryptingPdoStatement::class, [$connection]],
+        );
+
+        return $connection;
     }
 }

@@ -54,7 +54,7 @@ final class CustomerServiceTest extends TestCase
         }
     }
 
-    public function testCustomerLifecycleIsVersionedAuditedAndProtectedByOptimisticLocking(): void
+    public function testCustomerLifecycleIsVersionedAuditedEncryptedAndProtectedByOptimisticLocking(): void
     {
         $actor = new UserIdentity('admin-test', 'admin@example.test', 'Admin test', 'administrator');
         $createdCode = $this->service->create($this->input('Mario Rossi'), $actor, 'corr-create');
@@ -62,7 +62,13 @@ final class CustomerServiceTest extends TestCase
         self::assertSame($this->customerCode, $createdCode);
         $row = $this->customer();
         self::assertSame(1, (int) $row['version']);
-        self::assertSame('mario@example.test', $row['email_normalized']);
+        self::assertSame('Mario Rossi', $row['display_name']);
+        self::assertSame('Mario@example.test', $row['email']);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/D', (string) $row['email_normalized']);
+        self::assertTrue($this->encryptedColumn('display_name'));
+        self::assertTrue($this->encryptedColumn('email'));
+        self::assertTrue($this->encryptedColumn('phone'));
+        self::assertTrue($this->encryptedHistory());
         self::assertSame(['created'], $this->historyTypes());
 
         $this->service->update(
@@ -75,6 +81,8 @@ final class CustomerServiceTest extends TestCase
         $row = $this->customer();
         self::assertSame(2, (int) $row['version']);
         self::assertSame('inactive', $row['status']);
+        self::assertSame('Mario R. aggiornato', $row['display_name']);
+        self::assertTrue($this->encryptedColumn('display_name'));
         self::assertSame(['created', 'updated'], $this->historyTypes());
 
         try {
@@ -132,6 +140,35 @@ final class CustomerServiceTest extends TestCase
         self::assertIsArray($row);
 
         return $row;
+    }
+
+    private function encryptedColumn(string $column): bool
+    {
+        if (!in_array($column, ['display_name', 'email', 'phone'], true)) {
+            self::fail('Colonna PII di test non consentita.');
+        }
+        $statement = $this->pdo->prepare(sprintf(
+            "SELECT %s LIKE 'hapa:v1:%%' FROM customers WHERE customer_code = :code",
+            $column,
+        ));
+        $statement->execute(['code' => $this->customerCode]);
+
+        return filter_var($statement->fetchColumn(), FILTER_VALIDATE_BOOL);
+    }
+
+    private function encryptedHistory(): bool
+    {
+        $statement = $this->pdo->prepare(<<<'SQL'
+SELECT jsonb_exists(history.snapshot, '_hapa_pii')
+FROM customer_history history
+JOIN customers customer ON customer.id = history.customer_id
+WHERE customer.customer_code = :code
+ORDER BY history.version
+LIMIT 1
+SQL);
+        $statement->execute(['code' => $this->customerCode]);
+
+        return filter_var($statement->fetchColumn(), FILTER_VALIDATE_BOOL);
     }
 
     private function customerId(): ?int

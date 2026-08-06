@@ -34,13 +34,17 @@ final class FilesystemPrivateDocumentStorageTest extends TestCase
         rmdir($this->directory);
     }
 
-    public function testItStoresReadsVerifiesAndDeletesAPrivateLabel(): void
+    public function testItStoresEncryptedReadsVerifiesAndDeletesAPrivateLabel(): void
     {
         $storage = new FilesystemPrivateDocumentStorage($this->directory, 1024);
         $stored = $storage->store('shipment_label', 'pdf', '%PDF-test');
 
         self::assertSame('PDF', $stored->format);
         self::assertSame(9, $stored->bytes);
+        $raw = file_get_contents($this->directory . '/' . $stored->reference);
+        self::assertIsString($raw);
+        self::assertStringStartsWith("HAPA-PII-FILE-V1\n", $raw);
+        self::assertStringNotContainsString('%PDF-test', $raw);
         self::assertSame('%PDF-test', $storage->read($stored->reference, $stored->checksumSha256));
 
         $storage->delete($stored->reference);

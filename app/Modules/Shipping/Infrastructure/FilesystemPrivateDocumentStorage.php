@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Hapa\Modules\Shipping\Infrastructure;
 
+use Hapa\Core\Exception\HapaRuntimeException;
+use Hapa\Core\Security\PiiKeyProvider;
 use Hapa\Modules\Shipping\Contract\PrivateDocumentStorage;
 use Hapa\Modules\Shipping\Contract\StoredDocument;
 use InvalidArgumentException;
-use Hapa\Core\Exception\HapaRuntimeException;
+use JsonException;
 
 final readonly class FilesystemPrivateDocumentStorage implements PrivateDocumentStorage
 {
+    private const ENVELOPE_PREFIX = "HAPA-PII-FILE-V1\n";
+    private const CIPHER = 'aes-256-gcm';
+
     private string $root;
 
     public function __construct(string $root, private int $maximumBytes = 10_485_760)
@@ -53,8 +58,9 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
         $reference = $relativeDirectory . '/' . $name;
         $destination = $directory . DIRECTORY_SEPARATOR . $name;
         $temporary = $destination . '.tmp-' . bin2hex(random_bytes(6));
-        $written = file_put_contents($temporary, $content, LOCK_EX);
-        if ($written !== $bytes) {
+        $encrypted = $this->encrypt($content, $reference);
+        $written = file_put_contents($temporary, $encrypted, LOCK_EX);
+        if ($written !== strlen($encrypted)) {
             @unlink($temporary);
             throw new HapaRuntimeException('Scrittura documento incompleta.');
         }
@@ -70,10 +76,13 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
     public function read(string $reference, string $expectedChecksum): string
     {
         $path = $this->resolve($reference);
-        $content = file_get_contents($path);
-        if (!is_string($content)) {
+        $stored = file_get_contents($path);
+        if (!is_string($stored)) {
             throw new HapaRuntimeException('Documento privato non leggibile.');
         }
+        $content = str_starts_with($stored, self::ENVELOPE_PREFIX)
+            ? $this->decrypt(substr($stored, strlen(self::ENVELOPE_PREFIX)), $reference)
+            : $stored;
         if (preg_match('/^[0-9a-f]{64}$/D', $expectedChecksum) !== 1
             || !hash_equals($expectedChecksum, hash('sha256', $content))) {
             throw new HapaRuntimeException('Checksum documento non valido.');
@@ -88,6 +97,76 @@ final readonly class FilesystemPrivateDocumentStorage implements PrivateDocument
         if (!unlink($path)) {
             throw new HapaRuntimeException('Impossibile eliminare il documento privato.');
         }
+    }
+
+    private function encrypt(string $content, string $reference): string
+    {
+        $nonceLength = openssl_cipher_iv_length(self::CIPHER);
+        if ($nonceLength < 12) {
+            throw new HapaRuntimeException('Cifrario documenti privati non disponibile.');
+        }
+        $nonce = random_bytes($nonceLength);
+        $tag = '';
+        $ciphertext = openssl_encrypt(
+            $content,
+            self::CIPHER,
+            PiiKeyProvider::rawKey(),
+            OPENSSL_RAW_DATA,
+            $nonce,
+            $tag,
+            $reference,
+            16,
+        );
+        if (!is_string($ciphertext)) {
+            throw new HapaRuntimeException('Cifratura documento privato fallita.');
+        }
+        try {
+            $envelope = json_encode([
+                'version' => 1,
+                'key_id' => PiiKeyProvider::keyId(),
+                'nonce' => base64_encode($nonce),
+                'tag' => base64_encode($tag),
+                'ciphertext' => base64_encode($ciphertext),
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        } catch (JsonException $exception) {
+            throw new HapaRuntimeException('Serializzazione documento cifrato fallita.', 0, $exception);
+        }
+
+        return self::ENVELOPE_PREFIX . $envelope;
+    }
+
+    private function decrypt(string $envelope, string $reference): string
+    {
+        try {
+            $payload = json_decode($envelope, true, 16, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new HapaRuntimeException('Documento cifrato non valido.', 0, $exception);
+        }
+        if (!is_array($payload)
+            || ($payload['version'] ?? null) !== 1
+            || ($payload['key_id'] ?? null) !== PiiKeyProvider::keyId()) {
+            throw new HapaRuntimeException('Versione o chiave del documento cifrato non supportata.');
+        }
+        $nonce = base64_decode((string) ($payload['nonce'] ?? ''), true);
+        $tag = base64_decode((string) ($payload['tag'] ?? ''), true);
+        $ciphertext = base64_decode((string) ($payload['ciphertext'] ?? ''), true);
+        if (!is_string($nonce) || !is_string($tag) || !is_string($ciphertext)) {
+            throw new HapaRuntimeException('Envelope del documento cifrato non valido.');
+        }
+        $plaintext = openssl_decrypt(
+            $ciphertext,
+            self::CIPHER,
+            PiiKeyProvider::rawKey(),
+            OPENSSL_RAW_DATA,
+            $nonce,
+            $tag,
+            $reference,
+        );
+        if (!is_string($plaintext)) {
+            throw new HapaRuntimeException('Autenticazione del documento cifrato fallita.');
+        }
+
+        return $plaintext;
     }
 
     private function resolve(string $reference): string
